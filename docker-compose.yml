@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: insurance_claims
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/insurance_claims
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/storage:/app/storage
+      - ./backend/faiss_index:/app/faiss_index
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "python seed.py && uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"
+
+  celery-worker:
+    build: .
+    env_file:
+      - backend/.env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/insurance_claims
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/storage:/app/storage
+      - ./backend/faiss_index:/app/faiss_index
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=4
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:8000
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

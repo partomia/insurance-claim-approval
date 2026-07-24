@@ -1,0 +1,22 @@
+flowchart TD
+    START([Customer Signup + OTP]) --> KYC[KYC Verification]
+    KYC --> POL[Connect / Upload Policy]
+    POL --> IDX[Index Policy → ChromaDB]
+    IDX --> W1[Step 1: Incident Details]
+    W1 --> W2[Step 2: Policy Papers]
+    W2 --> W3[Step 3: Evidence Upload]
+    W3 --> W4[Step 4: Review & Submit]
+    W4 --> AI[AI Multi-Agent Pipeline]
+    AI --> D{Decision}
+
+    D -->|Auto| AC[ANALYSIS_COMPLETE]
+    D -->|Auto| AR[APPROVED / REJECTED]
+    D -->|Escalate| PR[PENDING_REVIEW]
+    D -->|Missing docs| RMI[REQUEST_MORE_INFO]
+    RMI --> W3
+
+    PR --> AG[Policy Agent Review]
+    AG --> SI[SUBMITTED_TO_INSURER]
+    SI --> INS[Insurer Final Decision]
+
+    AC & AR & INS --> AUDIT[Audit Report + Tracking]

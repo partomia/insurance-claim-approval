@@ -1,0 +1,37 @@
+flowchart LR
+    subgraph Client["Frontend — React 19 + Vite 8"]
+        P1[pages/customer]
+        P2[pages/agent]
+        P3[pages/insurer]
+        UI[shadcn/ui + Tailwind 4]
+    end
+
+    subgraph Routers["FastAPI — 14 Routers"]
+        R1[auth · claims · policies]
+        R2[kyc · dashboard · assistant]
+        R3[agent · insurer · rag]
+    end
+
+    subgraph Services["Services Layer (~35 modules)"]
+        S1[claim_pipeline]
+        S2[orchestrator]
+        S3[decision_engine]
+        S4[fraud_detection]
+        S5[rag_service]
+        S6[progress_service]
+    end
+
+    subgraph Queue["Celery + Redis"]
+        T1[Parallel Tasks x5]
+        T2[generate_decision_task]
+    end
+
+    subgraph Data
+        DB[(PostgreSQL / SQLite)]
+        VDB[(ChromaDB)]
+        BRK[(Redis)]
+    end
+
+    Client --> Routers --> Services
+    Services --> Queue
+    Services --> Data

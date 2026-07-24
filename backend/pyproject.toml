@@ -1,0 +1,44 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "AI-powered Insurance Claim Processing System"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.139.2",
+    "uvicorn[standard]>=0.51.0",
+    "pydantic[email]>=2.13.4",
+    "pydantic-settings>=2.8.1",
+    "sqlalchemy>=2.0.51",
+    "psycopg2-binary>=2.9.10",
+    "alembic>=1.15.2",
+    "celery[redis]>=5.5.1",
+    "redis>=5.2.1",
+    "python-multipart>=0.0.32",
+    "aiofiles>=24.1.0",
+    "python-jose[cryptography]>=3.4.0",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=4.0.0,<4.1.0",
+    "python-dotenv>=1.2.2",
+    "langchain-openai>=0.3.14",
+    "langchain-core>=0.3.55",
+    "langchain-groq>=0.3.2",
+    "groq>=0.30.0",
+    "chromadb>=0.6.0",
+    "numpy>=2.2.4",
+    "pillow>=11.2.1",
+    "pytesseract>=0.3.13",
+    "pypdf>=5.4.0",
+    "httpx>=0.28.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

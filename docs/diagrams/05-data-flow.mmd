@@ -1,0 +1,9 @@
+flowchart LR
+    UP[Document Upload] --> OCR[OCR Extraction]
+    OCR --> EMB[OpenAI Embeddings]
+    EMB --> CHROMA[ChromaDB Index]
+    CHROMA --> ANALYZE[Multi-Agent Analysis]
+    ANALYZE --> PG[(PostgreSQL)]
+    ANALYZE --> REDIS[(Redis Pub/Sub)]
+    REDIS --> SSE[SSE → Frontend]
+    PG --> AUDIT[Regulator Audit Report]

@@ -1,0 +1,36 @@
+flowchart LR
+    subgraph Input[Claim Input]
+        CL[Claim Data]
+        DOC[Documents]
+        POL[Policy Context]
+    end
+
+    subgraph RulesEngine[Rules Engine]
+        R1[Hard Rejects]
+        R2[Escalation Flags]
+        R3[Amount Thresholds]
+    end
+
+    subgraph RAG[RAG — ChromaDB]
+        R4[Clause Retrieval]
+        R5[Coverage Grounding]
+    end
+
+    subgraph LLM[Groq LLM]
+        L1[Fraud Rationale]
+        L2[Decision Reasoning]
+        L3[Payout Calculation]
+    end
+
+    subgraph Output[Decision Output]
+        DEC[Status + Confidence]
+        AUD[Audit Trail]
+    end
+
+    Input --> RulesEngine
+    Input --> RAG
+    Input --> LLM
+    RulesEngine --> DEC
+    RAG --> DEC
+    LLM --> DEC
+    DEC --> AUD

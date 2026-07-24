@@ -1,0 +1,24 @@
+flowchart TB
+    subgraph CustomerPortal["Customer Portal"]
+        C1[KYC Verification]
+        C2[Policy Connect]
+        C3[4-Step Claim Wizard]
+        C4[Live SSE Tracking]
+        C5[AI Assistant]
+    end
+
+    subgraph AgentPortal["Policy Agent Portal"]
+        A1[Expert Queue]
+        A2[Claim Review]
+        A3[AI Consult]
+        A4[Submit to Insurer]
+    end
+
+    subgraph InsurerPortal["Insurer Portal"]
+        I1[Claim Dashboard]
+        I2[Final Adjudication]
+        I3[Compliance Trail]
+    end
+
+    CustomerPortal -->|Escalated claims| AgentPortal
+    AgentPortal -->|Submitted claims| InsurerPortal

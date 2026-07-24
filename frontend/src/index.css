@@ -1,0 +1,261 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@theme {
+  --color-primary: #F96702;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #201A5C;
+  --color-secondary-foreground: #ffffff;
+  --color-field: oklch(0.99 0 0);
+  --color-input: oklch(0.86 0 0);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-border: var(--info-border);
+  --color-surface: var(--surface);
+}
+
+@layer base {
+  .theme {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+  }
+  :root {
+    --background: oklch(1 0 0);
+    --surface: oklch(0.985 0 0);
+    --foreground: oklch(0.145 0 0);
+    --success: oklch(0.62 0.17 150);
+    --success-foreground: oklch(0.99 0 0);
+    --success-subtle: oklch(0.965 0.05 150);
+    --success-border: oklch(0.87 0.09 150);
+    --warning: oklch(0.72 0.16 65);
+    --warning-foreground: oklch(0.2 0.05 60);
+    --warning-subtle: oklch(0.97 0.05 80);
+    --warning-border: oklch(0.87 0.09 80);
+    --info: oklch(0.62 0.15 250);
+    --info-foreground: oklch(0.99 0 0);
+    --info-subtle: oklch(0.965 0.04 250);
+    --info-border: oklch(0.87 0.07 250);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: #F96702;
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: #201A5C;
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.86 0 0);
+    --input: oklch(0.86 0 0);
+    --field: oklch(0.99 0 0);
+    --ring: color-mix(in oklch, #F96702 35%, oklch(0.708 0 0));
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.86 0 0);
+    --sidebar-ring: color-mix(in oklch, #F96702 35%, oklch(0.708 0 0));
+  }
+  .dark {
+    --background: oklch(0.145 0 0);
+    --surface: oklch(0.185 0 0);
+    --foreground: oklch(0.985 0 0);
+    --success: oklch(0.68 0.16 150);
+    --success-foreground: oklch(0.15 0.02 150);
+    --success-subtle: oklch(0.24 0.05 150 / 40%);
+    --success-border: oklch(0.4 0.1 150 / 60%);
+    --warning: oklch(0.78 0.15 70);
+    --warning-foreground: oklch(0.18 0.04 60);
+    --warning-subtle: oklch(0.28 0.06 70 / 40%);
+    --warning-border: oklch(0.45 0.1 70 / 60%);
+    --info: oklch(0.7 0.14 250);
+    --info-foreground: oklch(0.15 0.02 250);
+    --info-subtle: oklch(0.26 0.06 250 / 40%);
+    --info-border: oklch(0.4 0.1 250 / 60%);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: #F96702;
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: #201A5C;
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 18%);
+    --input: oklch(1 0 0 / 22%);
+    --field: oklch(0.235 0 0);
+    --ring: color-mix(in oklch, #F96702 40%, oklch(0.556 0 0));
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 18%);
+    --sidebar-ring: color-mix(in oklch, #F96702 40%, oklch(0.556 0 0));
+  }
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+  html {
+    font-family: var(--font-sans);
+  }
+}
+
+@layer components {
+  .field-control {
+    min-height: 2.5rem;
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid var(--input);
+    background-color: var(--field);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    transition:
+      color 150ms,
+      background-color 150ms,
+      border-color 150ms,
+      box-shadow 150ms;
+    outline: none;
+  }
+
+  .field-control::placeholder {
+    color: var(--muted-foreground);
+  }
+
+  .field-control:focus-visible {
+    border-color: color-mix(in oklch, var(--primary) 40%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 25%, transparent);
+  }
+
+  .field-control:disabled {
+    pointer-events: none;
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .assistant-backdrop {
+    background: color-mix(in oklch, var(--secondary) 45%, transparent);
+    backdrop-filter: blur(4px);
+  }
+
+  .assistant-panel {
+    background: var(--card);
+    border: 2px solid color-mix(in oklch, var(--primary) 70%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--secondary) 12%, transparent),
+      0 24px 60px color-mix(in oklch, var(--secondary) 30%, transparent),
+      0 10px 28px color-mix(in oklch, var(--primary) 18%, transparent);
+  }
+
+  .dark .assistant-panel {
+    border-color: color-mix(in oklch, var(--primary) 55%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--primary) 30%, transparent),
+      0 24px 60px rgba(0, 0, 0, 0.6);
+  }
+
+  .assistant-header {
+    background: linear-gradient(
+      135deg,
+      var(--secondary) 0%,
+      color-mix(in oklch, var(--secondary) 80%, white) 100%
+    );
+    border-bottom: 2px solid var(--primary);
+    color: var(--secondary-foreground);
+  }
+
+  .assistant-body {
+    background: var(--muted);
+  }
+
+  .assistant-footer {
+    background: var(--card);
+    border-top: 1px solid var(--border);
+  }
+
+  .assistant-msg-user {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border: 1px solid color-mix(in oklch, var(--primary) 70%, black);
+    box-shadow: 0 2px 8px color-mix(in oklch, var(--primary) 30%, transparent);
+  }
+
+  .assistant-msg-bot {
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px color-mix(in oklch, var(--secondary) 8%, transparent);
+  }
+
+  .assistant-panel .assistant-body > div > .assistant-msg-user,
+  .assistant-panel .assistant-body > div > .assistant-msg-bot {
+    margin-bottom: 0.75rem;
+  }
+
+  .assistant-prompt-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--card-foreground);
+    box-shadow: 0 1px 2px color-mix(in oklch, var(--secondary) 8%, transparent);
+    transition:
+      background-color 150ms,
+      border-color 150ms;
+  }
+
+  .assistant-prompt-btn:hover {
+    border-color: var(--primary);
+    background: color-mix(in oklch, var(--primary) 8%, var(--card));
+  }
+
+  .assistant-panel .assistant-input,
+  textarea.assistant-input {
+    background-color: var(--field);
+    color: var(--foreground);
+    border: 1px solid var(--input);
+    caret-color: var(--primary);
+  }
+
+  .assistant-panel .assistant-input::placeholder,
+  textarea.assistant-input::placeholder {
+    color: var(--muted-foreground);
+  }
+}

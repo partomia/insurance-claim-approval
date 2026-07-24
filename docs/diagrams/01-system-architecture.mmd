@@ -1,0 +1,53 @@
+flowchart TB
+    subgraph Users
+        C[Customer]
+        A[Policy Agent]
+        I[Insurer]
+    end
+
+    subgraph Frontend["React SPA — 3 Portals"]
+        CP[Customer Portal]
+        AP[Agent Portal]
+        IP[Insurer Portal]
+    end
+
+    subgraph API["FastAPI Gateway"]
+        AUTH[JWT Auth]
+        CLAIMS[Claims API]
+        SSE[SSE Stream]
+    end
+
+    subgraph Orchestration
+        ORCH[ClaimOrchestrator]
+        PIPE[Claim Pipeline]
+    end
+
+    subgraph Agents["AI Analysis Agents"]
+        PV[Policy Validation]
+        RAG[RAG Retrieval]
+        CP2[Customer Profile]
+        EV[Evidence + OCR]
+        FR[Fraud Detection]
+        DE[Decision Engine]
+        EX[Explainability]
+    end
+
+    subgraph Storage
+        PG[(PostgreSQL)]
+        RD[(Redis)]
+        CH[(ChromaDB)]
+        FS[File Storage]
+    end
+
+    subgraph External
+        GQ[Groq LLM]
+        OA[OpenAI Embeddings]
+        TS[Tesseract OCR]
+    end
+
+    C & A & I --> Frontend
+    Frontend -->|REST + SSE| API
+    API --> ORCH --> PIPE --> Agents
+    Agents --> Storage
+    Agents --> External
+    API --> PG

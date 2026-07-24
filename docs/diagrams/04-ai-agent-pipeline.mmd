@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant U as Customer
+    participant API as FastAPI
+    participant O as Orchestrator
+    participant P as Claim Pipeline
+    participant R as Redis/SSE
+    participant DB as Database
+
+    U->>API: POST /api/claims/{id}/submit
+    API->>DB: status = PROCESSING
+    API->>O: dispatch(claim_id)
+
+    par Phase 1 — Parallel (4 workers)
+        P->>P: Policy Validation
+        P->>P: RAG Retrieval
+        P->>P: Customer Profile
+        P->>P: Evidence Analysis (OCR)
+    end
+
+    P->>P: Fraud Detection (Groq LLM)
+    P->>P: Decision Engine (rules)
+    P->>P: Explainability (confidence score)
+    P->>P: Payout Calculation (if approved)
+
+    P->>DB: Persist decision + audit log
+    P->>R: Progress events
+    R-->>U: SSE /api/claims/{id}/stream
