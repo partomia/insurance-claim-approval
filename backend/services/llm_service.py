@@ -112,6 +112,16 @@ class LLMService:
             logger.warning("Groq assistant call failed: %s", exc)
             return ""
 
+    def invoke_summarize(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int = 512,
+        temperature: float = 0,
+    ) -> str:
+        return self.invoke_assistant(system, user, max_tokens=max_tokens, temperature=temperature)
+
     def invoke_json(self, system: str, user: str) -> dict[str, Any]:
         text = self.invoke(
             system + " Return ONLY valid JSON, no markdown fences.",
@@ -297,7 +307,7 @@ Set aligned=false if the retrieved clause is wrong for this incident type or con
         incident_description: str,
         policy_type: str,
     ) -> dict[str, Any] | None:
-        if not self.client:
+        if not self._has_valid_key():
             return None
         return self.invoke_json(
             "You validate insurance claim evidence documents. Return ONLY valid JSON.",

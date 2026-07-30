@@ -3,7 +3,7 @@ import os
 from sqlalchemy import inspect, text
 
 from config import get_settings
-from database import Base, engine
+from database import Base, SessionLocal, engine
 
 settings = get_settings()
 
@@ -133,3 +133,23 @@ def ensure_schema(force_reset: bool = False) -> None:
 
     Base.metadata.create_all(bind=engine)
     _apply_sqlite_migrations()
+    _backfill_assistant_threads()
+
+
+def _backfill_assistant_threads() -> None:
+    """Migrate legacy flat chat messages into assistant threads (one-time).
+
+    Gated by `ASSISTANT_BACKFILL_ON_STARTUP` — flip to false in production once
+    the first successful boot has migrated data, so we don't table-scan legacy
+    chat tables on every restart.
+    """
+    if not settings.assistant_backfill_on_startup:
+        return
+
+    from services.assistant_memory_service import backfill_legacy_messages
+
+    db = SessionLocal()
+    try:
+        backfill_legacy_messages(db)
+    finally:
+        db.close()

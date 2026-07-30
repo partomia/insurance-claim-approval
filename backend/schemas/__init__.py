@@ -553,6 +553,7 @@ class AssistantChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     claim_id: Optional[int] = None
     policy_number: Optional[str] = None
+    thread_id: Optional[int] = None
 
 
 class AssistantChatResponse(BaseModel):

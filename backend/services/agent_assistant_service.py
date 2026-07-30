@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-import json
 from typing import Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from models.chat import AgentChatMessage, ChatRole
+from models.assistant_memory import AssistantOwnerType, AssistantPersona
+from models.chat import ChatRole
 from models.claim import Claim
 from models.customer import Customer
 from models.platform import CustomerProfile
 from models.policy_agent import PolicyAgent
 from services.agent_service import agent_service
 from services.analysis_service import analysis_to_dict, format_analysis_context_for_assistant
+from services.assistant_memory_service import assistant_memory_service
 from services.assistant_response_service import (
     build_expert_llm_reply,
     normalize_expert_structured_reply,
@@ -107,16 +108,35 @@ FOCUS_INSTRUCTIONS = {
 class AgentAssistantService:
     MEMORY_LIMIT = 20
 
+    def _session(self, db: Session, agent_id: int):
+        return assistant_memory_service.get_or_create_session(
+            db,
+            owner_type=AssistantOwnerType.AGENT,
+            owner_id=agent_id,
+            persona=AssistantPersona.EXPERT_COPILOT,
+        )
+
     def get_history(self, db: Session, agent_id: int) -> list[dict]:
+        # Legacy agent chat was a flat table keyed by agent_id, so the router
+        # doesn't scope by thread. Aggregate across every thread for this session
+        # to preserve that behavior.
+        from models.assistant_memory import AssistantMessage, AssistantThread
+
+        session = self._session(db, agent_id)
         messages = (
-            db.query(AgentChatMessage)
-            .filter(AgentChatMessage.agent_id == agent_id)
-            .order_by(AgentChatMessage.created_at.asc())
+            db.query(AssistantMessage)
+            .join(AssistantThread, AssistantThread.id == AssistantMessage.thread_id)
+            .filter(AssistantThread.session_id == session.id)
+            .order_by(AssistantMessage.created_at.asc())
             .limit(50)
             .all()
         )
         return [
-            {"role": m.role.value, "content": m.content, "created_at": m.created_at.isoformat()}
+            {
+                "role": m.role.value,
+                "content": m.content,
+                "created_at": m.created_at.isoformat(),
+            }
             for m in messages
         ]
 
@@ -402,14 +422,12 @@ class AgentAssistantService:
         if claim_id and not claim:
             return "**Summary:** That claim is not in your assigned queue.\n\n**Recommended action:** Pick a claim from your work queue."
 
-        history = (
-            db.query(AgentChatMessage)
-            .filter(AgentChatMessage.agent_id == agent.id)
-            .order_by(AgentChatMessage.created_at.desc())
-            .limit(self.MEMORY_LIMIT)
-            .all()
+        session = self._session(db, agent.id)
+        thread = assistant_memory_service.resolve_thread(
+            db, session, claim_id=claim_id
         )
-        history.reverse()
+        _, history = assistant_memory_service.load_context_window(db, thread)
+        # detect_expert_focus reads .role.value and .content, both present on AssistantMessage.
         focus = detect_expert_focus(message, history)
         context = self._build_context(db, claim, customer, document_id, focus=focus)
         history_text = "\n".join(f"{m.role.value}: {m.content}" for m in history)
@@ -442,10 +460,15 @@ Write a fresh structured reply for the question above. Match FOCUS. 70-100 words
             reply = self._structured_fallback(focus, claim, message)
         reply = normalize_expert_structured_reply(reply)
 
-        context_payload = {"claim_id": claim_id, "customer_id": customer_id, "document_id": document_id}
-        db.add(AgentChatMessage(agent_id=agent.id, role=ChatRole.USER, content=message, context_json=json.dumps(context_payload), claim_id=claim_id, customer_id=customer_id))
-        db.add(AgentChatMessage(agent_id=agent.id, role=ChatRole.ASSISTANT, content=reply, claim_id=claim_id, customer_id=customer_id))
-        db.commit()
+        context_payload = {
+            "claim_id": claim_id,
+            "customer_id": customer_id,
+            "document_id": document_id,
+        }
+        assistant_memory_service.persist_exchange(
+            db, thread, message, reply, context_json=context_payload
+        )
+        assistant_memory_service.maybe_compact_thread(db, thread, session)
         return reply
 
 

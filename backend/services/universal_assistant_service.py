@@ -3,11 +3,12 @@ from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
-from models.chat import ChatRole, CustomerChatMessage
+from models.assistant_memory import AssistantOwnerType, AssistantPersona
 from models.claim import Claim
 from models.customer import Customer
 from models.platform import CustomerProfile
 from models.policy import Policy
+from services.assistant_memory_service import assistant_memory_service
 from services.assistant_response_service import (
     AssistantIntent,
     build_llm_reply,
@@ -22,29 +23,41 @@ from services.rag_service import rag_service
 
 
 class UniversalAssistantService:
-    MEMORY_LIMIT = 20
-    HISTORY_LIMIT = 30
-
     def __init__(self) -> None:
         self._claim_assistant = ClaimAssistantService()
+        self._memory = assistant_memory_service
 
-    def get_history(self, db: Session, customer_id: int) -> list[dict]:
-        messages = (
-            db.query(CustomerChatMessage)
-            .filter(CustomerChatMessage.customer_id == customer_id)
-            .order_by(CustomerChatMessage.created_at.desc())
-            .limit(self.HISTORY_LIMIT)
-            .all()
+    def _customer_session(self, db: Session, customer: Customer):
+        return self._memory.get_or_create_session(
+            db,
+            owner_type=AssistantOwnerType.CUSTOMER,
+            owner_id=customer.id,
+            persona=AssistantPersona.CUSTOMER_COPILOT,
         )
-        messages.reverse()
-        return [
-            {
-                "role": m.role.value,
-                "content": m.content,
-                "created_at": m.created_at.isoformat(),
-            }
-            for m in messages
-        ]
+
+    def list_threads(self, db: Session, customer: Customer) -> list[dict[str, Any]]:
+        session = self._customer_session(db, customer)
+        return [self._memory.thread_to_dict(t) for t in self._memory.list_threads(db, session)]
+
+    def create_thread(self, db: Session, customer: Customer, *, title: str | None = None) -> dict[str, Any]:
+        session = self._customer_session(db, customer)
+        thread = self._memory.create_general_thread(db, session, title=title)
+        return self._memory.thread_to_dict(thread)
+
+    def get_history(
+        self,
+        db: Session,
+        customer: Customer,
+        *,
+        thread_id: Optional[int] = None,
+        claim_id: Optional[int] = None,
+    ) -> list[dict]:
+        session = self._customer_session(db, customer)
+        try:
+            thread = self._memory.resolve_thread(db, session, thread_id=thread_id, claim_id=claim_id)
+        except ValueError:
+            return []
+        return self._memory.get_thread_history(db, thread)
 
     def _system_prompt(self) -> str:
         return (
@@ -139,35 +152,40 @@ class UniversalAssistantService:
         customer: Customer,
         user_message: str,
         *,
+        thread_id: Optional[int] = None,
         claim_id: Optional[int] = None,
         policy_number: Optional[str] = None,
         page_route: Optional[str] = None,
     ) -> str:
+        session = self._customer_session(db, customer)
+        try:
+            thread = self._memory.resolve_thread(db, session, thread_id=thread_id, claim_id=claim_id)
+        except ValueError:
+            return "**In short:** Conversation not found.\n\n**Do this next:** Start a new chat."
+
         intent = detect_intent(user_message)
         claim: Optional[Claim] = None
+        active_claim_id = claim_id or thread.claim_id
 
-        if claim_id:
-            claim = self._claim_assistant.load_claim(db, claim_id, customer.id)
+        if active_claim_id:
+            claim = self._claim_assistant.load_claim(db, active_claim_id, customer.id)
 
         if uses_template_reply(intent, claim):
             assert claim is not None
             reply = build_template_reply(claim, intent)
-            self._persist_exchange(db, customer, user_message, reply, claim_id, policy_number, page_route)
+            self._persist_exchange(
+                db, session, thread, customer, user_message, reply,
+                active_claim_id, policy_number, page_route,
+            )
             return reply
 
-        history = (
-            db.query(CustomerChatMessage)
-            .filter(CustomerChatMessage.customer_id == customer.id)
-            .order_by(CustomerChatMessage.created_at.desc())
-            .limit(self.MEMORY_LIMIT)
-            .all()
-        )
-        history.reverse()
+        summary_text, recent_messages = self._memory.load_context_window(db, thread)
+        ltm = self._memory.format_long_term_memory(session)
 
         account_ctx = self._build_account_context(db, customer)
         claim_ctx = ""
-        if claim_id:
-            _, claim_ctx = self._build_claim_context(db, customer.id, claim_id, intent)
+        if active_claim_id:
+            _, claim_ctx = self._build_claim_context(db, customer.id, active_claim_id, intent)
 
         rag_query = user_message
         if claim:
@@ -179,21 +197,26 @@ class UniversalAssistantService:
                 db, customer.id, rag_query, policy_number
             )
 
-        context_parts = [f"ACCOUNT:\n{account_ctx}"]
+        context_parts = []
+        if ltm:
+            context_parts.append(ltm)
+        context_parts.append(f"ACCOUNT:\n{account_ctx}")
         if claim_ctx:
             context_parts.append(f"ACTIVE CLAIM:\n{claim_ctx}")
         if rag_ctx:
             context_parts.append(f"POLICY RAG (supplementary):\n{rag_ctx}")
         if page_route:
             context_parts.append(f"Page: {page_route}")
+        if summary_text:
+            context_parts.append(f"THREAD SUMMARY:\n{summary_text}")
 
-        history_text = "\n".join(f"{m.role.value}: {m.content}" for m in history)
+        history_text = self._memory.format_history_text(recent_messages)
         reply = build_llm_reply(
             self._system_prompt(),
             f"""{chr(10).join(context_parts)}
 
 HISTORY:
-{history_text or 'No prior messages.'}
+{history_text}
 
 USER: {user_message}""",
         )
@@ -205,12 +228,17 @@ USER: {user_message}""",
                 "**Do this next:** Ask a specific question about your policy or claim."
             )
 
-        self._persist_exchange(db, customer, user_message, reply, claim_id, policy_number, page_route)
+        self._persist_exchange(
+            db, session, thread, customer, user_message, reply,
+            active_claim_id, policy_number, page_route,
+        )
         return reply
 
     def _persist_exchange(
         self,
         db: Session,
+        session,
+        thread,
         customer: Customer,
         user_message: str,
         reply: str,
@@ -226,22 +254,11 @@ USER: {user_message}""",
         if page_route:
             audit_context["page_route"] = page_route
 
-        db.add(
-            CustomerChatMessage(
-                customer_id=customer.id,
-                role=ChatRole.USER,
-                content=user_message,
-                context_json=json.dumps(audit_context) if audit_context else None,
-            )
+        self._memory.persist_exchange(
+            db, thread, user_message, reply,
+            context_json=audit_context or None,
         )
-        db.add(
-            CustomerChatMessage(
-                customer_id=customer.id,
-                role=ChatRole.ASSISTANT,
-                content=reply,
-            )
-        )
-        db.commit()
+        self._memory.maybe_compact_thread(db, thread, session)
 
 
 universal_assistant_service = UniversalAssistantService()

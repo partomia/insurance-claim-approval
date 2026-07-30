@@ -379,7 +379,7 @@ def get_chat_history(
     db: Session = Depends(get_db),
 ):
     _get_owned_claim(db, claim_id, customer.id)
-    return assistant_service.get_history(db, claim_id)
+    return assistant_service.get_history(db, claim_id, customer.id)
 
 
 @router.post("/{claim_id}/chat", response_model=schemas.ChatMessageResponse)

@@ -3,6 +3,14 @@ from models.insurer_auth_session import InsurerAuthSession
 from models.insurer_user import InsurerUser
 from models.audit import AuditLog, ClaimDecision, FraudAssessment, HumanReview
 from models.auth_session import AuthSession
+from models.assistant_memory import (
+    AssistantMessage,
+    AssistantOwnerType,
+    AssistantPersona,
+    AssistantSession,
+    AssistantThread,
+    AssistantThreadType,
+)
 from models.chat import ChatRole, ClaimChatMessage, CustomerChatMessage, AgentChatMessage
 from models.claim import Claim, ClaimDocument, ClaimStatus, DocumentType
 from models.claim_progress import ClaimProgressEvent
@@ -49,4 +57,10 @@ __all__ = [
     "CustomerChatMessage",
     "AgentChatMessage",
     "ChatRole",
+    "AssistantPersona",
+    "AssistantOwnerType",
+    "AssistantThreadType",
+    "AssistantSession",
+    "AssistantThread",
+    "AssistantMessage",
 ]

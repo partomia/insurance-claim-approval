@@ -2,9 +2,9 @@ from typing import Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from models.chat import ChatRole, ClaimChatMessage
+from models.assistant_memory import AssistantOwnerType, AssistantPersona
 from models.claim import Claim
-from services.analysis_service import format_analysis_context_for_assistant
+from services.assistant_memory_service import assistant_memory_service
 from services.assistant_response_service import (
     AssistantIntent,
     build_llm_reply,
@@ -16,19 +16,18 @@ from services.assistant_response_service import (
 
 
 class ClaimAssistantService:
-    MEMORY_LIMIT = 20
+    def __init__(self) -> None:
+        self._memory = assistant_memory_service
 
-    def get_history(self, db: Session, claim_id: int) -> list[dict]:
-        messages = (
-            db.query(ClaimChatMessage)
-            .filter(ClaimChatMessage.claim_id == claim_id)
-            .order_by(ClaimChatMessage.created_at.asc())
-            .all()
+    def get_history(self, db: Session, claim_id: int, customer_id: int) -> list[dict]:
+        session = self._memory.get_or_create_session(
+            db,
+            owner_type=AssistantOwnerType.CUSTOMER,
+            owner_id=customer_id,
+            persona=AssistantPersona.CUSTOMER_COPILOT,
         )
-        return [
-            {"role": m.role.value, "content": m.content, "created_at": m.created_at.isoformat()}
-            for m in messages
-        ]
+        thread = self._memory.get_or_create_claim_thread(db, session, claim_id)
+        return self._memory.get_thread_history(db, thread)
 
     def _build_context(
         self,
@@ -64,6 +63,8 @@ class ClaimAssistantService:
                         f"Document [{doc.doc_type.value}] {doc.original_filename}: {doc.ocr_text[:150]}"
                     )
 
+        from services.analysis_service import format_analysis_context_for_assistant
+
         if claim.decision:
             parts.append(format_analysis_context_for_assistant(claim))
 
@@ -92,38 +93,47 @@ class ClaimAssistantService:
         )
 
     def chat(self, db: Session, claim: Claim, user_message: str) -> str:
+        session = self._memory.get_or_create_session(
+            db,
+            owner_type=AssistantOwnerType.CUSTOMER,
+            owner_id=claim.customer_id,
+            persona=AssistantPersona.CUSTOMER_COPILOT,
+        )
+        thread = self._memory.get_or_create_claim_thread(db, session, claim.id)
+
         intent = detect_intent(user_message)
 
         if uses_template_reply(intent, claim):
-            return build_template_reply(claim, intent)
+            reply = build_template_reply(claim, intent)
+            self._memory.persist_exchange(db, thread, user_message, reply)
+            self._memory.maybe_compact_thread(db, thread, session)
+            return reply
 
-        history = (
-            db.query(ClaimChatMessage)
-            .filter(ClaimChatMessage.claim_id == claim.id)
-            .order_by(ClaimChatMessage.created_at.desc())
-            .limit(self.MEMORY_LIMIT)
-            .all()
-        )
-        history.reverse()
-
+        summary_text, recent_messages = self._memory.load_context_window(db, thread)
+        ltm = self._memory.format_long_term_memory(session)
         context = self._build_context(claim, intent)
-        history_text = "\n".join(f"{m.role.value}: {m.content}" for m in history)
+        history_text = self._memory.format_history_text(recent_messages)
+
+        context_parts = []
+        if ltm:
+            context_parts.append(ltm)
+        context_parts.append(f"CLAIM CONTEXT:\n{context}")
+        if summary_text:
+            context_parts.append(f"THREAD SUMMARY:\n{summary_text}")
 
         reply = build_llm_reply(
             self._system_prompt(claim),
-            f"""CLAIM CONTEXT:
-{context}
+            f"""{chr(10).join(context_parts)}
 
 CONVERSATION HISTORY:
-{history_text or 'No prior messages.'}
+{history_text}
 
 USER: {user_message}""",
         )
         reply = normalize_structured_reply(reply)
 
-        db.add(ClaimChatMessage(claim_id=claim.id, role=ChatRole.USER, content=user_message))
-        db.add(ClaimChatMessage(claim_id=claim.id, role=ChatRole.ASSISTANT, content=reply))
-        db.commit()
+        self._memory.persist_exchange(db, thread, user_message, reply)
+        self._memory.maybe_compact_thread(db, thread, session)
         return reply
 
     def load_claim(self, db: Session, claim_id: int, customer_id: int) -> Claim | None:
@@ -137,3 +147,6 @@ USER: {user_message}""",
             .filter(Claim.id == claim_id, Claim.customer_id == customer_id)
             .first()
         )
+
+
+assistant_service = ClaimAssistantService()

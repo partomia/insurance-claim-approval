@@ -50,6 +50,27 @@ class Settings(BaseSettings):
     # Comma-separated browser origins allowed to call the API (required with cookies/auth)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # --- Assistant memory tuning (STM = short-term per-thread, LTM = long-term per-persona) ---
+    # Recent turns kept verbatim in every prompt. Lower = cheaper tokens, less context.
+    assistant_recent_turn_limit: int = 8
+    # Once a thread crosses BOTH thresholds, older turns are compacted into a running
+    # summary. Raising delays compaction (more prompt tokens, fewer LLM summary calls);
+    # lowering compacts sooner.
+    assistant_compaction_message_threshold: int = 16
+    assistant_compaction_char_threshold: int = 6000
+    # Hard cap on the persisted running summary — prevents unbounded prompt growth.
+    assistant_summary_char_cap: int = 1500
+    # Long-term (per-persona) fact store: how many stable facts we carry across sessions.
+    assistant_max_long_term_facts: int = 20
+    # Rows returned by GET /chat history endpoints.
+    assistant_history_limit: int = 30
+    # LLM token budgets for the compaction + fact-extraction pass.
+    assistant_summary_max_tokens: int = 512
+    assistant_ltm_extract_max_tokens: int = 256
+    # Run legacy → assistant-memory backfill on every ensure_schema() call.
+    # Set to false in production after the first successful boot has migrated data.
+    assistant_backfill_on_startup: bool = True
+
     def cors_origin_list(self) -> list[str]:
         raw = self.cors_origins.strip()
         if not raw:
