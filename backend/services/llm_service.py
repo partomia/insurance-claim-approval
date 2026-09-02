@@ -146,16 +146,20 @@ class LLMService:
         incident: str,
         claim_amount: float,
         policy_clauses: list[dict],
-        policy_type: str,
+        policy_type: str = "Motor",
     ) -> dict[str, Any]:
+        """Assess coverage for a motor-vehicle incident against retrieved clauses."""
         clauses_text = "\n".join(
             f"- {c.get('section_ref', 'Section')}: {c.get('clause_text', '')[:300]}"
             for c in policy_clauses[:5]
         )
         return self.invoke_json(
-            "You are an insurance policy analyst. Assess whether the incident is covered.",
-            f"""Policy type: {policy_type}
-Claim amount: ${claim_amount:,.2f}
+            "You are a motor insurance policy analyst. Assess whether a motor-vehicle incident "
+            "(collision, theft, vandalism, fire, natural disaster, glass, third-party liability) "
+            "is covered under the retrieved policy clauses. Consider own-damage vs third-party "
+            "distinctions and standard exclusions (unlicensed driver, DUI, racing, commercial use).",
+            f"""Policy type: Motor
+Claim amount (estimated repair/replacement): ${claim_amount:,.2f}
 Incident: {incident}
 
 Relevant policy clauses:
@@ -171,8 +175,13 @@ Return JSON: {{"is_covered": boolean, "confidence": float 0-1, "summary": string
         signals: list[str],
         evidence_summary: str,
     ) -> dict[str, Any]:
+        """Assess fraud risk for a motor claim."""
         return self.invoke_json(
-            "You are an insurance fraud analyst. Assess fraud risk from signals.",
+            "You are a motor insurance fraud analyst. Consider motor-specific fraud patterns: "
+            "staged accidents, VIN mismatch, exaggerated repair estimates vs vehicle IDV, "
+            "prior salvage title, repeated garage across unrelated customers, night-time single-car "
+            "incidents, license-suspended driver, incident location far from customer's registered "
+            "address, and rapid successive claims.",
             f"""Incident: {incident}
 Claim amount: ${claim_amount:,.2f}
 Rule-based signals: {signals or ['none']}
@@ -186,9 +195,12 @@ Return JSON: {{"fraud_score": float 0-1, "risk_level": "Low|Medium|High", "ratio
         status: str,
         context: dict[str, Any],
     ) -> str:
+        """Regulator-ready motor claim decision explanation."""
         result = self.invoke(
-            "You are an insurance claims explainability agent. Write a clear, regulator-ready "
-            "explanation of why this claim decision was made. Be concise (3-5 sentences).",
+            "You are a motor insurance claims explainability agent. Write a clear, regulator-ready "
+            "explanation of why this motor claim decision was made. Reference IDV, deductible, "
+            "depreciation, own-damage vs third-party split, and no-claim-bonus impact when relevant. "
+            "Be concise (3-5 sentences).",
             f"""Decision status: {status}
 Policy validation: {context.get('policy_violations', [])}
 Retrieved clauses: {[c.get('section_ref') for c in context.get('retrieved_clauses', [])]}
@@ -196,7 +208,8 @@ Evidence confidence: {context.get('evidence_confidence', 'N/A')}
 Fraud score: {context.get('fraud_score', 'N/A')}
 Confidence score: {context.get('confidence_score', 'N/A')}
 Payable amount: {context.get('payable_amount', 0)}
-Customer risk: {context.get('customer_risk_score', 'N/A')}""",
+Customer risk: {context.get('customer_risk_score', 'N/A')}
+Escalation flags: {context.get('escalation_flags', [])}""",
         )
         return result
 
@@ -233,7 +246,7 @@ Document text:
 
 Return JSON:
 {{
-  "policy_type": "Auto|Health|Home",
+  "policy_type": "Motor",
   "policy_number": "string or null if not found in document",
   "coverage_limit": number,
   "deductible": number,
@@ -241,11 +254,18 @@ Return JSON:
   "exclusions": ["list of exclusion strings"],
   "effective_date": "YYYY-MM-DD or null",
   "expiry_date": "YYYY-MM-DD or null",
-  "summary": "one sentence summary of the policy"
+  "covered_make": "string or null",
+  "covered_model": "string or null",
+  "covered_year": "number or null",
+  "covered_vehicle_vin": "string or null",
+  "no_claim_bonus_pct": number,
+  "zero_depreciation_addon": boolean,
+  "roadside_assistance_addon": boolean,
+  "summary": "one sentence summary of the motor policy"
 }}
 
-Use reasonable numeric defaults only when values cannot be determined: coverage_limit 500000, deductible 500, co_pay_pct 10.
-policy_type must be one of Auto, Health, or Home.""",
+Use reasonable numeric defaults only when values cannot be determined: coverage_limit 500000, deductible 500, co_pay_pct 10, no_claim_bonus_pct 0.
+policy_type must be "Motor" for this product. Extract the covered vehicle's make/model/year/VIN from the schedule when present.""",
         )
 
     def check_clause_alignment(
@@ -305,14 +325,15 @@ Set aligned=false if the retrieved clause is wrong for this incident type or con
         doc_type: str,
         ocr_text: str,
         incident_description: str,
-        policy_type: str,
+        policy_type: str = "Motor",
     ) -> dict[str, Any] | None:
+        """Validate that an uploaded document matches its declared motor-claim type."""
         if not self._has_valid_key():
             return None
         return self.invoke_json(
-            "You validate insurance claim evidence documents. Return ONLY valid JSON.",
+            "You validate motor-vehicle insurance claim evidence documents. Return ONLY valid JSON.",
             f"""Document type expected: {doc_type}
-Policy type: {policy_type}
+Policy type: Motor
 Incident: {incident_description[:500]}
 OCR text (may be empty): {ocr_text[:1500]}
 
@@ -320,12 +341,20 @@ Return JSON:
 {{
   "matches_type": boolean,
   "reason": "brief explanation if mismatch",
-  "detected_content": "e.g. technical diagram, driver's license, repair invoice"
+  "detected_content": "e.g. damage photo, driver's license, repair estimate, police FIR, RC book"
 }}
 
-For GOV_ID: matches_type=true for government-issued ID (passport, driver's license, national ID, Aadhaar, PAN card, voter ID, or similar).
-For PROOF: matches_type=true if content relates to the incident/claim (damage photos, repair invoices, inspection reports, medical bills, police reports).
-Set matches_type=false ONLY for clearly unrelated content: diagrams, flowcharts, software screenshots, or documents with no connection to an insurance claim.""",
+Guidance per document type:
+- DRIVER_LICENSE: matches_type=true only for a driver's licence (issuing authority, licence class, endorsements, expiry, photo). NOT other government IDs.
+- VEHICLE_REGISTRATION: matches_type=true for RC book / registration certificate (VIN/chassis, engine number, owner, registration authority).
+- DAMAGE_PHOTO: matches_type=true for photos showing vehicle damage (dents, scratches, broken glass, crumpled panels). Absent OCR text is fine for photos.
+- REPAIR_ESTIMATE: matches_type=true for a garage invoice or estimate with line items, labour, parts, GST/tax, and garage name.
+- POLICE_REPORT: matches_type=true for a police FIR / accident report with incident date, location, vehicles involved.
+- TOWING_INVOICE: matches_type=true for a tow-truck receipt with vehicle plate, pickup/drop location, charges.
+- THIRD_PARTY_STATEMENT: matches_type=true for a signed statement by another party involved in the incident.
+- POLICY_PAPER: matches_type=true for a policy schedule / certificate.
+
+Set matches_type=false for clearly unrelated content: technical diagrams, flowcharts, medical bills, hospital records, software screenshots, or documents with no connection to a motor claim.""",
         )
 
     def _fallback_clause_alignment(

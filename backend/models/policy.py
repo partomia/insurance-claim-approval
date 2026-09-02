@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -32,7 +32,8 @@ class Policy(Base):
     policy_number = Column(String, unique=True, index=True, nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     provider_id = Column(Integer, ForeignKey("insurance_providers.id"), nullable=True, index=True)
-    policy_type = Column(String, nullable=False)
+    # Retained for legacy compatibility; always "Motor" going forward.
+    policy_type = Column(String, nullable=False, default="Motor")
     premium_amount = Column(Float, default=0.0, nullable=False)
     status = Column(Enum(PolicyStatus), default=PolicyStatus.ACTIVE, nullable=False)
     coverage_limit = Column(Float, nullable=False)
@@ -43,6 +44,15 @@ class Policy(Base):
     effective_date = Column(DateTime, nullable=False)
     expiry_date = Column(DateTime, nullable=False)
     depreciation_rate = Column(Float, default=0.0, nullable=False)
+
+    # Motor-specific policy metadata.
+    covered_vehicle_vin = Column(String, nullable=True, index=True)
+    covered_make = Column(String, nullable=True)
+    covered_model = Column(String, nullable=True)
+    covered_year = Column(Integer, nullable=True)
+    no_claim_bonus_pct = Column(Float, default=0.0, nullable=False)
+    zero_depreciation_addon = Column(Boolean, default=False, nullable=False)
+    roadside_assistance_addon = Column(Boolean, default=False, nullable=False)
 
     customer = relationship("Customer", back_populates="policies")
     provider = relationship("InsuranceProvider", back_populates="policies")

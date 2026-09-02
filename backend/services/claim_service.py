@@ -50,7 +50,9 @@ class ClaimService:
         location: str,
         claim_amount: float,
         policy_id: int | None = None,
+        motor_fields: dict | None = None,
     ) -> Claim:
+        motor_fields = motor_fields or {}
         claim = Claim(
             claim_number=generate_claim_number(),
             customer_id=customer_id,
@@ -62,6 +64,7 @@ class ClaimService:
             status=ClaimStatus.DRAFT,
             submission_step=1,
             policy_context_json={},
+            **{k: v for k, v in motor_fields.items() if v is not None},
         )
         db.add(claim)
         db.commit()
@@ -80,6 +83,7 @@ class ClaimService:
         location: str | None = None,
         claim_amount: float | None = None,
         policy_id: int | None = None,
+        motor_fields: dict | None = None,
     ) -> Claim:
         if incident_description is not None:
             claim.incident_description = incident_description
@@ -91,6 +95,9 @@ class ClaimService:
             claim.claim_amount = claim_amount
         if policy_id is not None:
             claim.policy_id = policy_id
+        for key, value in (motor_fields or {}).items():
+            if value is not None:
+                setattr(claim, key, value)
         claim.submission_step = max(claim.submission_step, 1)
         db.commit()
         db.refresh(claim)

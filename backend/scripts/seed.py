@@ -1,3 +1,10 @@
+"""Seed the demo database with motor-only data.
+
+Creates one demo customer, three motor policies (each covering a distinct vehicle),
+motor policy documents + RAG clauses, two demo motor-claim experts, and an insurer
+back-office user.
+"""
+
 import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -24,74 +31,101 @@ from services.rag_service import rag_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# Motor-only insurers.
 INSURANCE_PROVIDERS = [
-    ("HDFC Ergo", "hdfc-ergo"),
-    ("ICICI Lombard", "icici-lombard"),
-    ("Bajaj Allianz", "bajaj-allianz"),
-    ("Star Health", "star-health"),
-    ("Care Insurance", "care-insurance"),
-    ("Niva Bupa", "niva-bupa"),
-    ("Acko", "acko"),
-    ("Tata AIG", "tata-aig"),
+    ("Bajaj Allianz Motor", "bajaj-allianz-motor"),
+    ("ICICI Lombard Motor", "icici-lombard-motor"),
+    ("HDFC ERGO Motor", "hdfc-ergo-motor"),
+    ("Acko Drive", "acko-drive"),
+    ("Tata AIG Motor", "tata-aig-motor"),
+    ("Reliance General Motor", "reliance-general-motor"),
 ]
 
-POLICY_SCHEDULE_DOCS = {
-    "Auto": [
-        ("Policy Schedule", "Section 1.0", "This Auto Comprehensive Policy provides coverage for owned vehicles used for personal transportation. Policy period is 12 months from effective date."),
-        ("Coverage Details", "Section 4.2", "Comprehensive coverage includes collision, theft, fire, vandalism, and natural disasters up to the stated coverage limit of the insured vehicle."),
-        ("Exclusions", "Section 7.1", "Exclusions: intentional damage, racing, unlicensed operation, commercial use without rider, and damage while driver is under influence."),
-        ("Settlement", "Section 3.5", "Deductible of $500 applies per claim. Co-pay of 10% applies after deductible. Depreciation of 5% per year on vehicle parts."),
-    ],
-    "Health": [
-        ("Policy Schedule", "Section 1.0", "This Health Insurance Policy covers hospitalization, surgery, and prescription drugs for the insured and dependents."),
-        ("Coverage Details", "Section 2.1", "In-patient hospitalization, day-care procedures, ambulance charges, and post-hospitalization expenses are covered up to sum insured."),
-        ("Exclusions", "Section 5.3", "Cosmetic surgery, experimental treatments, self-inflicted injuries, and pre-existing conditions within waiting period are excluded."),
-        ("Settlement", "Section 3.2", "Deductible of $1,000 per policy year. Co-pay of 20% on all approved claims after deductible."),
-    ],
-    "Home": [
-        ("Policy Schedule", "Section 1.0", "This Home Insurance Policy covers the structure and contents of the insured residential property."),
-        ("Coverage Details", "Section 1.4", "Fire, theft, windstorm, lightning, and explosion damage to building and contents are covered."),
-        ("Exclusions", "Section 6.1", "Flood, earthquake (unless rider purchased), wear and tear, and unoccupied property over 60 days are excluded."),
-        ("Settlement", "Section 2.3", "Deductible of $2,000 per claim. Depreciation of 10% on building contents over 5 years old."),
-    ],
-}
+# One shared motor policy schedule template applied to every seeded policy.
+MOTOR_POLICY_SCHEDULE = [
+    (
+        "Policy Schedule",
+        "Section 1.0",
+        "This Motor Comprehensive Policy provides own-damage and third-party liability "
+        "coverage for the insured private vehicle for a period of 12 months from the "
+        "effective date. Insured Declared Value (IDV) is the maximum settlement amount "
+        "for total loss.",
+    ),
+    (
+        "Coverage Details",
+        "Section 4.2",
+        "Own-damage coverage includes collision, theft, fire, vandalism, natural disasters, "
+        "and glass breakage. Third-party liability covers bodily injury and property "
+        "damage to third parties as required by law. Add-ons available: zero-depreciation, "
+        "roadside assistance, engine protection, consumables cover.",
+    ),
+    (
+        "Exclusions",
+        "Section 7.1",
+        "Exclusions: driving under influence of alcohol or drugs, driving without a "
+        "valid licence, racing or speed testing, commercial use without endorsement, "
+        "consequential loss, mechanical/electrical breakdown, wear and tear, and "
+        "damage caused by war or nuclear risks.",
+    ),
+    (
+        "Add-ons",
+        "Section 5.0",
+        "Zero-depreciation add-on waives depreciation on plastic and rubber parts. "
+        "Roadside assistance covers towing up to 100 km. No-Claim Bonus (NCB) grows "
+        "each claim-free year up to 50%.",
+    ),
+    (
+        "Claim Settlement",
+        "Section 3.5",
+        "Deductible of $500 applies per own-damage claim. Depreciation applied per "
+        "vehicle age schedule unless zero-dep add-on is active. Cashless settlement "
+        "available at network garages. Repair cost above 75% of IDV is treated as "
+        "total loss and settled at IDV minus salvage.",
+    ),
+]
 
-MOCK_CLAUSES = [
+# RAG clause corpus — one per policy_id slot; all motor.
+MOTOR_CLAUSES_TEMPLATE = [
     {
-        "policy_id": 1,
         "section_ref": "Section 4.2",
-        "clause_text": "Comprehensive coverage includes collision, theft, and natural disasters up to policy limits.",
+        "clause_text": (
+            "Own-damage coverage includes collision, theft, fire, vandalism, natural "
+            "disasters, and glass breakage up to the Insured Declared Value (IDV)."
+        ),
         "embedding_metadata": {"category": "coverage"},
     },
     {
-        "policy_id": 1,
+        "section_ref": "Section 4.3",
+        "clause_text": (
+            "Third-party liability coverage indemnifies the insured against bodily "
+            "injury and property damage to third parties as mandated by the Motor "
+            "Vehicles Act."
+        ),
+        "embedding_metadata": {"category": "coverage"},
+    },
+    {
         "section_ref": "Section 7.1",
-        "clause_text": "Exclusions: intentional damage, racing, and unlicensed operation are not covered.",
+        "clause_text": (
+            "Exclusions: driving under influence, unlicensed driver, racing, "
+            "commercial use without endorsement, and consequential loss."
+        ),
         "embedding_metadata": {"category": "exclusion"},
     },
     {
-        "policy_id": 1,
+        "section_ref": "Section 5.0",
+        "clause_text": (
+            "Zero-depreciation add-on waives depreciation on plastic and rubber parts. "
+            "No-Claim Bonus (NCB) grows each claim-free year up to 50%."
+        ),
+        "embedding_metadata": {"category": "add-on"},
+    },
+    {
         "section_ref": "Section 3.5",
-        "clause_text": "Deductible of $500 applies per claim. Co-pay of 10% applies after deductible.",
+        "clause_text": (
+            "Deductible of $500 applies per claim. Repair cost above 75% of IDV is "
+            "treated as total loss and settled at IDV minus salvage."
+        ),
         "embedding_metadata": {"category": "settlement"},
-    },
-    {
-        "policy_id": 2,
-        "section_ref": "Section 2.1",
-        "clause_text": "Health coverage includes hospitalization, surgery, and prescription drugs.",
-        "embedding_metadata": {"category": "coverage"},
-    },
-    {
-        "policy_id": 2,
-        "section_ref": "Section 5.3",
-        "clause_text": "Cosmetic surgery and experimental treatments are excluded from coverage.",
-        "embedding_metadata": {"category": "exclusion"},
-    },
-    {
-        "policy_id": 3,
-        "section_ref": "Section 1.4",
-        "clause_text": "Home coverage includes fire, theft, and windstorm damage to insured property.",
-        "embedding_metadata": {"category": "coverage"},
     },
 ]
 
@@ -123,11 +157,22 @@ def seed_db(reset: bool = False) -> None:
                 customer_id=customer.id,
                 phone="9876543210",
                 kyc_status=KYCStatus.PENDING,
+                saved_vehicles=[
+                    {
+                        "make": "Toyota",
+                        "model": "Camry",
+                        "year": 2022,
+                        "vin": "1HGBH41JXMN109186",
+                        "license_plate": "MH-01-AB-1234",
+                    }
+                ],
+                saved_garages=[
+                    {"name": "Prime Auto Body Shop", "city": "Mumbai"},
+                ],
             )
             db.add(profile)
             db.commit()
         elif profile.kyc_gov_id_path and not Path(profile.kyc_gov_id_path).is_file():
-            # Clear demo seed flags when no real ID file was uploaded
             profile.kyc_gov_id_path = None
             profile.kyc_face_verified = False
             profile.kyc_mobile_verified = False
@@ -136,33 +181,52 @@ def seed_db(reset: bool = False) -> None:
             db.commit()
 
         now = datetime.utcnow()
+        # Motor policies — each covering a distinct vehicle.
         policies_data = [
             {
-                "policy_number": "POL-12345",
-                "policy_type": "Auto",
+                "policy_number": "POL-MTR-1001",
                 "coverage_limit": 500000.0,
                 "deductible": 500.0,
-                "co_pay_pct": 10.0,
-                "exclusions": ["intentional damage", "racing"],
-                "depreciation_rate": 5.0,
-            },
-            {
-                "policy_number": "POL-67890",
-                "policy_type": "Health",
-                "coverage_limit": 1000000.0,
-                "deductible": 1000.0,
-                "co_pay_pct": 20.0,
-                "exclusions": ["cosmetic surgery", "experimental treatments"],
-                "depreciation_rate": 0.0,
-            },
-            {
-                "policy_number": "POL-11111",
-                "policy_type": "Home",
-                "coverage_limit": 300000.0,
-                "deductible": 2000.0,
                 "co_pay_pct": 0.0,
-                "exclusions": ["flood", "earthquake"],
+                "exclusions": ["unlicensed driver", "racing", "commercial use"],
+                "depreciation_rate": 5.0,
+                "covered_make": "Toyota",
+                "covered_model": "Camry",
+                "covered_year": 2022,
+                "covered_vehicle_vin": "1HGBH41JXMN109186",
+                "no_claim_bonus_pct": 20.0,
+                "zero_depreciation_addon": True,
+                "roadside_assistance_addon": True,
+            },
+            {
+                "policy_number": "POL-MTR-1002",
+                "coverage_limit": 300000.0,
+                "deductible": 750.0,
+                "co_pay_pct": 5.0,
+                "exclusions": ["unlicensed driver", "racing"],
                 "depreciation_rate": 10.0,
+                "covered_make": "Honda",
+                "covered_model": "Civic",
+                "covered_year": 2019,
+                "covered_vehicle_vin": "2HGFC2F59KH500001",
+                "no_claim_bonus_pct": 35.0,
+                "zero_depreciation_addon": False,
+                "roadside_assistance_addon": True,
+            },
+            {
+                "policy_number": "POL-MTR-1003",
+                "coverage_limit": 800000.0,
+                "deductible": 1000.0,
+                "co_pay_pct": 0.0,
+                "exclusions": ["unlicensed driver", "DUI", "racing", "commercial use"],
+                "depreciation_rate": 5.0,
+                "covered_make": "BMW",
+                "covered_model": "3 Series",
+                "covered_year": 2023,
+                "covered_vehicle_vin": "WBA5A5C58DD000001",
+                "no_claim_bonus_pct": 0.0,
+                "zero_depreciation_addon": True,
+                "roadside_assistance_addon": True,
             },
         ]
 
@@ -173,7 +237,7 @@ def seed_db(reset: bool = False) -> None:
                 policy = Policy(
                     policy_number=pdata["policy_number"],
                     customer_id=customer.id,
-                    policy_type=pdata["policy_type"],
+                    policy_type="Motor",
                     status=PolicyStatus.ACTIVE,
                     coverage_limit=pdata["coverage_limit"],
                     deductible=pdata["deductible"],
@@ -183,6 +247,13 @@ def seed_db(reset: bool = False) -> None:
                     effective_date=now - timedelta(days=365),
                     expiry_date=now + timedelta(days=365),
                     depreciation_rate=pdata["depreciation_rate"],
+                    covered_make=pdata["covered_make"],
+                    covered_model=pdata["covered_model"],
+                    covered_year=pdata["covered_year"],
+                    covered_vehicle_vin=pdata["covered_vehicle_vin"],
+                    no_claim_bonus_pct=pdata["no_claim_bonus_pct"],
+                    zero_depreciation_addon=pdata["zero_depreciation_addon"],
+                    roadside_assistance_addon=pdata["roadside_assistance_addon"],
                 )
                 db.add(policy)
                 db.commit()
@@ -200,8 +271,7 @@ def seed_db(reset: bool = False) -> None:
 
         for policy in db.query(Policy).all():
             if db.query(PolicyDocument).filter(PolicyDocument.policy_id == policy.id).count() == 0:
-                schedule = POLICY_SCHEDULE_DOCS.get(policy.policy_type, POLICY_SCHEDULE_DOCS["Auto"])
-                for title, section_ref, content in schedule:
+                for title, section_ref, content in MOTOR_POLICY_SCHEDULE:
                     db.add(
                         PolicyDocument(
                             policy_id=policy.id,
@@ -213,10 +283,11 @@ def seed_db(reset: bool = False) -> None:
                     )
                 db.commit()
 
+        # Build the RAG corpus: one set of motor clauses per policy.
         clauses_with_ids = []
-        for i, clause in enumerate(MOCK_CLAUSES):
-            pid = policy_ids[min(i // 2, len(policy_ids) - 1)]
-            clauses_with_ids.append({**clause, "policy_id": pid})
+        for pid in policy_ids:
+            for clause in MOTOR_CLAUSES_TEMPLATE:
+                clauses_with_ids.append({**clause, "policy_id": pid})
 
         if rag_service.count() == 0:
             rag_service.ingest_clauses(db, clauses_with_ids, rebuild=True)
@@ -238,13 +309,13 @@ def seed_db(reset: bool = False) -> None:
                 "email": "expert1@claimcopilot.in",
                 "full_name": "Ananya Desai",
                 "password": "password123",
-                "department": "Senior Claim Consultant",
+                "department": "Senior Motor Claims Advisor",
             },
             {
                 "email": "expert2@claimcopilot.in",
                 "full_name": "Rohit Mehta",
                 "password": "password123",
-                "department": "Health Claims Advisor",
+                "department": "Motor Fraud Investigator",
             },
         ]
         for agent_data in demo_agents:
@@ -268,7 +339,7 @@ def seed_db(reset: bool = False) -> None:
                 email="insurer1@claimcopilot.in",
                 full_name="Rajesh Iyer",
                 hashed_password=get_password_hash("password123"),
-                department="Senior Claims Adjuster",
+                department="Senior Motor Claims Adjuster",
             )
             db.add(demo_insurer)
             db.commit()
@@ -311,20 +382,7 @@ def seed_db(reset: bool = False) -> None:
                 claim.assigned_at = datetime.utcnow()
             db.commit()
 
-        if test_customer:
-            submitted_demo = (
-                db.query(Claim)
-                .filter(Claim.customer_id == test_customer.id)
-                .order_by(Claim.updated_at.desc())
-                .first()
-            )
-            if submitted_demo and expert1:
-                submitted_demo.status = ClaimStatus.SUBMITTED_TO_INSURER
-                submitted_demo.assigned_agent_id = expert1.id
-                submitted_demo.assigned_agent = expert1.full_name
-                db.commit()
-
-        print("Database seeded with customer, policies, demo agents, and Chroma index.")
+        print("Database seeded with motor customer, 3 motor policies, and Chroma index.")
         print("Run `python backend/scripts/seed_enterprise.py --reset` for full enterprise demo data.")
         print("  Demo insurer: insurer1@claimcopilot.in / password123 / OTP 112233")
     finally:

@@ -101,8 +101,14 @@ def detect_intent(message: str) -> AssistantIntent:
             "copay",
             "policy",
             "clause",
-            "hospital",
             "motor",
+            "vehicle",
+            "car",
+            "idv",
+            "ncb",
+            "own damage",
+            "third party",
+            "garage",
         )
     ):
         return AssistantIntent.COVERAGE

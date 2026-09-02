@@ -111,6 +111,21 @@ def notify_customer_task(claim_id: int) -> dict[str, Any]:
 
 @celery_app.task(name="orchestrate_claim_task")
 def orchestrate_claim_task(claim_id: int) -> str:
+    # New CrewAI Flow path — feature-flagged via settings.use_crewai_flow.
+    # The Flow itself handles PROCESSING transition + the claim_submitted
+    # progress event, so we short-circuit before the legacy chord builds.
+    if settings.use_crewai_flow:
+        try:
+            from crew.flow import run_claim_flow
+
+            run_claim_flow(claim_id)
+            return f"crewai flow completed for claim {claim_id}"
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "CrewAI Flow failed for claim %s (%s), falling back to legacy chord",
+                claim_id, exc,
+            )
+
     db = SessionLocal()
     try:
         claim = db.query(Claim).filter(Claim.id == claim_id).first()

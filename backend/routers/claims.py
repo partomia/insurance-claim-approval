@@ -180,11 +180,42 @@ def _get_owned_claim(db: Session, claim_id: int, customer_id: int) -> Claim:
     return claim
 
 
+_MOTOR_FIELD_KEYS = (
+    "incident_type",
+    "third_party_involved",
+    "injuries_reported",
+    "tow_required",
+    "vehicle_make",
+    "vehicle_model",
+    "vehicle_year",
+    "vin",
+    "license_plate",
+    "odometer_km",
+    "driver_license_number",
+    "driver_license_class",
+)
+
+
+def _extract_motor_fields(body) -> dict:
+    """Collect motor-specific fields set on a DraftClaimCreate/Update body."""
+    out: dict = {}
+    for key in _MOTOR_FIELD_KEYS:
+        val = getattr(body, key, None)
+        if val is not None:
+            out[key] = val
+    return out
+
+
 def _draft_response(claim: Claim, db: Session) -> schemas.DraftClaimResponse:
     policy_number = None
     if claim.policy_id:
         policy = db.query(Policy).filter(Policy.id == claim.policy_id).first()
         policy_number = policy.policy_number if policy else None
+    incident_type_val = None
+    if claim.incident_type is not None:
+        incident_type_val = (
+            claim.incident_type.value if hasattr(claim.incident_type, "value") else str(claim.incident_type)
+        )
     return schemas.DraftClaimResponse(
         claim_id=claim.claim_number,
         id=claim.id,
@@ -192,6 +223,18 @@ def _draft_response(claim: Claim, db: Session) -> schemas.DraftClaimResponse:
         submission_step=claim.submission_step,
         policy_context_ready=policy_context_service.has_policy_context(claim),
         policy_number=policy_number,
+        incident_type=incident_type_val,
+        third_party_involved=bool(claim.third_party_involved),
+        injuries_reported=bool(claim.injuries_reported),
+        tow_required=bool(claim.tow_required),
+        vehicle_make=claim.vehicle_make,
+        vehicle_model=claim.vehicle_model,
+        vehicle_year=claim.vehicle_year,
+        vin=claim.vin,
+        license_plate=claim.license_plate,
+        odometer_km=claim.odometer_km,
+        driver_license_number=claim.driver_license_number,
+        driver_license_class=claim.driver_license_class,
     )
 
 
@@ -208,6 +251,7 @@ def create_draft(
         incident_datetime=body.incident_datetime,
         location=body.location,
         claim_amount=body.claim_amount,
+        motor_fields=_extract_motor_fields(body),
     )
     return _draft_response(claim, db)
 
@@ -236,6 +280,7 @@ def update_draft(
         location=body.location,
         claim_amount=body.claim_amount,
         policy_id=policy_id,
+        motor_fields=_extract_motor_fields(body),
     )
     db.refresh(claim)
     return _draft_response(claim, db)
@@ -303,13 +348,22 @@ def get_policy_context(
 @router.post("/{claim_id}/evidence", status_code=status.HTTP_200_OK)
 async def upload_evidence(
     claim_id: int,
-    proofs: list[UploadFile] = File(default=[]),
-    gov_id: Optional[UploadFile] = File(default=None),
+    damage_photos: list[UploadFile] = File(default=[]),
+    repair_estimate: Optional[UploadFile] = File(default=None),
+    driver_license: Optional[UploadFile] = File(default=None),
+    vehicle_registration: Optional[UploadFile] = File(default=None),
     police_report: Optional[UploadFile] = File(default=None),
-    medical_bills: Optional[UploadFile] = File(default=None),
+    towing_invoice: Optional[UploadFile] = File(default=None),
+    third_party_statement: Optional[UploadFile] = File(default=None),
     customer: Customer = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
+    """Upload motor-vehicle claim evidence.
+
+    Required: at least one damage photo. Driver's license required until KYC
+    is verified. Police report required when third-party or injuries are on
+    the claim. Other slots optional but strengthen the case.
+    """
     claim = _get_owned_claim(db, claim_id, customer.id)
     if not policy_context_service.has_policy_context(claim):
         raise HTTPException(status_code=400, detail="Complete Step 2 (policy papers) first")
@@ -317,20 +371,37 @@ async def upload_evidence(
     profile = db.query(CustomerProfile).filter(CustomerProfile.customer_id == customer.id).first()
     kyc_verified = is_kyc_verified(profile)
 
-    if not kyc_verified and not gov_id:
-        raise HTTPException(status_code=400, detail="Upload government ID or complete KYC in your profile")
-    if not proofs:
-        raise HTTPException(status_code=400, detail="Upload at least one supporting document")
+    if not kyc_verified and not driver_license:
+        raise HTTPException(
+            status_code=400,
+            detail="Upload driver's license or complete KYC in your profile",
+        )
+    if not damage_photos:
+        raise HTTPException(status_code=400, detail="Upload at least one damage photo")
+    if (claim.third_party_involved or claim.injuries_reported) and not police_report:
+        raise HTTPException(
+            status_code=400,
+            detail="Police report is required when third parties or injuries are involved",
+        )
+    if claim.tow_required and not towing_invoice:
+        # Not fatal — flag for later evidence collection but allow submission.
+        pass
 
     uploads: list[tuple[DocumentType, UploadFile]] = []
-    if gov_id:
-        uploads.append((DocumentType.GOV_ID, gov_id))
-    for proof in proofs:
-        uploads.append((DocumentType.PROOF, proof))
+    if driver_license:
+        uploads.append((DocumentType.DRIVER_LICENSE, driver_license))
+    for photo in damage_photos:
+        uploads.append((DocumentType.DAMAGE_PHOTO, photo))
+    if repair_estimate:
+        uploads.append((DocumentType.REPAIR_ESTIMATE, repair_estimate))
+    if vehicle_registration:
+        uploads.append((DocumentType.VEHICLE_REGISTRATION, vehicle_registration))
     if police_report:
         uploads.append((DocumentType.POLICE_REPORT, police_report))
-    if medical_bills:
-        uploads.append((DocumentType.MEDICAL, medical_bills))
+    if towing_invoice:
+        uploads.append((DocumentType.TOWING_INVOICE, towing_invoice))
+    if third_party_statement:
+        uploads.append((DocumentType.THIRD_PARTY_STATEMENT, third_party_statement))
 
     for doc_type, upload in uploads:
         path, checksum = await save_upload(upload, claim.id)
@@ -398,21 +469,17 @@ def send_chat_message(
 
 @router.post("/submit", response_model=schemas.ClaimSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
 async def submit_claim_legacy(
-    policy_number: str = Form(...),
-    incident_description: str = Form(...),
-    incident_datetime: datetime = Form(...),
-    location: str = Form(...),
-    claim_amount: float = Form(...),
-    proofs: list[UploadFile] = File(default=[]),
-    gov_id: UploadFile = File(...),
-    police_report: Optional[UploadFile] = File(default=None),
-    medical_bills: Optional[UploadFile] = File(default=None),
     customer: Customer = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
+    """Legacy single-shot submit — deprecated. Use the wizard flow instead."""
     raise HTTPException(
         status_code=400,
-        detail="Use the 4-step wizard at /claim: create draft, load policy papers (Step 2), upload evidence, then submit.",
+        detail=(
+            "Use the 4-step motor claim wizard at /claim: create draft with vehicle "
+            "and driver details, load policy papers (Step 2), upload damage photos "
+            "and supporting documents (Step 3), then submit (Step 4)."
+        ),
     )
 
 

@@ -18,14 +18,12 @@ from models.policy_agent import PolicyAgent
 from services.analysis_service import compute_analysis_fields
 
 PROVIDERS = [
-    ("HDFC Ergo", "hdfc-ergo"),
-    ("ICICI Lombard", "icici-lombard"),
-    ("Bajaj Allianz", "bajaj-allianz"),
-    ("Star Health", "star-health"),
-    ("Care Insurance", "care-insurance"),
-    ("Niva Bupa", "niva-bupa"),
-    ("Acko", "acko"),
-    ("Tata AIG", "tata-aig"),
+    ("Bajaj Allianz Motor", "bajaj-allianz-motor"),
+    ("ICICI Lombard Motor", "icici-lombard-motor"),
+    ("HDFC ERGO Motor", "hdfc-ergo-motor"),
+    ("Acko Drive", "acko-drive"),
+    ("Tata AIG Motor", "tata-aig-motor"),
+    ("Reliance General Motor", "reliance-general-motor"),
 ]
 
 FIRST_NAMES = [
@@ -40,51 +38,38 @@ LAST_NAMES = [
     "Joshi", "Desai", "Kapoor", "Malhotra", "Verma", "Chopra", "Rao", "Pillai",
 ]
 
-HOSPITALS = [
-    {"name": "Apollo Hospitals", "city": "Chennai"},
-    {"name": "Fortis Memorial", "city": "Gurgaon"},
-    {"name": "Max Super Specialty", "city": "Delhi"},
-    {"name": "Manipal Hospital", "city": "Bangalore"},
-    {"name": "Kokilaben Dhirubhai", "city": "Mumbai"},
-]
-
 GARAGES = [
     {"name": "MyTVS Auto", "city": "Bangalore"},
     {"name": "Bosch Car Service", "city": "Pune"},
     {"name": "Mahindra First Choice", "city": "Hyderabad"},
+    {"name": "Prime Auto Body Shop", "city": "Mumbai"},
+    {"name": "Denting & Painting Co.", "city": "Delhi"},
 ]
 
 VEHICLES = [
-    {"make": "Maruti", "model": "Swift", "year": 2021},
-    {"make": "Hyundai", "model": "Creta", "year": 2022},
-    {"make": "Honda", "model": "City", "year": 2020},
-    {"make": "Tata", "model": "Nexon", "year": 2023},
+    {"make": "Maruti", "model": "Swift", "year": 2021, "vin": "MA3ETDE1S00500001"},
+    {"make": "Hyundai", "model": "Creta", "year": 2022, "vin": "MALA751CLNM500001"},
+    {"make": "Honda", "model": "City", "year": 2020, "vin": "JHMCB7660LC500001"},
+    {"make": "Tata", "model": "Nexon", "year": 2023, "vin": "MAT625134PPT00001"},
+    {"make": "Toyota", "model": "Innova", "year": 2019, "vin": "MHFAX8G80K1500001"},
 ]
 
 INCIDENTS = {
-    "Health": [
-        "Hospitalization for appendectomy surgery",
-        "Day-care cataract procedure",
-        "Emergency room visit for fracture treatment",
-        "Maternity delivery expenses",
-        "Dengue fever hospitalization",
-    ],
     "Motor": [
         "Rear-end collision damage repair",
         "Windshield replacement after stone chip",
-        "Theft of vehicle accessories",
-        "Flood damage to engine",
-        "Side mirror damage in parking",
-    ],
-    "Home": [
-        "Water pipe burst damage to flooring",
-        "Burglary — electronics stolen",
-        "Kitchen fire smoke damage",
-        "Monsoon leakage damage to ceiling",
+        "Theft of vehicle accessories overnight",
+        "Flood damage to engine after monsoon flooding",
+        "Side mirror damage in parking lot hit-and-run",
+        "T-bone collision at intersection",
+        "Vandalism — paint scratches across side panel",
+        "Fire damage after electrical short",
+        "Front bumper and headlight damage after hitting divider",
+        "Total loss after highway collision with truck",
     ],
 }
 
-POLICY_TYPES = ["Health", "Motor", "Home"]
+POLICY_TYPES = ["Motor"]
 STATUSES = [
     ClaimStatus.ANALYSIS_COMPLETE,
     ClaimStatus.PENDING_REVIEW,
@@ -97,20 +82,20 @@ STATUSES = [
 ]
 
 PROBLEMS = [
-    "Missing discharge summary",
-    "Invoice not signed by hospital",
-    "Policy waiting period ends in 12 days",
+    "Repair estimate not signed by garage",
+    "Damage photos do not match the described incident",
     "Claim amount exceeds declared IDV",
-    "FIR copy not uploaded",
-    "Pre-existing condition clause may apply",
+    "FIR copy not uploaded for a third-party incident",
+    "VIN on claim does not match policy's covered vehicle",
+    "Driver's licence expired at the time of incident",
 ]
 
 RECOMMENDATIONS = [
-    "Upload discharge summary from hospital",
-    "Use original signed invoice, not photocopy",
-    "Add treating doctor's prescription",
-    "Include itemized bill breakdown",
-    "Upload geo-tagged photos of damage",
+    "Upload the garage's original itemized repair estimate",
+    "Use a signed original invoice, not a photocopy",
+    "Add clear geo-tagged photos of all damaged panels",
+    "Include the VIN/chassis plate photo",
+    "Upload the police FIR for third-party incidents",
 ]
 
 
@@ -133,7 +118,7 @@ def seed_enterprise(reset: bool = False) -> None:
 
         experts_data = [
             ("expert1@claimcopilot.in", "Ananya Desai", "Senior Claim Consultant"),
-            ("expert2@claimcopilot.in", "Rohit Mehta", "Health Claims Advisor"),
+            ("expert2@claimcopilot.in", "Rohit Mehta", "Motor Fraud Investigator"),
             ("expert3@claimcopilot.in", "Kavita Nair", "Motor Claims Specialist"),
             ("expert4@claimcopilot.in", "Vikram Singh", "Policy Coverage Expert"),
         ]
@@ -195,9 +180,8 @@ def seed_enterprise(reset: bool = False) -> None:
                     kyc_mobile_verified=i < 28,
                     kyc_verified_at=now - timedelta(days=random.randint(30, 400)) if i < 28 else None,
                     emergency_contacts=[{"name": f"{last} Family", "phone": "9876543210", "relation": "Spouse"}],
-                    saved_vehicles=random.sample(VEHICLES, k=random.randint(0, 2)),
-                    saved_hospitals=random.sample(HOSPITALS, k=random.randint(1, 3)),
-                    saved_garages=random.sample(GARAGES, k=random.randint(0, 2)),
+                    saved_vehicles=random.sample(VEHICLES, k=random.randint(1, 2)),
+                    saved_garages=random.sample(GARAGES, k=random.randint(1, 3)),
                     preferred_providers=random.sample([s for _, s in PROVIDERS], k=3),
                     dependents=[{"name": f"Child {first}", "age": random.randint(5, 18), "relation": "Child"}],
                     risk_profile={"tier": random.choice(["low", "medium", "high"]), "prior_rejections": random.randint(0, 2)},
@@ -215,25 +199,33 @@ def seed_enterprise(reset: bool = False) -> None:
                 continue
 
             for j in range(random.randint(1, 2)):
-                ptype = random.choice(POLICY_TYPES)
+                ptype = "Motor"
                 provider = random.choice(list(provider_map.values()))
-                policy_number = f"{provider.slug[:3].upper()}-{ptype[:3].upper()}-{customer.id:03d}-{j+1}"
+                policy_number = f"{provider.slug[:3].upper()}-MTR-{customer.id:03d}-{j+1}"
                 effective = now - timedelta(days=random.randint(180, 900))
+                covered_vehicle = random.choice(VEHICLES)
                 policy = Policy(
                     policy_number=policy_number,
                     customer_id=customer.id,
                     provider_id=provider.id,
                     policy_type=ptype,
                     status=PolicyStatus.ACTIVE,
-                    coverage_limit={"Health": 500000, "Motor": 800000, "Home": 2500000}[ptype],
-                    deductible={"Health": 5000, "Motor": 2000, "Home": 10000}[ptype],
-                    co_pay_pct=10.0 if ptype == "Health" else 0.0,
-                    exclusions=["cosmetic surgery"] if ptype == "Health" else ["commercial use"],
-                    waiting_period_days=30 if ptype == "Health" else 0,
+                    coverage_limit=random.choice([300000, 500000, 800000, 1000000]),
+                    deductible=random.choice([500, 750, 1000, 2000]),
+                    co_pay_pct=0.0,
+                    exclusions=["unlicensed driver", "racing", "commercial use"],
+                    waiting_period_days=0,
                     effective_date=effective,
                     expiry_date=effective + timedelta(days=365),
-                    depreciation_rate=5.0 if ptype == "Motor" else 0.0,
-                    premium_amount={"Health": 18500, "Motor": 12400, "Home": 8200}[ptype],
+                    depreciation_rate=5.0,
+                    premium_amount=12400,
+                    covered_make=covered_vehicle["make"],
+                    covered_model=covered_vehicle["model"],
+                    covered_year=covered_vehicle["year"],
+                    covered_vehicle_vin=covered_vehicle["vin"],
+                    no_claim_bonus_pct=random.choice([0.0, 20.0, 25.0, 35.0, 50.0]),
+                    zero_depreciation_addon=random.random() < 0.4,
+                    roadside_assistance_addon=random.random() < 0.6,
                 )
                 db.add(policy)
                 db.commit()
@@ -271,7 +263,7 @@ def seed_enterprise(reset: bool = False) -> None:
             ptype = policy.policy_type
             status = random.choice(STATUSES)
             amount = round(random.uniform(5000, 250000), 2)
-            incident = random.choice(INCIDENTS.get(ptype, INCIDENTS["Health"]))
+            incident = random.choice(INCIDENTS["Motor"])
             claim_number = f"CLM{uuid.uuid4().hex[:8].upper()}"
 
             claim = Claim(

@@ -1,3 +1,10 @@
+"""Motor-vehicle evidence analysis: validates each uploaded document against its
+declared type using OCR + keyword heuristics + LLM validation as a tie-breaker.
+
+Emits a per-document confidence score and surfaces mismatches for the claim
+pipeline to feed into the decision engine.
+"""
+
 import logging
 import re
 from dataclasses import dataclass, field
@@ -12,144 +19,149 @@ from services.ocr_service import ocr_service
 logger = logging.getLogger(__name__)
 
 FIELD_LABELS = {
-    DocumentType.GOV_ID: "Government ID",
-    DocumentType.PROOF: "Proof document",
-    DocumentType.POLICE_REPORT: "Police report",
-    DocumentType.MEDICAL: "Medical document",
-    DocumentType.INVOICE: "Invoice",
+    DocumentType.DRIVER_LICENSE: "Driver's licence",
+    DocumentType.DAMAGE_PHOTO: "Damage photo",
+    DocumentType.REPAIR_ESTIMATE: "Repair estimate",
+    DocumentType.POLICE_REPORT: "Police report / FIR",
+    DocumentType.VEHICLE_REGISTRATION: "Vehicle registration (RC)",
+    DocumentType.TOWING_INVOICE: "Towing invoice",
+    DocumentType.THIRD_PARTY_STATEMENT: "Third-party statement",
+    DocumentType.POLICY_PAPER: "Policy document",
+    DocumentType.OTHER: "Supporting document",
 }
 
-# Phrase patterns for technical/architecture diagrams — not plumbing "pipeline"
+# Phrase patterns for technical/architecture diagrams (still a valid mismatch signal).
 TECH_DIAGRAM_PHRASES = (
     r"\bdata\s+pipeline\b",
     r"\bagents?\s+pipeline\b",
     r"\bprocessing\s+pipeline\b",
     r"\bml\s+pipeline\b",
     r"\betl\s+pipeline\b",
-    r"\bdiscovery\s+pipeline\b",
     r"\bflowchart\b",
     r"\bsequence\s+diagram\b",
     r"\bsystem\s+architecture\b",
     r"\bcomponent\s+diagram\b",
     r"\barchitecture\s+diagram\b",
-    r"\brfp\b",
 )
 
 DIAGRAM_FILENAME_HINTS = (
     "flowchart",
     "architecture",
-    "rfp_discovery",
     "pipeline_flow",
     "agent_workflow",
     "system_diagram",
 )
 
-GOV_ID_PATTERNS = (
-    r"\bpassport\b",
+# Motor-specific evidence heuristics.
+DRIVER_LICENSE_PATTERNS = (
     r"\bdriver['']?s?\s*licen[cs]e\b",
-    r"\bdate\s*of\s*birth\b",
-    r"\bd\.?o\.?b\.?\b",
-    r"\bnational\s*id\b",
-    r"\bidentity\s*card\b",
-    r"\b(?:id|license|licence)\s*(?:no|number|#)\b",
-    r"\b(?:expir(?:y|es|ation)|issued)\b",
-    r"\b(?:sex|gender)\b",
-    r"\b(?:address|nationality)\b",
-    r"\baadhaar\b",
-    r"\baadhar\b",
-    r"\buidai\b",
-    r"\bpan\b",
-    r"\bpermanent\s*account\b",
-    r"\bincome\s*tax\b",
-    r"\bgovernment\s*of\s*india\b",
-    r"\bunique\s*identification\b",
-    r"\bvoter\b",
-    r"\belection\s*commission\b",
+    r"\bdriving\s*licen[cs]e\b",
+    r"\bdl\s*(?:no|number|#)\b",
+    r"\blicen[cs]e\s*(?:no|number|#|class)\b",
+    r"\bendorsement(s)?\b",
+    r"\bexpir(?:y|es|ation)\b",
+    r"\bissuing\s*authority\b",
+    r"\brto\b",
+    r"\bmotor\s*vehicles?\s*department\b",
+    r"\bdmv\b",
 )
 
-ID_FILENAME_HINTS = (
-    "pan",
-    "aadhar",
-    "aadhaar",
-    "passport",
-    "license",
+DRIVER_LICENSE_FILENAME_HINTS = (
+    "dl",
+    "driver",
+    "driving",
     "licence",
-    "voter",
-    "identity",
-    "gov_id",
-    "gov-id",
-    "national_id",
-    "id_card",
-    "id-card",
+    "license",
 )
 
-PROOF_FILENAME_HINTS = (
-    "inspection",
-    "repair",
+VEHICLE_REGISTRATION_PATTERNS = (
+    r"\bregistration\s*certificate\b",
+    r"\brc\s*book\b",
+    r"\brc\s*copy\b",
+    r"\bchassis\s*(?:no|number|#)\b",
+    r"\bengine\s*(?:no|number|#)\b",
+    r"\bvin\b",
+    r"\bvehicle\s*identification\b",
+    r"\bregistration\s*(?:no|number|#|authority)\b",
+    r"\bmodel\s*year\b",
+)
+
+VEHICLE_REGISTRATION_FILENAME_HINTS = ("rc", "registration", "vehicle_rc", "regcert")
+
+REPAIR_ESTIMATE_PATTERNS = (
+    r"\bgarage\b",
+    r"\bworkshop\b",
+    r"\brepair\s*(?:estimate|invoice|order)\b",
+    r"\bbody\s*shop\b",
+    r"\bparts?\s*(?:cost|total|charge)\b",
+    r"\blabou?r\s*(?:cost|charge|hours?)\b",
+    r"\bgst\b",
+    r"\bvat\b",
+    r"\btax\b",
+    r"\bdent(ing)?\b",
+    r"\bpanel\b",
+    r"\bbumper\b",
+    r"\bwindshield\b",
+    r"\bpaint(ing)?\b",
+    r"\bpolish(ing)?\b",
+    r"\bdenting\s*and\s*painting\b",
+)
+
+REPAIR_ESTIMATE_FILENAME_HINTS = (
     "estimate",
     "invoice",
-    "report",
-    "proof",
-    "evidence",
-    "damage",
-    "plumber",
-    "medical",
+    "garage",
+    "workshop",
+    "repair",
+    "quote",
+    "quotation",
     "bill",
-    "receipt",
-    "police",
-    "survey",
 )
 
-PROOF_TEXT_KEYWORDS = (
-    "inspection",
-    "repair",
-    "estimate",
-    "invoice",
-    "damage",
-    "plumber",
-    "contractor",
-    "report",
-    "survey",
-    "receipt",
-    "bill",
-    "claim",
-    "incident",
-    "loss",
-    "property",
-    "home",
-    "roof",
-    "water",
-    "fire",
-    "theft",
-    "medical",
-    "hospital",
-    "treatment",
-    "diagnosis",
-    "assessment",
-    "itemized",
-    "leak",
-    "plumbing",
-    "flood",
-    "mold",
+POLICE_REPORT_PATTERNS = (
+    r"\bfir\b",
+    r"\bfirst\s*information\s*report\b",
+    r"\bpolice\s*(?:report|station)\b",
+    r"\bcrime\s*number\b",
+    r"\bcomplainant\b",
+    r"\baccused\b",
+    r"\baccident\b",
+    r"\bincident\s*(?:report|number)\b",
+    r"\bofficer\b",
+    r"\binvestigating\s*officer\b",
 )
 
-HOME_PROOF_KEYWORDS = (
-    "inspection",
-    "repair",
-    "estimate",
-    "damage",
-    "assessment",
-    "plumber",
-    "plumbing",
-    "contractor",
-    "property",
-    "leak",
-    "water",
-    "pipe",
-    "flood",
-    "roof",
-    "itemized",
+POLICE_REPORT_FILENAME_HINTS = ("fir", "police", "report", "incident")
+
+TOWING_INVOICE_PATTERNS = (
+    r"\btowing\b",
+    r"\btow(ed)?\b",
+    r"\brecovery\s*(?:service|vehicle)\b",
+    r"\bpickup\s*(?:location|point)\b",
+    r"\bdrop\s*(?:location|point)\b",
+    r"\bcrane\s*charge\b",
 )
+
+TOWING_INVOICE_FILENAME_HINTS = ("tow", "towing", "recovery")
+
+DAMAGE_PHOTO_HINTS = (
+    "damage",
+    "photo",
+    "img",
+    "image",
+    "picture",
+    "front",
+    "rear",
+    "side",
+    "bumper",
+    "dent",
+    "scratch",
+    "accident",
+)
+
+# When a doc claims to be a damage photo we mostly trust the filename/extension
+# because OCR on a bare photograph rarely returns useful text.
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".heif")
 
 
 @dataclass
@@ -175,6 +187,36 @@ class EvidenceAnalysisResult:
     evidence_issues: list[dict[str, Any]] = field(default_factory=list)
 
 
+# Map each motor DocumentType to (patterns, filename_hints, expected_min_text).
+_TYPE_MATCHERS = {
+    DocumentType.DRIVER_LICENSE: (
+        DRIVER_LICENSE_PATTERNS,
+        DRIVER_LICENSE_FILENAME_HINTS,
+        12,
+    ),
+    DocumentType.VEHICLE_REGISTRATION: (
+        VEHICLE_REGISTRATION_PATTERNS,
+        VEHICLE_REGISTRATION_FILENAME_HINTS,
+        20,
+    ),
+    DocumentType.REPAIR_ESTIMATE: (
+        REPAIR_ESTIMATE_PATTERNS,
+        REPAIR_ESTIMATE_FILENAME_HINTS,
+        40,
+    ),
+    DocumentType.POLICE_REPORT: (
+        POLICE_REPORT_PATTERNS,
+        POLICE_REPORT_FILENAME_HINTS,
+        40,
+    ),
+    DocumentType.TOWING_INVOICE: (
+        TOWING_INVOICE_PATTERNS,
+        TOWING_INVOICE_FILENAME_HINTS,
+        20,
+    ),
+}
+
+
 class EvidenceAnalysisService:
     def analyze(self, db: Session, claim: Claim) -> EvidenceAnalysisResult:
         documents = list(claim.documents or [])
@@ -184,7 +226,6 @@ class EvidenceAnalysisService:
                 evidence_missing=True,
             )
 
-        policy_type = claim.policy.policy_type if claim.policy else "Auto"
         seen_checksums: dict[str, str] = {}
         duplicate_uploads: list[str] = []
         document_results: list[DocumentValidationResult] = []
@@ -202,20 +243,14 @@ class EvidenceAnalysisService:
                 db.add(doc)
 
             logger.info(
-                "Evidence OCR for claim doc id=%s filename=%s doc_type=%s chars=%s preview=%r",
+                "Evidence OCR for claim doc id=%s filename=%s doc_type=%s chars=%s",
                 doc.id,
                 doc.original_filename,
                 doc.doc_type.value,
                 len(ocr_text or ""),
-                (ocr_text or "")[:200],
             )
 
-            result = self._validate_document(
-                doc,
-                ocr_text,
-                claim.incident_description,
-                policy_type,
-            )
+            result = self._validate_document(doc, ocr_text, claim.incident_description)
             document_results.append(result)
 
             if result.type_mismatch and not self._is_acknowledged(doc):
@@ -279,7 +314,6 @@ class EvidenceAnalysisService:
         doc: ClaimDocument,
         ocr_text: str,
         incident_description: str,
-        policy_type: str,
     ) -> DocumentValidationResult:
         issues: list[str] = []
         issue_codes: list[str] = []
@@ -287,67 +321,80 @@ class EvidenceAnalysisService:
         mismatch_reason = ""
         text_lower = (ocr_text or "").lower()
         filename_lower = (doc.original_filename or "").lower()
-        is_image = filename_lower.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"))
+        is_image = filename_lower.endswith(IMAGE_EXTENSIONS)
         is_pdf = filename_lower.endswith(".pdf")
 
         extraction_quality, extraction_message = self._assess_extraction_quality(
             ocr_text, is_image=is_image, is_pdf=is_pdf
         )
-        filename_suggests_diagram = any(h in filename_lower for h in DIAGRAM_FILENAME_HINTS)
 
-        if extraction_quality != "good":
-            if doc.doc_type == DocumentType.GOV_ID and self._filename_suggests_id(filename_lower):
-                # Accept ID uploads identified by filename when image OCR is unavailable
-                logger.info(
-                    "GOV_ID accepted via filename hint (OCR unavailable or empty) filename=%s",
-                    doc.original_filename,
+        # Damage photos are trusted heavily on filename since OCR on a photo is thin.
+        if doc.doc_type == DocumentType.DAMAGE_PHOTO:
+            if is_image or self._filename_suggests_damage(filename_lower):
+                confidence = 0.75 if is_image else 0.55
+                return DocumentValidationResult(
+                    doc_type=doc.doc_type.value,
+                    document_id=doc.id,
+                    filename=doc.original_filename,
+                    ocr_text=ocr_text or "",
+                    confidence=confidence,
+                    issues=issues,
+                    issue_codes=issue_codes,
+                    type_mismatch=False,
+                    mismatch_reason="",
                 )
-            else:
-                issues.append(extraction_message)
-                issue_codes.append("extraction_failed")
+            # Non-image damage photo file — flag as suspicious.
+            type_mismatch = True
+            mismatch_reason = "Damage photo slot expects an image file (jpg/png)"
+            issues.append(mismatch_reason)
+            issue_codes.append("evidence_type_mismatch")
 
-        # Evaluate document-type match when content is readable, or filename clearly indicates diagram
-        if extraction_quality == "good" or filename_suggests_diagram:
-            if doc.doc_type == DocumentType.GOV_ID:
-                type_mismatch, mismatch_reason = self._check_gov_id(
-                    text_lower, filename_lower, is_image, len(ocr_text or "")
-                )
-            elif doc.doc_type == DocumentType.PROOF:
-                type_mismatch, mismatch_reason = self._check_proof(
-                    text_lower, filename_lower, incident_description, policy_type, is_image
-                )
+        elif doc.doc_type in _TYPE_MATCHERS:
+            patterns, filename_hints, min_text = _TYPE_MATCHERS[doc.doc_type]
+            filename_hit = any(h in filename_lower for h in filename_hints)
+            filename_diagram = any(h in filename_lower for h in DIAGRAM_FILENAME_HINTS)
 
-            if type_mismatch:
+            if filename_diagram:
+                type_mismatch = True
+                mismatch_reason = (
+                    f"{FIELD_LABELS.get(doc.doc_type, doc.doc_type.value)} slot "
+                    "does not accept technical diagrams"
+                )
                 issues.append(mismatch_reason)
                 issue_codes.append("evidence_type_mismatch")
-                # Diagram/mismatch confirmed from filename or content — not just unreadable file
-                if "extraction_failed" in issue_codes and extraction_quality != "good":
-                    issue_codes.remove("extraction_failed")
-                    issues[:] = [i for i in issues if "Could not extract" not in i]
 
-            if (
-                not type_mismatch
-                and doc.doc_type in (DocumentType.GOV_ID, DocumentType.PROOF)
-                and self._should_run_llm_validation(
-                    doc, ocr_text, text_lower, filename_lower, is_image, policy_type
-                )
-            ):
-                llm_result = llm_service.validate_evidence_document(
-                    doc.doc_type.value,
-                    ocr_text or "",
-                    incident_description,
-                    policy_type,
-                )
-                if llm_result and not llm_result.get("matches_type", True):
-                    type_mismatch = True
-                    mismatch_reason = llm_result.get("reason") or "Document does not match expected type"
-                    if mismatch_reason not in issues:
+            elif extraction_quality != "good":
+                if filename_hit:
+                    # Trust the filename when OCR is thin.
+                    pass
+                else:
+                    issues.append(extraction_message)
+                    issue_codes.append("extraction_failed")
+            else:
+                # We have readable text — pattern-match against expected type.
+                hits = sum(1 for p in patterns if re.search(p, text_lower, re.I))
+                if hits == 0 and not filename_hit:
+                    # Escalate to LLM for a tie-break.
+                    llm_result = llm_service.validate_evidence_document(
+                        doc.doc_type.value,
+                        ocr_text or "",
+                        incident_description,
+                        "Motor",
+                    )
+                    if llm_result and not llm_result.get("matches_type", True):
+                        type_mismatch = True
+                        mismatch_reason = (
+                            llm_result.get("reason")
+                            or f"Document does not match expected type: {doc.doc_type.value}"
+                        )
                         issues.append(mismatch_reason)
-                    if "evidence_type_mismatch" not in issue_codes:
                         issue_codes.append("evidence_type_mismatch")
-        elif doc.doc_type == DocumentType.GOV_ID and self._filename_suggests_id(filename_lower):
-            # Allow ID filename hint even when OCR failed — do not assert mismatch
-            pass
+
+        else:
+            # POLICY_PAPER, THIRD_PARTY_STATEMENT, OTHER — accept if extractable.
+            if extraction_quality != "good":
+                issues.append(extraction_message)
+                issue_codes.append("extraction_failed")
 
         confidence = self._score_confidence(
             ocr_text, issue_codes, type_mismatch, filename_lower, doc.doc_type
@@ -365,35 +412,8 @@ class EvidenceAnalysisService:
             mismatch_reason=mismatch_reason,
         )
 
-    def _filename_suggests_id(self, filename_lower: str) -> bool:
-        return any(hint in filename_lower for hint in ID_FILENAME_HINTS)
-
-    def _text_suggests_id(self, text_lower: str) -> bool:
-        if len(text_lower) < 8:
-            return False
-        hits = sum(1 for p in GOV_ID_PATTERNS if re.search(p, text_lower, re.I))
-        return hits >= 1
-
-    def _looks_like_valid_id(self, text_lower: str, filename_lower: str) -> bool:
-        return self._filename_suggests_id(filename_lower) or self._text_suggests_id(text_lower)
-
-    def _filename_suggests_proof(self, filename_lower: str) -> bool:
-        return any(hint in filename_lower for hint in PROOF_FILENAME_HINTS)
-
-    def _text_suggests_proof(self, text_lower: str, policy_type: str = "Auto") -> bool:
-        if len(text_lower) < 40:
-            return False
-        keywords = HOME_PROOF_KEYWORDS if policy_type == "Home" else PROOF_TEXT_KEYWORDS
-        hits = sum(1 for kw in keywords if kw in text_lower)
-        min_hits = 2 if policy_type != "Home" else 2
-        return hits >= min_hits
-
-    def _looks_like_valid_proof(
-        self, text_lower: str, filename_lower: str, policy_type: str = "Auto"
-    ) -> bool:
-        return self._filename_suggests_proof(filename_lower) or self._text_suggests_proof(
-            text_lower, policy_type
-        )
+    def _filename_suggests_damage(self, filename_lower: str) -> bool:
+        return any(hint in filename_lower for hint in DAMAGE_PHOTO_HINTS)
 
     def _assess_extraction_quality(
         self, ocr_text: str, *, is_image: bool, is_pdf: bool
@@ -412,78 +432,6 @@ class EvidenceAnalysisService:
             return "poor", "Could not extract readable content from this document"
         return "good", ""
 
-    def _should_run_llm_validation(
-        self,
-        doc: ClaimDocument,
-        ocr_text: str,
-        text_lower: str,
-        filename_lower: str,
-        is_image: bool,
-        policy_type: str = "Auto",
-    ) -> bool:
-        if self._looks_like_diagram(text_lower, filename_lower):
-            return True
-        if doc.doc_type == DocumentType.GOV_ID:
-            if self._looks_like_valid_id(text_lower, filename_lower):
-                return False
-            return is_image and len(ocr_text or "") < 40
-        if doc.doc_type == DocumentType.PROOF:
-            if self._looks_like_valid_proof(text_lower, filename_lower, policy_type):
-                return False
-            return len(ocr_text or "") < 80 and is_image
-        return False
-
-    def _check_gov_id(
-        self, text_lower: str, filename_lower: str, is_image: bool, text_len: int
-    ) -> tuple[bool, str]:
-        if self._looks_like_diagram(text_lower, filename_lower):
-            return True, "Uploaded Government ID does not appear to be a valid identity document"
-
-        if self._looks_like_valid_id(text_lower, filename_lower):
-            return False, ""
-
-        if is_image and text_len == 0 and not self._filename_suggests_id(filename_lower):
-            return False, ""
-
-        if is_image and text_len < 12 and not self._filename_suggests_id(filename_lower):
-            return True, "Uploaded Government ID does not appear to be a valid identity document"
-
-        if text_len >= 12:
-            id_hits = sum(1 for p in GOV_ID_PATTERNS if re.search(p, text_lower, re.I))
-            if id_hits >= 1:
-                return False, ""
-
-        return False, ""
-
-    def _check_proof(
-        self,
-        text_lower: str,
-        filename_lower: str,
-        incident_description: str,
-        policy_type: str,
-        is_image: bool,
-    ) -> tuple[bool, str]:
-        if self._looks_like_diagram(text_lower, filename_lower):
-            return True, "Uploaded proof document does not match claim type"
-
-        if self._looks_like_valid_proof(text_lower, filename_lower, policy_type):
-            return False, ""
-
-        if not is_image and len(text_lower) >= 80:
-            return False, ""
-
-        if is_image and len(text_lower) < 12 and not self._filename_suggests_proof(filename_lower):
-            return True, "Uploaded proof document does not match claim type"
-
-        return False, ""
-
-    def _looks_like_diagram(self, text_lower: str, filename_lower: str) -> bool:
-        if any(hint in filename_lower for hint in DIAGRAM_FILENAME_HINTS):
-            return True
-        combined = f"{text_lower} {filename_lower}"
-        tech_hits = sum(1 for pattern in TECH_DIAGRAM_PHRASES if re.search(pattern, combined, re.I))
-        return tech_hits >= 1
-
     def _score_confidence(
         self,
         ocr_text: str,
@@ -494,12 +442,12 @@ class EvidenceAnalysisService:
     ) -> float:
         if type_mismatch:
             return 0.25
-        if (
-            doc_type == DocumentType.GOV_ID
-            and self._filename_suggests_id(filename_lower)
-            and "extraction_failed" not in issue_codes
-        ):
-            return 0.75
+        if doc_type == DocumentType.DAMAGE_PHOTO:
+            return 0.75  # Handled above; keep as safety default.
+        if doc_type and doc_type in _TYPE_MATCHERS:
+            _, filename_hints, _ = _TYPE_MATCHERS[doc_type]
+            if any(h in filename_lower for h in filename_hints) and "extraction_failed" not in issue_codes:
+                return 0.75
         if "extraction_failed" in issue_codes:
             return 0.30
         if not ocr_text:

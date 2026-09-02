@@ -13,7 +13,8 @@ from services.rag_service import rag_service
 
 _policy_context = PolicyContextService()
 
-_VALID_POLICY_TYPES = {"Auto", "Health", "Home"}
+_VALID_POLICY_TYPES = {"Motor"}
+_DEFAULT_POLICY_TYPE = "Motor"
 
 
 def _parse_date(value: str | None, default: datetime) -> datetime:
@@ -50,7 +51,7 @@ def create_policy(
     policy = Policy(
         policy_number=resolved_number,
         customer_id=customer_id,
-        policy_type=policy_type if policy_type in _VALID_POLICY_TYPES else "Auto",
+        policy_type=policy_type if policy_type in _VALID_POLICY_TYPES else _DEFAULT_POLICY_TYPE,
         status=PolicyStatus.ACTIVE,
         coverage_limit=coverage_limit,
         deductible=deductible,
@@ -134,9 +135,8 @@ def create_policy_from_document(
     text = _policy_context._extract_text_from_file(file_path)
     extracted = llm_service.extract_policy_profile(text) if text else {}
 
-    policy_type = str(extracted.get("policy_type") or "Auto")
-    if policy_type not in _VALID_POLICY_TYPES:
-        policy_type = "Auto"
+    # Motor-only product — always normalize to Motor regardless of LLM output.
+    policy_type = _DEFAULT_POLICY_TYPE
 
     coverage_limit = float(extracted.get("coverage_limit") or 500_000)
     deductible = float(extracted.get("deductible") or 500)

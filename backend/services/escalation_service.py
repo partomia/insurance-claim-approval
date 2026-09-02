@@ -14,6 +14,12 @@ FLAG_MESSAGES = {
     "clause_mismatch": "The policy section we found may not match what your plan covers",
     "evidence_mismatch": "{message}",
     "extraction_failed": "{message}",
+    # Motor-specific flags
+    "total_loss_suspected": "Repair cost is close to or above the vehicle's IDV — surveyor review required",
+    "vin_mismatch": "The VIN on this claim does not match the vehicle covered by the policy",
+    "unlicensed_driver": "Driver's licence details are missing or invalid on this claim",
+    "third_party_injury_reported": "Third-party injuries reported — legal team review required",
+    "no_police_report_major_loss": "Major-loss claim without a police / FIR report — additional evidence required",
 }
 
 
@@ -72,8 +78,9 @@ class EscalationService:
 
         if claim.policy and claim.policy.effective_date:
             days_since = (claim.incident_datetime - claim.policy.effective_date).days
-            policy_type = claim.policy.policy_type or "Auto"
-            threshold = settings.early_claim_amount_thresholds.get(policy_type, 5000.0)
+            # Motor is the only policy type; threshold map still keyed for legacy compatibility.
+            policy_type = claim.policy.policy_type or "Motor"
+            threshold = settings.early_claim_amount_thresholds.get(policy_type, 10000.0)
             if (
                 days_since <= settings.early_claim_days
                 and claim.claim_amount > 0.5 * threshold
@@ -95,6 +102,44 @@ class EscalationService:
         if alignment and not alignment.get("aligned", True):
             flags.append("clause_mismatch")
             details["clause_mismatch"] = alignment
+
+        # --- Motor-specific escalation checks -----------------------------
+        payout_breakdown = merged.get("payout_breakdown") or {}
+        if payout_breakdown.get("is_total_loss"):
+            flags.append("total_loss_suspected")
+            details["total_loss_suspected"] = {
+                "ratio_threshold": payout_breakdown.get("total_loss_ratio_threshold"),
+                "salvage_deduction": payout_breakdown.get("salvage_deduction"),
+            }
+
+        if claim.policy and claim.vin and claim.policy.covered_vehicle_vin:
+            if claim.vin.strip().upper() != claim.policy.covered_vehicle_vin.strip().upper():
+                flags.append("vin_mismatch")
+                details["vin_mismatch"] = {
+                    "claim_vin": claim.vin,
+                    "policy_vin": claim.policy.covered_vehicle_vin,
+                }
+
+        if not claim.driver_license_number:
+            flags.append("unlicensed_driver")
+            details["unlicensed_driver"] = {}
+
+        if claim.injuries_reported:
+            flags.append("third_party_injury_reported")
+            details["third_party_injury_reported"] = {}
+
+        # A "major loss" here means > 50% of coverage limit, and no police report uploaded.
+        if claim.policy and claim.claim_amount > 0.5 * (claim.policy.coverage_limit or 0):
+            has_police = any(
+                (d.doc_type.value if hasattr(d.doc_type, "value") else str(d.doc_type)) == "POLICE_REPORT"
+                for d in (claim.documents or [])
+            )
+            if not has_police:
+                flags.append("no_police_report_major_loss")
+                details["no_police_report_major_loss"] = {
+                    "claim_amount": claim.claim_amount,
+                    "coverage_limit": claim.policy.coverage_limit,
+                }
 
         messages = self.build_messages(flags, details)
         return EscalationResult(flags=flags, flag_details=details, messages=messages)
@@ -124,4 +169,7 @@ class EscalationService:
                 messages.append(FLAG_MESSAGES[flag].format(message=detail.get("message", "Document type mismatch")))
             elif flag == "extraction_failed":
                 messages.append(FLAG_MESSAGES[flag].format(message=detail.get("message", "Extraction failed")))
+            elif flag in ("total_loss_suspected", "vin_mismatch", "unlicensed_driver",
+                          "third_party_injury_reported", "no_police_report_major_loss"):
+                messages.append(FLAG_MESSAGES[flag])
         return messages

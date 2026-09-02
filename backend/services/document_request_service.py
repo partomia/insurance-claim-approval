@@ -8,11 +8,13 @@ from typing import Iterable, Optional
 from models.claim import ClaimDocument, DocumentType
 
 DOCUMENT_TYPE_LABELS: dict[str, str] = {
-    DocumentType.GOV_ID.value: "Government ID",
-    DocumentType.PROOF.value: "Supporting proof document",
+    DocumentType.DRIVER_LICENSE.value: "Driver's licence",
+    DocumentType.DAMAGE_PHOTO.value: "Damage photo",
+    DocumentType.REPAIR_ESTIMATE.value: "Repair estimate / garage invoice",
     DocumentType.POLICE_REPORT.value: "Police / FIR report",
-    DocumentType.MEDICAL.value: "Medical bill / discharge summary",
-    DocumentType.INVOICE.value: "Invoice / itemized bill",
+    DocumentType.VEHICLE_REGISTRATION.value: "Vehicle registration (RC)",
+    DocumentType.TOWING_INVOICE.value: "Towing invoice",
+    DocumentType.THIRD_PARTY_STATEMENT.value: "Third-party statement",
     DocumentType.POLICY_PAPER.value: "Policy document",
     DocumentType.OTHER.value: "Other document",
 }

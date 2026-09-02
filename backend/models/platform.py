@@ -43,7 +43,6 @@ class CustomerProfile(Base):
     kyc_verified_at = Column(DateTime, nullable=True)
     emergency_contacts = Column(JSON, default=list, nullable=False)
     saved_vehicles = Column(JSON, default=list, nullable=False)
-    saved_hospitals = Column(JSON, default=list, nullable=False)
     saved_garages = Column(JSON, default=list, nullable=False)
     preferred_providers = Column(JSON, default=list, nullable=False)
     dependents = Column(JSON, default=list, nullable=False)

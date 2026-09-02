@@ -130,8 +130,6 @@ def update_profile(
         profile.emergency_contacts = payload.emergency_contacts
     if payload.saved_vehicles is not None:
         profile.saved_vehicles = payload.saved_vehicles
-    if payload.saved_hospitals is not None:
-        profile.saved_hospitals = payload.saved_hospitals
     if payload.saved_garages is not None:
         profile.saved_garages = payload.saved_garages
     if payload.preferred_providers is not None:
@@ -177,7 +175,6 @@ def _profile_response(customer: Customer, profile: CustomerProfile) -> schemas.C
         date_of_birth=profile.date_of_birth,
         emergency_contacts=profile.emergency_contacts or [],
         saved_vehicles=profile.saved_vehicles or [],
-        saved_hospitals=profile.saved_hospitals or [],
         saved_garages=profile.saved_garages or [],
         preferred_providers=profile.preferred_providers or [],
         dependents=profile.dependents or [],

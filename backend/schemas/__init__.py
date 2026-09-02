@@ -257,7 +257,7 @@ class HumanReviewSubmit(BaseModel):
     internal_notes: Optional[str] = None
     requested_documents: list[str] = Field(
         default_factory=list,
-        description="Document type keys (MEDICAL, INVOICE, …) or custom labels when requesting more info",
+        description="Document type keys (DAMAGE_PHOTO, REPAIR_ESTIMATE, POLICE_REPORT, DRIVER_LICENSE, VEHICLE_REGISTRATION, TOWING_INVOICE, THIRD_PARTY_STATEMENT, POLICY_PAPER, OTHER) or custom labels when requesting more info",
     )
 
 
@@ -407,7 +407,24 @@ class DraftClaimCreate(BaseModel):
     incident_description: str
     incident_datetime: datetime
     location: str
+    # Estimated repair or replacement value the customer is claiming.
     claim_amount: float
+    # Motor-specific fields (all optional at draft time; validated at submit).
+    incident_type: Optional[str] = Field(
+        default="COLLISION",
+        description="One of COLLISION, THEFT, VANDALISM, FIRE, NATURAL_DISASTER, GLASS_ONLY, THIRD_PARTY_LIABILITY, OTHER",
+    )
+    third_party_involved: bool = False
+    injuries_reported: bool = False
+    tow_required: bool = False
+    vehicle_make: Optional[str] = None
+    vehicle_model: Optional[str] = None
+    vehicle_year: Optional[int] = None
+    vin: Optional[str] = None
+    license_plate: Optional[str] = None
+    odometer_km: Optional[int] = None
+    driver_license_number: Optional[str] = None
+    driver_license_class: Optional[str] = None
 
 
 class DraftClaimUpdate(BaseModel):
@@ -416,6 +433,18 @@ class DraftClaimUpdate(BaseModel):
     location: Optional[str] = None
     claim_amount: Optional[float] = None
     policy_number: Optional[str] = None
+    incident_type: Optional[str] = None
+    third_party_involved: Optional[bool] = None
+    injuries_reported: Optional[bool] = None
+    tow_required: Optional[bool] = None
+    vehicle_make: Optional[str] = None
+    vehicle_model: Optional[str] = None
+    vehicle_year: Optional[int] = None
+    vin: Optional[str] = None
+    license_plate: Optional[str] = None
+    odometer_km: Optional[int] = None
+    driver_license_number: Optional[str] = None
+    driver_license_class: Optional[str] = None
 
 
 class DraftClaimResponse(BaseModel):
@@ -425,6 +454,18 @@ class DraftClaimResponse(BaseModel):
     submission_step: int
     policy_context_ready: bool
     policy_number: Optional[str] = None
+    incident_type: Optional[str] = None
+    third_party_involved: bool = False
+    injuries_reported: bool = False
+    tow_required: bool = False
+    vehicle_make: Optional[str] = None
+    vehicle_model: Optional[str] = None
+    vehicle_year: Optional[int] = None
+    vin: Optional[str] = None
+    license_plate: Optional[str] = None
+    odometer_km: Optional[int] = None
+    driver_license_number: Optional[str] = None
+    driver_license_class: Optional[str] = None
 
 
 class PolicyDocumentItem(BaseModel):
@@ -501,7 +542,6 @@ class CustomerProfileResponse(BaseModel):
     date_of_birth: Optional[datetime] = None
     emergency_contacts: list[dict[str, Any]] = []
     saved_vehicles: list[dict[str, Any]] = []
-    saved_hospitals: list[dict[str, Any]] = []
     saved_garages: list[dict[str, Any]] = []
     preferred_providers: list[str] = []
     dependents: list[dict[str, Any]] = []
@@ -513,7 +553,6 @@ class CustomerProfileUpdate(BaseModel):
     date_of_birth: Optional[datetime] = None
     emergency_contacts: Optional[list[dict[str, Any]]] = None
     saved_vehicles: Optional[list[dict[str, Any]]] = None
-    saved_hospitals: Optional[list[dict[str, Any]]] = None
     saved_garages: Optional[list[dict[str, Any]]] = None
     preferred_providers: Optional[list[str]] = None
     dependents: Optional[list[dict[str, Any]]] = None

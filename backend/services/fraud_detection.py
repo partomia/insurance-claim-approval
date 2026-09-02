@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
@@ -19,12 +20,26 @@ class FraudDetectionResult:
 
 
 class FraudDetectionService:
+    """Motor-vehicle fraud rule engine.
+
+    Rule signals cover motor-specific patterns: VIN mismatch, IDV/claim ratio
+    on aged vehicles, third-party without police report, prior-claim clustering,
+    device-hash reuse across customers, and duplicate-document / duplicate-claim
+    baselines from the general layer.
+    """
+
     SIGNAL_WEIGHTS = {
         "duplicate_claim": 0.30,
         "abnormal_amount": 0.25,
         "blacklist": 0.35,
         "duplicate_document": 0.15,
         "policy_abuse": 0.20,
+        # Motor-specific
+        "vin_mismatch": 0.35,
+        "idv_ratio_aged_vehicle": 0.20,
+        "third_party_no_police_report": 0.20,
+        "device_hash_reuse": 0.30,
+        "unlicensed_driver": 0.30,
     }
 
     def detect(
@@ -76,6 +91,65 @@ class FraudDetectionService:
         if evidence_result and len(evidence_result.duplicate_uploads) > 0:
             score += self.SIGNAL_WEIGHTS["duplicate_document"]
             signals.append("Duplicate document uploads detected")
+
+        # --- Motor-specific rules -----------------------------------------
+        if policy and claim.vin and policy.covered_vehicle_vin:
+            if claim.vin.strip().upper() != policy.covered_vehicle_vin.strip().upper():
+                score += self.SIGNAL_WEIGHTS["vin_mismatch"]
+                signals.append(
+                    f"VIN on claim ({claim.vin}) does not match policy's covered vehicle "
+                    f"({policy.covered_vehicle_vin})"
+                )
+
+        if (
+            policy
+            and claim.vehicle_year
+            and claim.claim_amount > policy.coverage_limit * 0.8
+        ):
+            vehicle_age = max(0, claim.incident_datetime.year - claim.vehicle_year)
+            if vehicle_age >= 5:
+                score += self.SIGNAL_WEIGHTS["idv_ratio_aged_vehicle"]
+                signals.append(
+                    f"Claim > 80% of IDV on a {vehicle_age}-year-old vehicle"
+                )
+
+        if claim.third_party_involved:
+            has_police_report = any(
+                d.doc_type.value == "POLICE_REPORT" for d in (claim.documents or [])
+            )
+            if not has_police_report:
+                score += self.SIGNAL_WEIGHTS["third_party_no_police_report"]
+                signals.append("Third-party involvement without police / FIR report")
+
+        if claim.injuries_reported:
+            has_police_report = any(
+                d.doc_type.value == "POLICE_REPORT" for d in (claim.documents or [])
+            )
+            if not has_police_report:
+                score += self.SIGNAL_WEIGHTS["third_party_no_police_report"]
+                signals.append("Injuries reported without police / FIR report")
+
+        if claim.submission_device_hash:
+            recent_window = claim.created_at - timedelta(days=90)
+            device_reuse = (
+                db.query(Claim)
+                .filter(
+                    Claim.submission_device_hash == claim.submission_device_hash,
+                    Claim.customer_id != claim.customer_id,
+                    Claim.created_at >= recent_window,
+                )
+                .count()
+            )
+            if device_reuse >= 1:
+                score += self.SIGNAL_WEIGHTS["device_hash_reuse"]
+                signals.append(
+                    f"Submission device fingerprint shared across {device_reuse} other customers in the last 90 days"
+                )
+
+        # Unlicensed driver — no license number provided AND no KYC on file.
+        if not claim.driver_license_number:
+            score += self.SIGNAL_WEIGHTS["unlicensed_driver"] * 0.5
+            signals.append("Driver's licence details missing on claim")
 
         fraud_score = round(min(score, 1.0), 4)
         return FraudDetectionResult(

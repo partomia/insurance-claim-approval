@@ -113,6 +113,12 @@ class LLMPayoutService:
             co_pay_applied=b.get("co_pay_amount", 0),
             depreciation_applied=b.get("depreciation_amount", 0),
             coverage_cap_applied=max(b.get("gross", 0) - b.get("payable", 0), 0),
+            own_damage_payable=b.get("payable", result.payable_amount),
+            third_party_payable=0.0,
+            gst_amount=0.0,
+            salvage_deduction=0.0,
+            is_total_loss=False,
+            next_cycle_ncb_pct=0.0,
             payable_amount=result.payable_amount,
             breakdown=result.breakdown,
         )

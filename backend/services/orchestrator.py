@@ -8,6 +8,26 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def _pipeline_entrypoint():
+    """Return the callable used to process a claim end-to-end.
+
+    Routes to `crew.flow.run_claim_flow` when `settings.use_crewai_flow` is
+    truthy, otherwise the legacy `run_claim_pipeline`. Kept as a function
+    (not module-level constant) so config changes at runtime take effect
+    without a re-import.
+    """
+    if settings.use_crewai_flow:
+        try:
+            from crew.flow import run_claim_flow
+
+            return run_claim_flow
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "CrewAI Flow unavailable (%s), falling back to legacy pipeline", exc
+            )
+    return run_claim_pipeline
+
+
 class ClaimOrchestrator:
     def dispatch(self, claim_id: int) -> None:
         if settings.claim_processing_mode == "sync":
@@ -16,10 +36,7 @@ class ClaimOrchestrator:
         if settings.claim_processing_mode == "celery":
             self._run_celery(claim_id)
             return
-        # auto: SQLite local dev runs in-process; otherwise prefer Celery
-        if settings.database_url.startswith("sqlite"):
-            self._run_sync(claim_id)
-            return
+        # auto — prefer Celery, fall back to in-process sync
         try:
             self._run_celery(claim_id)
         except Exception as exc:
@@ -32,7 +49,7 @@ class ClaimOrchestrator:
         orchestrate_claim_task.delay(claim_id)
 
     def dispatch_from_step(self, claim_id: int, from_step: str) -> None:
-        if settings.claim_processing_mode == "sync" or settings.database_url.startswith("sqlite"):
+        if settings.claim_processing_mode == "sync":
             thread = threading.Thread(
                 target=self._run_from_step,
                 args=(claim_id, from_step),
@@ -59,5 +76,6 @@ class ClaimOrchestrator:
         run_claim_pipeline_from(claim_id, from_step)
 
     def _run_sync(self, claim_id: int) -> None:
-        thread = threading.Thread(target=run_claim_pipeline, args=(claim_id,), daemon=True)
+        target = _pipeline_entrypoint()
+        thread = threading.Thread(target=target, args=(claim_id,), daemon=True)
         thread.start()

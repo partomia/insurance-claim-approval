@@ -15,29 +15,11 @@ from services.rag_service import rag_service
 router = APIRouter(prefix="/api/policies", tags=["Policy Connect"])
 
 POLICY_SCHEDULE = {
-    "Health": [
-        ("Policy Schedule", "Section 1.0", "Health policy covering hospitalization, surgery, and day-care procedures."),
-        ("Coverage Details", "Section 2.1", "In-patient hospitalization and post-hospitalization expenses covered up to sum insured."),
-        ("Exclusions", "Section 5.3", "Cosmetic surgery, experimental treatments, and waiting-period exclusions apply."),
-        ("Settlement", "Section 3.2", "Co-pay and deductible apply as per schedule. Cashless at network hospitals."),
-    ],
     "Motor": [
         ("Policy Schedule", "Section 1.0", "Comprehensive motor policy for private vehicles."),
         ("Coverage Details", "Section 4.2", "Own damage, third-party liability, theft, and natural calamities covered."),
         ("Exclusions", "Section 7.1", "Driving without valid license, commercial use, and intentional damage excluded."),
         ("Settlement", "Section 3.5", "Depreciation and deductible apply. Network garage cashless repairs available."),
-    ],
-    "Auto": [
-        ("Policy Schedule", "Section 1.0", "Comprehensive motor policy for private vehicles."),
-        ("Coverage Details", "Section 4.2", "Own damage, third-party liability, theft, and natural calamities covered."),
-        ("Exclusions", "Section 7.1", "Driving without valid license, commercial use, and intentional damage excluded."),
-        ("Settlement", "Section 3.5", "Depreciation and deductible apply."),
-    ],
-    "Home": [
-        ("Policy Schedule", "Section 1.0", "Home insurance for structure and contents."),
-        ("Coverage Details", "Section 1.4", "Fire, theft, and natural disaster damage covered."),
-        ("Exclusions", "Section 6.1", "Wear and tear, unoccupied property, and undeclared valuables excluded."),
-        ("Settlement", "Section 2.3", "Deductible applies per claim event."),
     ],
 }
 

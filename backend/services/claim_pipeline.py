@@ -86,7 +86,7 @@ def _run_rag_retrieval(claim_id: int) -> dict[str, Any]:
             claim.incident_description,
             claim.claim_amount,
             clause_dicts,
-            claim.policy.policy_type if claim.policy else "Auto",
+            "Motor",
         )
         if ctx.get("key_sections"):
             llm_coverage["policy_context_sections"] = ctx["key_sections"]
@@ -268,6 +268,18 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
 
         confidence = explainability.compute_confidence(exp_input)
 
+        # Motor pre-decision payout preview: rules-based only, cheap. Surfaces
+        # is_total_loss so the escalation stage can raise TOTAL_LOSS_SUSPECTED
+        # before the decision engine runs.
+        if claim.policy:
+            from services.payout_calculation import PayoutCalculationService
+
+            payout_preview = PayoutCalculationService().calculate(
+                claim.policy, claim.claim_amount, claim=claim
+            )
+            merged["payout_breakdown"] = payout_preview.breakdown
+            merged["payout_preview_payable"] = payout_preview.payable_amount
+
         escalation = EscalationService().evaluate(claim, merged)
         claim.escalation_flags = escalation.flags
         claim.escalation_messages = escalation.messages
@@ -299,11 +311,18 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
         payout_breakdown: dict = {}
         if decision.status == ClaimStatus.APPROVED:
             progress_service.publish(claim_id, "payout_calculation", "running", "Calculating payout amount...")
-            llm_payout = LLMPayoutService().calculate(
-                claim, claim.policy, merged.get("retrieved_clauses", [])
-            )
-            payable_amount = llm_payout.payable_amount
-            payout_breakdown = llm_payout.breakdown
+            # Total-loss fast path: skip the LLM payout call. Motor total loss
+            # is settled at IDV minus salvage per the rules-based table, and
+            # LLM re-derivation adds no value.
+            if merged.get("payout_breakdown", {}).get("is_total_loss"):
+                payable_amount = merged.get("payout_preview_payable", 0.0)
+                payout_breakdown = merged["payout_breakdown"]
+            else:
+                llm_payout = LLMPayoutService().calculate(
+                    claim, claim.policy, merged.get("retrieved_clauses", [])
+                )
+                payable_amount = llm_payout.payable_amount
+                payout_breakdown = llm_payout.breakdown
             progress_service.publish(
                 claim_id,
                 "payout_calculation",
@@ -487,7 +506,7 @@ def _run_rag_retrieval_silent(claim_id: int) -> dict[str, Any]:
             claim.incident_description,
             claim.claim_amount,
             clause_dicts,
-            claim.policy.policy_type if claim.policy else "Auto",
+            "Motor",
         )
         if llm_coverage.get("confidence"):
             clarity = max(clarity, float(llm_coverage["confidence"]))

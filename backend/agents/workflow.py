@@ -21,7 +21,7 @@ def policy_lookup(state: ClaimState) -> ClaimState:
     return state
 
 def coverage_check(state: ClaimState) -> ClaimState:
-    """Check premium status and limits from SQLite DB"""
+    """Check premium status and limits from Impala"""
     print(f"--- COVERAGE CHECK for Claim {state['claim_id']} ---")
     
     db = SessionLocal()
