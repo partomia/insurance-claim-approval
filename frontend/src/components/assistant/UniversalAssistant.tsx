@@ -13,9 +13,9 @@ interface Message {
 }
 
 const STARTER_PROMPTS = [
-  "What's my approval chance?",
-  "What documents do I need?",
-  "Explain my deductible",
+  "What's my motor claim approval chance?",
+  "What documents do I need for this accident?",
+  "Explain my compulsory excess and NCB impact",
 ];
 
 export const OPEN_ASSISTANT_EVENT = "claimcopilot:open-assistant";
@@ -107,8 +107,8 @@ export function UniversalAssistant() {
       open={open}
       onOpenChange={(next) => (next ? setOpen(true) : closeAssistant())}
       storageKey="claimcopilot:assistant-panel:customer"
-      title="ClaimCopilot"
-      subtitle={claimId ? `Helping with claim #${claimId}` : "Policy & claims assistant"}
+      title="Motor Claim Copilot"
+      subtitle={claimId ? `Helping with motor claim #${claimId}` : "Motor policy & claims assistant"}
       onBackdropClick={closeAssistant}
       fab={
         <span className="flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-white bg-primary text-primary-foreground shadow-[0_8px_28px_rgba(249,103,2,0.55)]">

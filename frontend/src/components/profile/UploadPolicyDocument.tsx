@@ -6,6 +6,7 @@ import { FileInput } from "@/components/ui/file-input";
 import { apiFetch } from "@/lib/api";
 import { formatApiError, useToast } from "@/components/ui/toast";
 import { CheckCircle2, Sparkles } from "lucide-react";
+import { formatINR } from "@/lib/currency";
 
 interface PolicyFromDocumentResponse {
   policy_number: string;
@@ -73,8 +74,7 @@ export function UploadPolicyDocument({ onCreated }: UploadPolicyDocumentProps) {
                 {result.policy_type} · {result.policy_number}
               </p>
               <p className="text-sm">
-                Coverage ${result.coverage_limit.toLocaleString()} · Deductible $
-                {result.deductible.toLocaleString()}
+                Sum insured {formatINR(result.coverage_limit)} · Compulsory excess {formatINR(result.deductible)}
               </p>
               <p className="flex items-center gap-1.5 text-sm text-success">
                 <Sparkles className="h-4 w-4" />

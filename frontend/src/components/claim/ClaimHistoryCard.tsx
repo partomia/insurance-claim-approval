@@ -1,13 +1,14 @@
 import {
   AlertTriangle,
   ChevronRight,
-  DollarSign,
+  IndianRupee,
   FileText,
   Shield,
 } from "lucide-react";
 import { ClaimStatusBadge } from "@/components/claim/ClaimStatusBadge";
 import { claimStatusLabel, riskLevelLabel } from "@/lib/claimStatusLabels";
 import { formatEscalationList } from "@/lib/escalationLabels";
+import { formatINR } from "@/lib/currency";
 
 export interface ClaimHistoryCardData {
   id: number;
@@ -93,10 +94,10 @@ export function ClaimHistoryCard({ claim }: { claim: ClaimHistoryCardData }) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-lg border bg-muted/30 px-4 py-3">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <DollarSign className="h-4 w-4" />
-              <span className="text-xs font-medium uppercase tracking-wide">Claim amount</span>
+              <IndianRupee className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wide">Motor claim amount</span>
             </div>
-            <p className="text-xl font-semibold">${claim.claim_amount.toLocaleString()}</p>
+            <p className="text-xl font-semibold">{formatINR(claim.claim_amount)}</p>
           </div>
 
           <div className="rounded-lg border bg-muted/30 px-4 py-3">

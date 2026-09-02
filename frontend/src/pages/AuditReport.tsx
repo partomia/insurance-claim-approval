@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { FileText, MapPin, User, Calendar, DollarSign, Shield, ExternalLink } from "lucide-react";
+import { FileText, MapPin, User, Calendar, IndianRupee, Shield, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DetailHeader } from "@/components/ui/detail-header";
@@ -11,6 +11,7 @@ import { apiJson } from "@/lib/api";
 import { openClaimDocument } from "@/lib/documents";
 import { formatEscalationList } from "@/lib/escalationLabels";
 import { useToast } from "@/components/ui/toast";
+import { formatINR } from "@/lib/currency";
 
 interface ClaimDetails {
   incident_description: string;
@@ -56,11 +57,13 @@ interface AuditReportData {
 }
 
 const DOC_TYPE_LABELS: Record<string, string> = {
-  GOV_ID: "Government ID",
-  PROOF: "Proof document",
-  POLICE_REPORT: "Police report",
-  MEDICAL: "Medical",
-  INVOICE: "Invoice",
+  DRIVER_LICENSE: "Driver's licence",
+  DAMAGE_PHOTO: "Damage photo",
+  REPAIR_ESTIMATE: "Repair estimate",
+  POLICE_REPORT: "Police / FIR report",
+  VEHICLE_REGISTRATION: "Vehicle registration (RC)",
+  TOWING_INVOICE: "Towing invoice",
+  THIRD_PARTY_STATEMENT: "Third-party statement",
   POLICY_PAPER: "Policy paper",
   OTHER: "Other",
 };
@@ -135,7 +138,7 @@ export function AuditReport() {
           {details && (
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Claim Details</CardTitle>
+                <CardTitle className="text-base">Motor Claim Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex items-start gap-2">
@@ -158,10 +161,10 @@ export function AuditReport() {
                   </div>
                 )}
                 <div className="flex items-start gap-2">
-                  <DollarSign className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <IndianRupee className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Claim amount</p>
-                    <p className="font-medium">${details.claim_amount.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Motor claim amount</p>
+                    <p className="font-medium">{formatINR(details.claim_amount)}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">

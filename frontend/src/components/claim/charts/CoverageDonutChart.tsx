@@ -1,5 +1,6 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { useChartColors } from "@/lib/chartTheme";
+import { formatINR } from "@/lib/currency";
 
 interface Utilization {
   claim_amount: number;
@@ -35,7 +36,7 @@ export function CoverageDonutChart({ util }: { util: Utilization }) {
             <Cell fill={colors.border} />
           </Pie>
           <Tooltip
-            formatter={(value) => `$${Number(value ?? 0).toLocaleString()}`}
+            formatter={(value) => formatINR(Number(value ?? 0))}
             contentStyle={{
               background: colors.foreground === "#111827" ? "#fff" : "#1f2937",
               border: `1px solid ${colors.border}`,
@@ -53,7 +54,7 @@ export function CoverageDonutChart({ util }: { util: Utilization }) {
         </PieChart>
       </ResponsiveContainer>
       <p className="text-xs text-center text-muted-foreground -mt-2">
-        ${used.toLocaleString()} used / ${remaining.toLocaleString()} remaining of ${limit.toLocaleString()}
+        {formatINR(used)} used / {formatINR(remaining)} remaining of {formatINR(limit)}
       </p>
     </div>
   );

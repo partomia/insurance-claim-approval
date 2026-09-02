@@ -13,7 +13,7 @@ export function PolicyContextPreview({ context }: { context: PolicyContext }) {
 
   return (
     <div className="mt-4 p-4 bg-success-subtle border border-success-border rounded-lg space-y-3">
-      <h4 className="font-semibold text-success">Policy Analysis (Groq AI)</h4>
+      <h4 className="font-semibold text-success">Motor Policy Analysis (Groq AI)</h4>
       {context.coverage_summary && (
         <div>
           <p className="text-xs font-medium text-muted-foreground">Coverage Summary</p>

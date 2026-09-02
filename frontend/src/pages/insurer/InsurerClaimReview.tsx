@@ -138,10 +138,10 @@ export function InsurerClaimReview() {
   return (
     <div className="space-y-6">
       <DetailHeader
-        back={{ to: "/insurer/claims", label: "All claims" }}
-        eyebrow="Insurer claim review"
+        back={{ to: "/insurer/claims", label: "All motor claims" }}
+        eyebrow="Motor insurer claim review"
         title={claim.claim_id}
-        subtitle="Review submission, expert work, and AI analysis before your final decision."
+        subtitle="Review motor claim submission, expert work, and AI analysis before your final decision."
         status={<ClaimStatusBadge status={claim.status} assignedAgent={claim.assigned_agent} />}
         actions={
           <Link to={`/insurer/claims/${id}/audit`}>
@@ -233,7 +233,7 @@ export function InsurerClaimReview() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium" htmlFor="payable">
-                    Payable amount (if approved)
+                    Payable motor claim amount (if approved)
                   </label>
                   <Input
                     id="payable"

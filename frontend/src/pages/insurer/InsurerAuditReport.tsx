@@ -11,6 +11,7 @@ import { formatEscalationList } from "@/lib/escalationLabels";
 import { openInsurerClaimDocument } from "@/lib/insurerDocuments";
 import { useToast } from "@/components/ui/toast";
 import { ExternalLink, FileText } from "lucide-react";
+import { formatINR } from "@/lib/currency";
 
 interface AuditReportData {
   claim_id: string;
@@ -94,11 +95,11 @@ export function InsurerAuditReport() {
       {details && (
         <Card>
           <CardHeader>
-            <CardTitle>Claim Details</CardTitle>
+            <CardTitle>Motor Claim Details</CardTitle>
           </CardHeader>
           <CardContent className="text-sm space-y-2">
             <p><span className="text-muted-foreground">Customer:</span> {details.customer_name}</p>
-            <p><span className="text-muted-foreground">Amount:</span> ${details.claim_amount.toLocaleString()}</p>
+            <p><span className="text-muted-foreground">Motor claim amount:</span> {formatINR(details.claim_amount)}</p>
             <p><span className="text-muted-foreground">Location:</span> {details.location}</p>
             <p><span className="text-muted-foreground">Incident:</span> {details.incident_description}</p>
           </CardContent>

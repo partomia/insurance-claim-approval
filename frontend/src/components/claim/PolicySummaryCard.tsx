@@ -1,4 +1,5 @@
-import { Shield, DollarSign, FileText, Percent, AlertTriangle } from "lucide-react";
+import { Shield, IndianRupee, FileText, Percent, AlertTriangle } from "lucide-react";
+import { formatINR } from "@/lib/currency";
 
 interface PolicySummary {
   policy_type?: string;
@@ -39,7 +40,7 @@ export function PolicySummaryCard({
     <div className="p-4 bg-muted/30 border rounded-lg space-y-3">
       <div className="flex items-center gap-2">
         <Shield className="w-4 h-4 text-secondary" />
-        <h4 className="font-semibold text-sm">Policy Overview</h4>
+        <h4 className="font-semibold text-sm">Motor Policy Overview</h4>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -54,19 +55,19 @@ export function PolicySummaryCard({
         )}
         {policy?.coverage_limit != null && (
           <div className="flex items-start gap-2">
-            <DollarSign className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+            <IndianRupee className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
             <div>
-              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Limit</p>
-              <p className="text-sm font-medium">${policy.coverage_limit.toLocaleString()}</p>
+              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">IDV / sum insured</p>
+              <p className="text-sm font-medium">{formatINR(policy.coverage_limit)}</p>
             </div>
           </div>
         )}
         {policy?.deductible != null && (
           <div className="flex items-start gap-2">
-            <DollarSign className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+            <IndianRupee className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
             <div>
-              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Deductible</p>
-              <p className="text-sm font-medium">${policy.deductible.toLocaleString()}</p>
+              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Compulsory excess</p>
+              <p className="text-sm font-medium">{formatINR(policy.deductible)}</p>
             </div>
           </div>
         )}

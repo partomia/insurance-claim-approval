@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ClaimStatusBadge } from "@/components/claim/ClaimStatusBadge";
 import { agentApiJson } from "@/lib/agentApi";
 import { formatEscalationSummary } from "@/lib/escalationLabels";
+import { formatINR } from "@/lib/currency";
 
 interface AgentClaim {
   id: number;
@@ -115,7 +116,7 @@ export function AgentClaims() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Claims Queue"
+        title="Motor Claims Queue"
         description="Assigned claims sorted by review urgency."
         actions={
           <>
@@ -185,8 +186,7 @@ export function AgentClaims() {
                     <span className="text-muted-foreground"> · {claim.customer_email}</span>
                   </p>
                   <p>
-                    <span className="text-muted-foreground">Amount:</span> $
-                    {claim.claim_amount.toLocaleString()}
+                    <span className="text-muted-foreground">Claim amount:</span> {formatINR(claim.claim_amount)}
                     {claim.policy_type ? ` · ${claim.policy_type}` : ""}
                   </p>
                   <p>

@@ -94,13 +94,13 @@ export function ConnectPolicy() {
     <div className="mx-auto max-w-2xl space-y-8">
       <PageHeader
         eyebrow="Policy connection"
-        title="Connect your insurance policy"
+        title="Connect your motor insurance policy"
         description="Upload your policy schedule for instant AI indexing, or connect via your insurer portal."
       />
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Upload policy schedule (recommended)</CardTitle>
+          <CardTitle className="text-base">Upload motor policy schedule (recommended)</CardTitle>
         </CardHeader>
         <CardContent>
           <UploadPolicyDocument onCreated={loadPolicies} />
@@ -177,7 +177,7 @@ export function ConnectPolicy() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Your connected policies</CardTitle>
+          <CardTitle className="text-base">Your connected motor policies</CardTitle>
         </CardHeader>
         <CardContent>
           <PolicyList policies={policies} onDeleted={loadPolicies} />

@@ -1,5 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Legend } from "recharts";
 import { useChartColors } from "@/lib/chartTheme";
+import { formatINR, formatINRCompact } from "@/lib/currency";
 
 interface CoverageSlice {
   policy_number: string;
@@ -29,10 +30,10 @@ export function CoverageUtilizationChart({ data }: { data: CoverageSlice[] }) {
         <XAxis dataKey="name" tick={{ fill: colors.muted, fontSize: 10 }} />
         <YAxis
           tick={{ fill: colors.muted, fontSize: 10 }}
-          tickFormatter={(v) => `$${Math.round(Number(v) / 1000)}k`}
+          tickFormatter={(v) => formatINRCompact(Number(v))}
         />
         <Tooltip
-          formatter={(value) => `$${Number(value ?? 0).toLocaleString()}`}
+          formatter={(value) => formatINR(Number(value ?? 0))}
           contentStyle={{
             background: colors.foreground === "#111827" ? "#fff" : "#1f2937",
             border: `1px solid ${colors.border}`,

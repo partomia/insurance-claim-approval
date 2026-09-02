@@ -5,6 +5,7 @@ import { PolicyContextPreview } from "./PolicyContextPreview";
 import { FileInput } from "@/components/ui/file-input";
 import { apiFetch, apiJson } from "@/lib/api";
 import { formatApiError, useToast } from "@/components/ui/toast";
+import { formatINR } from "@/lib/currency";
 
 interface PolicySummary {
   id: number;
@@ -179,7 +180,7 @@ export function Step2PolicyPapers({
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Step 2 — Policy Papers</h2>
+      <h2 className="text-xl font-semibold">Step 2 — Motor Policy Papers</h2>
       <p className="text-sm text-muted-foreground">
         Choose a saved policy from your profile or upload a PDF. Groq AI will analyze coverage before you continue.
       </p>
@@ -208,7 +209,7 @@ export function Step2PolicyPapers({
       {tab === "fetch" && (
         <div className="grid md:grid-cols-2 gap-4">
           <div className="p-4 border rounded-lg bg-card space-y-4">
-            <h3 className="font-medium">Your saved policies</h3>
+            <h3 className="font-medium">Your saved motor policies</h3>
             {loadingPolicies ? (
               <p className="text-sm text-muted-foreground">Loading policies...</p>
             ) : policiesWithDocs.length === 0 ? (
@@ -236,7 +237,7 @@ export function Step2PolicyPapers({
                       {p.policy_type} — {p.policy_number}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      ${p.coverage_limit.toLocaleString()} · {p.document_count} document
+                      {formatINR(p.coverage_limit)} · {p.document_count} document
                       {p.document_count === 1 ? "" : "s"}
                     </p>
                   </button>
@@ -289,7 +290,7 @@ export function Step2PolicyPapers({
       {tab === "upload" && (
         <div className="grid md:grid-cols-2 gap-4">
           <div className="p-4 border rounded-lg bg-card space-y-4">
-            <h3 className="font-medium">Upload policy schedule</h3>
+            <h3 className="font-medium">Upload motor policy schedule</h3>
             <FileInput
               accept=".pdf,.png,.jpg,.jpeg"
               placeholder="Upload policy schedule PDF or image"

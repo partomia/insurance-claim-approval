@@ -7,9 +7,9 @@ import { AppHeader, type NavItem } from "@/components/AppHeader";
 
 const nav: NavItem[] = [
   { to: "/dashboard", label: "Home" },
-  { to: "/policies/connect", label: "Policies" },
-  { to: "/claim", label: "New Claim" },
-  { to: "/history", label: "Claims" },
+  { to: "/policies/connect", label: "Motor Policies" },
+  { to: "/claim", label: "New Motor Claim" },
+  { to: "/history", label: "My Motor Claims" },
   { to: "/profile", label: "Profile" },
 ];
 
@@ -19,7 +19,7 @@ export function Layout() {
       <AppHeader
         brand={{
           to: "/dashboard",
-          label: "ClaimCopilot",
+          label: "Motor Claim Copilot",
           icon: <Sparkles className="h-4 w-4" />,
         }}
         nav={nav}

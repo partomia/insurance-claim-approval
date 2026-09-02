@@ -22,7 +22,7 @@ interface CustomerProfile {
   mobile_verified: boolean;
   phone?: string | null;
   saved_vehicles: Record<string, unknown>[];
-  saved_hospitals: Record<string, unknown>[];
+  saved_garages: Record<string, unknown>[];
   dependents: Record<string, unknown>[];
 }
 
@@ -160,16 +160,16 @@ export function Profile() {
         </CardContent>
       </Card>
 
-      {extended && (extended.saved_hospitals.length > 0 || extended.saved_vehicles.length > 0) && (
+      {extended && (extended.saved_garages.length > 0 || extended.saved_vehicles.length > 0) && (
         <Card>
           <CardHeader><CardTitle>Saved for Claims</CardTitle></CardHeader>
           <CardContent className="space-y-4 text-sm">
-            {extended.saved_hospitals.length > 0 && (
+            {extended.saved_garages.length > 0 && (
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Hospitals</p>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Preferred garages</p>
                 <div className="flex flex-wrap gap-2">
-                  {extended.saved_hospitals
-                    .map((h) => String((h as { name?: string }).name ?? ""))
+                  {extended.saved_garages
+                    .map((g) => String((g as { name?: string }).name ?? ""))
                     .filter(Boolean)
                     .map((name) => (
                       <span

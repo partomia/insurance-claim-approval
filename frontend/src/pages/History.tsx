@@ -108,7 +108,7 @@ export function History() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Claim History"
+        title="Motor Claim History"
         description="Track every claim in one place. Items that need your action appear first."
         actions={
           <>

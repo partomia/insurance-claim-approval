@@ -92,7 +92,7 @@ export function AgentProfile() {
                 id="department"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
-                placeholder="Claims Review"
+                placeholder="Motor Claims Review"
               />
             </div>
             <Button type="submit" disabled={saving}>

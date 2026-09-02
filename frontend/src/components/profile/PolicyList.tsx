@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { formatApiError, useToast } from "@/components/ui/toast";
+import { formatINR } from "@/lib/currency";
 
 export interface PolicySummary {
   id: number;
@@ -44,7 +45,7 @@ export function PolicyList({ policies, onDeleted }: PolicyListProps) {
   if (policies.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4">
-        No policies yet — upload a policy schedule above to add one.
+        No motor policies yet — upload your policy schedule above to connect one.
       </p>
     );
   }
@@ -59,8 +60,7 @@ export function PolicyList({ policies, onDeleted }: PolicyListProps) {
                 {policy.policy_type} ({policy.policy_number})
               </p>
               <p className="text-sm text-muted-foreground">
-                Coverage: ${policy.coverage_limit.toLocaleString()} · Deductible: $
-                {policy.deductible.toLocaleString()} · Co-pay: {policy.co_pay_pct}%
+                Sum insured: {formatINR(policy.coverage_limit)} · Compulsory excess: {formatINR(policy.deductible)} · Co-pay: {policy.co_pay_pct}%
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {policy.document_count} schedule document{policy.document_count === 1 ? "" : "s"}

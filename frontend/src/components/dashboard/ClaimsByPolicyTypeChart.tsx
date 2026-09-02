@@ -1,5 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Cell } from "recharts";
 import { useChartColors } from "@/lib/chartTheme";
+import { formatINR } from "@/lib/currency";
 
 interface PolicyTypeSlice {
   policy_type: string;
@@ -31,7 +32,7 @@ export function ClaimsByPolicyTypeChart({ data }: { data: PolicyTypeSlice[] }) {
           formatter={(value, _name, item) => {
             const row = item?.payload as PolicyTypeSlice | undefined;
             return [
-              `${value ?? 0} claims · $${(row?.total_amount ?? 0).toLocaleString()} total`,
+              `${value ?? 0} motor claims · ${formatINR(row?.total_amount ?? 0)} total`,
               row?.policy_type ?? "Type",
             ];
           }}

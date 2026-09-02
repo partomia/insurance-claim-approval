@@ -56,7 +56,7 @@ export function ClaimStatusDonutChart({
         </Pie>
         <Tooltip
           formatter={(value, _name, item) => [
-            `${value ?? 0} claim${Number(value ?? 0) === 1 ? "" : "s"}`,
+            `${value ?? 0} motor claim${Number(value ?? 0) === 1 ? "" : "s"}`,
             (item?.payload as StatusSlice | undefined)?.label ?? "Status",
           ]}
           contentStyle={{

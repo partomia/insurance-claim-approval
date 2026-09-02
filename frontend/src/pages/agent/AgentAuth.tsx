@@ -152,7 +152,7 @@ export function AgentAuth() {
               <Label htmlFor="department">Department</Label>
               <Input
                 id="department"
-                placeholder="Claims Review"
+                placeholder="Motor Claims Review"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
               />

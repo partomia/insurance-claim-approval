@@ -12,6 +12,7 @@ import { agentApiJson } from "@/lib/agentApi";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useChartColors } from "@/lib/chartTheme";
 import { AlertTriangle, CheckCircle2, ClipboardList, Clock3, ShieldAlert } from "lucide-react";
+import { formatINR } from "@/lib/currency";
 
 interface AgentStats {
   assigned_total: number;
@@ -119,7 +120,7 @@ export function AgentDashboard() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Expert Workspace"
+        title="Motor Claims Expert Workspace"
         description="Review assigned claims, documents, and policy requirements."
       />
 
@@ -138,7 +139,7 @@ export function AgentDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Work Queue</CardTitle>
+          <CardTitle>Motor Claims Work Queue</CardTitle>
           <CardDescription>Assigned claims ready for expert review — click a row to open the workstation</CardDescription>
         </CardHeader>
         <CardContent>
@@ -152,7 +153,7 @@ export function AgentDashboard() {
                     <th className="py-2 pr-3 font-medium">Claim ID</th>
                     <th className="py-2 pr-3 font-medium">Customer</th>
                     <th className="py-2 pr-3 font-medium">Status</th>
-                    <th className="py-2 pr-3 font-medium">Amount</th>
+                    <th className="py-2 pr-3 font-medium">Claim amount</th>
                     <th className="py-2 pr-3 font-medium">Approval</th>
                     <th className="py-2 pr-3 font-medium">Fraud</th>
                     <th className="py-2 pr-3 font-medium">Docs</th>
@@ -175,7 +176,7 @@ export function AgentDashboard() {
                       <td className="py-3 pr-3">
                         <ClaimStatusBadge status={claim.status} />
                       </td>
-                      <td className="py-3 pr-3">${claim.claim_amount.toLocaleString()}</td>
+                      <td className="py-3 pr-3">{formatINR(claim.claim_amount)}</td>
                       <td className="py-3 pr-3">
                         {claim.approval_probability != null ? (
                           <span className="inline-flex rounded-full bg-success-subtle text-success px-2 py-0.5 text-xs font-semibold">
@@ -221,7 +222,7 @@ export function AgentDashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Claims by Status</CardTitle>
+            <CardTitle>Motor Claims by Status</CardTitle>
             <CardDescription>Click a slice to filter the claims queue</CardDescription>
           </CardHeader>
           <CardContent>
@@ -234,7 +235,7 @@ export function AgentDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Claims by Customer</CardTitle>
+            <CardTitle>Motor Claims by Customer</CardTitle>
             <CardDescription>Volume per customer in your queue</CardDescription>
           </CardHeader>
           <CardContent>

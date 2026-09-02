@@ -22,6 +22,7 @@ import {
 } from "@/components/claim/charts/PipelineTimeline";
 import { apiJson, apiUrl, ApiError } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { formatINR } from "@/lib/currency";
 
 interface Decision {
   claim_id: string;
@@ -223,7 +224,7 @@ export function TrackClaim() {
     return (
       <Card>
         <CardContent className="mx-auto max-w-lg space-y-4 py-12 text-center">
-          <h1 className="text-2xl font-semibold">Could not load claim</h1>
+          <h1 className="text-2xl font-semibold">Could not load motor claim</h1>
           <p className="text-muted-foreground">{loadError}</p>
           <div className="flex justify-center gap-3 pt-2">
             <Button onClick={() => window.location.reload()}>Retry</Button>
@@ -240,7 +241,7 @@ export function TrackClaim() {
     return (
       <Card>
         <CardContent className="mx-auto max-w-lg space-y-4 py-12 text-center">
-          <h1 className="text-2xl font-semibold">Claim not found</h1>
+          <h1 className="text-2xl font-semibold">Motor claim not found</h1>
           <p className="text-muted-foreground">
             Claim #{id} doesn&apos;t exist or isn&apos;t linked to your account.
             This can happen after a database reset — check History for your current claims.
@@ -283,10 +284,10 @@ export function TrackClaim() {
   return (
     <div className="space-y-6 pb-8">
       <DetailHeader
-        back={{ to: "/history", label: "All claims" }}
-        eyebrow="Claim tracking"
+        back={{ to: "/history", label: "All motor claims" }}
+        eyebrow="Motor claim tracking"
         title={`Claim ${claim.claim_id}`}
-        subtitle={`${processing ? "Review in progress" : "Review complete"} · ₹${claim.claim_amount?.toLocaleString("en-IN")} claimed`}
+        subtitle={`${processing ? "Review in progress" : "Review complete"} · ${formatINR(claim.claim_amount)} claimed`}
         status={<ClaimStatusBadge status={claim.status} assignedAgent={claim.assigned_agent} />}
         meta={[
           {
@@ -334,7 +335,7 @@ export function TrackClaim() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <CardTitle>Claim review progress</CardTitle>
+                  <CardTitle>Motor claim review progress</CardTitle>
                   <CardDescription>Step-by-step updates as we review your claim</CardDescription>
                 </div>
                 {stuckProcessing && (

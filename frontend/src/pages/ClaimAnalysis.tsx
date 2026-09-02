@@ -13,6 +13,7 @@ import { ExpertRequestedDocumentsCard } from "@/components/claim/ExpertRequested
 import { ExpertReviewCard, type ExpertReview } from "@/components/claim/ExpertReviewCard";
 import { AssignPolicyAgentModal } from "@/components/claim/AssignPolicyAgentModal";
 import { apiJson } from "@/lib/api";
+import { formatINR } from "@/lib/currency";
 
 interface Decision extends AIAnalysis {
   claim_id: string;
@@ -31,10 +32,6 @@ interface ClaimStatus {
   decision?: Decision;
   submission?: ClaimSubmission;
   documents?: ClaimDocumentItem[];
-}
-
-function formatINR(n: number): string {
-  return `₹${n.toLocaleString("en-IN")}`;
 }
 
 export function ClaimAnalysis() {
@@ -91,7 +88,7 @@ export function ClaimAnalysis() {
         back={{ to: "/history", label: "All claims" }}
         eyebrow="AI claim analysis"
         title={claim.claim_id}
-        subtitle={`Claim amount ${formatINR(claim.claim_amount)}`}
+        subtitle={`Motor claim amount ${formatINR(claim.claim_amount)}`}
         status={
           <ClaimStatusBadge
             status={claim.status}
@@ -133,7 +130,7 @@ export function ClaimAnalysis() {
           <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm">
             <SectionHeading
               icon={<Sparkles className="h-5 w-5 text-primary" />}
-              title="AI claim analysis"
+              title="AI motor claim analysis"
               className="mb-4"
             />
             <ClaimAnalysisPanel

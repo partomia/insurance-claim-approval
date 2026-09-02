@@ -6,8 +6,8 @@ import { AppHeader, type NavItem } from "@/components/AppHeader";
 import { Users } from "lucide-react";
 
 const nav: NavItem[] = [
-  { to: "/agent/dashboard", label: "Workspace" },
-  { to: "/agent/claims", label: "Claims queue" },
+  { to: "/agent/dashboard", label: "Motor Claims Workspace" },
+  { to: "/agent/claims", label: "Motor Claims Queue" },
   { to: "/agent/profile", label: "Profile" },
 ];
 
@@ -17,7 +17,7 @@ export function AgentLayout() {
       <AppHeader
         brand={{
           to: "/agent/dashboard",
-          label: "ClaimCopilot Expert",
+          label: "Motor Claim Copilot — Expert",
           icon: <Users className="h-4 w-4" />,
           iconClassName: "bg-secondary text-secondary-foreground",
         }}

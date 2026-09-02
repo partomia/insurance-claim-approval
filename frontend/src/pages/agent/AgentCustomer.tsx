@@ -7,6 +7,7 @@ import { ClaimStatusBadge } from "@/components/claim/ClaimStatusBadge";
 import { ClaimStatusDonutChart } from "@/components/dashboard/ClaimStatusDonutChart";
 import { ClaimsTimelineChart } from "@/components/dashboard/ClaimsTimelineChart";
 import { agentApiJson } from "@/lib/agentApi";
+import { formatINR } from "@/lib/currency";
 
 interface PolicySummary {
   id: number;
@@ -132,7 +133,7 @@ export function AgentCustomer() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Customer Claim Status</CardTitle>
+            <CardTitle>Customer Motor Claim Status</CardTitle>
           </CardHeader>
           <CardContent>
             {insights ? (
@@ -144,7 +145,7 @@ export function AgentCustomer() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Claims Timeline</CardTitle>
+            <CardTitle>Motor Claims Timeline</CardTitle>
           </CardHeader>
           <CardContent>
             {insights ? (
@@ -168,7 +169,7 @@ export function AgentCustomer() {
               <div key={p.id} className="border rounded-lg p-3 text-sm">
                 <p className="font-medium">{p.policy_number} · {p.policy_type}</p>
                 <p className="text-muted-foreground">
-                  Coverage ${p.coverage_limit.toLocaleString()} · Deductible ${p.deductible.toLocaleString()} · {p.status}
+                  Sum insured {formatINR(p.coverage_limit)} · Excess {formatINR(p.deductible)} · {p.status}
                 </p>
               </div>
             ))
@@ -178,7 +179,7 @@ export function AgentCustomer() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Your Assigned Claims</CardTitle>
+          <CardTitle>Your Assigned Motor Claims</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {customer.assigned_claims.map((claim) => (
@@ -189,7 +190,7 @@ export function AgentCustomer() {
             >
               <div>
                 <p className="font-medium">{claim.claim_id}</p>
-                <p className="text-sm text-muted-foreground">${claim.claim_amount.toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground">{formatINR(claim.claim_amount)}</p>
               </div>
               <ClaimStatusBadge status={claim.status} />
             </Link>

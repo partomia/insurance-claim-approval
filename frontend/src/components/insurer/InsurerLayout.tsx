@@ -5,8 +5,8 @@ import { AppHeader, type NavItem } from "@/components/AppHeader";
 import { Building2 } from "lucide-react";
 
 const nav: NavItem[] = [
-  { to: "/insurer/dashboard", label: "Dashboard" },
-  { to: "/insurer/claims", label: "Claims" },
+  { to: "/insurer/dashboard", label: "Motor Insurance Dashboard" },
+  { to: "/insurer/claims", label: "Motor Claims" },
 ];
 
 export function InsurerLayout() {
@@ -15,7 +15,7 @@ export function InsurerLayout() {
       <AppHeader
         brand={{
           to: "/insurer/dashboard",
-          label: "ClaimCopilot Insurer",
+          label: "Motor Claim Copilot — Insurer",
           icon: <Building2 className="h-4 w-4" />,
           iconClassName: "bg-secondary text-secondary-foreground",
         }}

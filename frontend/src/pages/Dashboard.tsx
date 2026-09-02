@@ -7,6 +7,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClaimAnalysisPanel, type AIAnalysis } from "@/components/claim/ClaimAnalysisPanel";
 import { apiJson } from "@/lib/api";
+import { formatINR } from "@/lib/currency";
 import {
   ArrowRight,
   Bell,
@@ -47,10 +48,6 @@ interface DashboardStats {
     incident_description: string;
     created_at: string;
   }[];
-}
-
-function formatINR(value: number): string {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
 }
 
 export function Dashboard() {
@@ -94,8 +91,8 @@ export function Dashboard() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Insurance Claim Assistant"
-        title="Your Claim Workspace"
+        eyebrow="Motor Insurance Claim Assistant"
+        title="Your Motor Claim Workspace"
         description="Know if your claim is likely to be approved before you submit to your insurer."
         actions={
           <>
@@ -107,7 +104,7 @@ export function Dashboard() {
             <Link to="/claim">
               <Button>
                 <FilePlus2 className="h-4 w-4" />
-                Start New Claim
+                File Motor Claim
               </Button>
             </Link>
           </>
@@ -122,7 +119,7 @@ export function Dashboard() {
             </span>
             <div>
               <p className="font-medium">Complete one-time KYC</p>
-              <p className="text-sm text-muted-foreground">Verify identity once to connect policies and file claims.</p>
+              <p className="text-sm text-muted-foreground">Verify identity once to connect motor policies and file claims.</p>
             </div>
           </div>
           <Link to="/kyc">
@@ -135,17 +132,17 @@ export function Dashboard() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Connected Policies"
+          label="Connected Motor Policies"
           value={stats.active_policies}
           icon={<Shield className="h-5 w-5" />}
         />
         <StatCard
-          label="Claims Analyzed"
+          label="Motor Claims Filed"
           value={stats.total_claims}
           icon={<ClipboardList className="h-5 w-5" />}
         />
         <StatCard
-          label="In Progress"
+          label="Claims In Progress"
           value={stats.pending_claims}
           icon={<Clock3 className="h-5 w-5" />}
         />
@@ -179,7 +176,7 @@ export function Dashboard() {
               </div>
             ) : (
               <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-                No analyses yet. Start a claim to get AI-powered approval predictions.
+                No motor claim analyses yet. File a claim to get AI-powered approval predictions.
               </div>
             )}
           </section>
@@ -188,7 +185,7 @@ export function Dashboard() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4" /> Connected Policies</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4" /> Connected Motor Policies</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {stats.connected_policies.length === 0 ? (
@@ -225,7 +222,7 @@ export function Dashboard() {
           )}
 
           <Card>
-            <CardHeader><CardTitle className="text-base">Recent Claims</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Recent Motor Claims</CardTitle></CardHeader>
             <CardContent className="space-y-1">
               {stats.recent_activity.length === 0 ? (
                 <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">

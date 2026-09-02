@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { PolicyContextPreview } from "./PolicyContextPreview";
+import { formatINR } from "@/lib/currency";
 
 interface Step4Props {
   policyNumber: string;
@@ -28,7 +29,7 @@ export function Step4ReviewSubmit({
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">Step 4 — Review & Submit</h2>
       <p className="text-sm text-muted-foreground">
-        Review your claim details before submitting for AI processing.
+        Review your motor claim details before submitting for AI processing.
       </p>
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -38,12 +39,12 @@ export function Step4ReviewSubmit({
             <p><span className="text-muted-foreground">Policy:</span> {policyNumber}</p>
             <p><span className="text-muted-foreground">Date:</span> {incidentDatetime}</p>
             <p><span className="text-muted-foreground">Location:</span> {location}</p>
-            <p><span className="text-muted-foreground">Amount:</span> ${Number(claimAmount).toLocaleString()}</p>
+            <p><span className="text-muted-foreground">Estimated repair cost:</span> {formatINR(Number(claimAmount))}</p>
             <p><span className="text-muted-foreground">Description:</span> {incidentDescription}</p>
           </div>
         </div>
         <div className="p-4 border rounded-lg">
-          <h3 className="font-medium mb-2">Policy Context</h3>
+          <h3 className="font-medium mb-2">Motor Policy Context</h3>
           {policyContext ? (
             <PolicyContextPreview context={policyContext as never} />
           ) : (
@@ -55,7 +56,7 @@ export function Step4ReviewSubmit({
       <div className="flex justify-between gap-3 border-t pt-4">
         <Button variant="outline" onClick={onBack}>← Back</Button>
         <Button onClick={onSubmit} disabled={loading || !policyContext}>
-          {loading ? "Submitting..." : "Submit Claim →"}
+          {loading ? "Submitting..." : "Submit Motor Claim →"}
         </Button>
       </div>
     </div>

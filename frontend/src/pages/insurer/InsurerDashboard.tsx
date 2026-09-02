@@ -8,7 +8,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClaimStatusBadge } from "@/components/claim/ClaimStatusBadge";
 import { insurerApiJson } from "@/lib/insurerApi";
-import { Building2, CheckCircle2, Clock3, DollarSign, XCircle } from "lucide-react";
+import { Building2, CheckCircle2, Clock3, IndianRupee, XCircle } from "lucide-react";
+import { formatINR } from "@/lib/currency";
 
 interface InsurerStats {
   pending_decision: number;
@@ -73,9 +74,9 @@ export function InsurerDashboard() {
     { label: "Approved", value: stats.approved_total, icon: <CheckCircle2 className="h-5 w-5" />, hint: "Claims you approved", tone: "success" },
     { label: "Rejected", value: stats.rejected_total, icon: <XCircle className="h-5 w-5" />, hint: "Claims you rejected", tone: stats.rejected_total > 0 ? "danger" : "default" },
     {
-      label: "Total approved payout",
-      value: `$${stats.total_approved_payout.toLocaleString()}`,
-      icon: <DollarSign className="h-5 w-5" />,
+      label: "Total approved motor payouts",
+      value: formatINR(stats.total_approved_payout),
+      icon: <IndianRupee className="h-5 w-5" />,
       hint: "Sum of approved payable amounts",
     },
   ];
@@ -83,8 +84,8 @@ export function InsurerDashboard() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Insurer Dashboard"
-        description="Review claims submitted by ClaimCopilot experts and record final decisions."
+        title="Motor Insurer Dashboard"
+        description="Review motor claims submitted by Motor Claim Copilot experts and record final decisions."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -119,7 +120,7 @@ export function InsurerDashboard() {
                     <th className="py-2 pr-3 font-medium">Claim ID</th>
                     <th className="py-2 pr-3 font-medium">Customer</th>
                     <th className="py-2 pr-3 font-medium">Expert</th>
-                    <th className="py-2 pr-3 font-medium">Amount</th>
+                    <th className="py-2 pr-3 font-medium">Claim amount</th>
                     <th className="py-2 pr-3 font-medium">Status</th>
                     <th className="py-2 pr-3 font-medium">Updated</th>
                     <th className="py-2 font-medium">Action</th>
@@ -138,7 +139,7 @@ export function InsurerDashboard() {
                         <div className="text-xs text-muted-foreground">{claim.customer_email}</div>
                       </td>
                       <td className="py-3 pr-3">{claim.assigned_agent ?? "—"}</td>
-                      <td className="py-3 pr-3">${claim.claim_amount.toLocaleString()}</td>
+                      <td className="py-3 pr-3">{formatINR(claim.claim_amount)}</td>
                       <td className="py-3 pr-3">
                         <ClaimStatusBadge status={claim.status} showExpert={false} />
                       </td>

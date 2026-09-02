@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Calendar,
-  DollarSign,
+  IndianRupee,
   ExternalLink,
   FileText,
   MapPin,
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { openClaimDocument } from "@/lib/documents";
 import { useToast } from "@/components/ui/toast";
+import { formatINR } from "@/lib/currency";
 
 export interface ClaimSubmission {
   incident_description: string;
@@ -28,21 +29,25 @@ export interface ClaimDocumentItem {
 }
 
 const DOC_TYPE_LABELS: Record<string, string> = {
-  GOV_ID: "Government ID",
-  PROOF: "Supporting document",
-  POLICE_REPORT: "Police report",
-  MEDICAL: "Medical bill / report",
-  INVOICE: "Invoice",
+  DRIVER_LICENSE: "Driver's licence",
+  DAMAGE_PHOTO: "Damage photo",
+  REPAIR_ESTIMATE: "Repair estimate",
+  POLICE_REPORT: "Police / FIR report",
+  VEHICLE_REGISTRATION: "Vehicle registration (RC)",
+  TOWING_INVOICE: "Towing invoice",
+  THIRD_PARTY_STATEMENT: "Third-party statement",
   POLICY_PAPER: "Policy paper",
   OTHER: "Other",
 };
 
 const DOC_TYPE_BADGE: Record<string, string> = {
-  PROOF: "bg-info-subtle text-info",
-  MEDICAL: "bg-info-subtle text-info",
-  GOV_ID: "bg-warning-subtle text-warning",
+  DAMAGE_PHOTO: "bg-info-subtle text-info",
+  REPAIR_ESTIMATE: "bg-secondary/10 text-secondary",
+  DRIVER_LICENSE: "bg-warning-subtle text-warning",
+  VEHICLE_REGISTRATION: "bg-warning-subtle text-warning",
   POLICE_REPORT: "bg-muted text-foreground",
-  INVOICE: "bg-secondary/10 text-secondary",
+  TOWING_INVOICE: "bg-secondary/10 text-secondary",
+  THIRD_PARTY_STATEMENT: "bg-muted text-foreground",
   POLICY_PAPER: "bg-success-subtle text-success",
   OTHER: "bg-muted text-muted-foreground",
 };
@@ -133,15 +138,15 @@ export function ClaimSubmissionSummary({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="shadow-md border-border/80">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Claim request</CardTitle>
+            <CardTitle className="text-base">Motor claim request</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <StatTile icon={Shield} label="Policy" value={policyLabel} />
               <StatTile
-                icon={DollarSign}
+                icon={IndianRupee}
                 label="Amount"
-                value={claimAmount != null ? `$${claimAmount.toLocaleString()}` : "—"}
+                value={claimAmount != null ? formatINR(Number(claimAmount)) : "—"}
               />
               <StatTile icon={Calendar} label="Incident date" value={formatDate(submission.incident_datetime)} />
               <StatTile icon={MapPin} label="Location" value={submission.location} />

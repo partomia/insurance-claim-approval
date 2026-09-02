@@ -2,9 +2,9 @@ import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
-  { num: 1, label: "Incident Details" },
-  { num: 2, label: "Policy Papers" },
-  { num: 3, label: "Evidence & ID" },
+  { num: 1, label: "Incident & Vehicle" },
+  { num: 2, label: "Motor Policy" },
+  { num: 3, label: "Evidence & RC" },
   { num: 4, label: "Review & Submit" },
 ];
 
@@ -48,7 +48,7 @@ export function WizardStepper({ currentStep }: WizardStepperProps) {
       {/* Desktop: full stepper. */}
       <ol
         role="list"
-        aria-label="Claim submission steps"
+        aria-label="Motor claim submission steps"
         className="hidden items-center px-2 sm:flex"
       >
         {STEPS.map((step, i) => {

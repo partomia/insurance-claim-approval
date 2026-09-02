@@ -78,7 +78,7 @@ export function InsurerClaims() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Claims"
+        title="Motor Claims"
         description="All submissions sent to your company for final decision."
         actions={
           <Select

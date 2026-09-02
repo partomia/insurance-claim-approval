@@ -8,6 +8,9 @@ import { formatApiError, useToast } from "@/components/ui/toast";
 
 interface Step3Props {
   claimId: string;
+  thirdPartyInvolved: boolean;
+  injuriesReported: boolean;
+  towRequired: boolean;
   onContinue: () => void;
   onBack: () => void;
 }
@@ -16,14 +19,26 @@ interface KYCStatus {
   kyc_status: string;
 }
 
-export function Step3EvidenceUpload({ claimId, onContinue, onBack }: Step3Props) {
+export function Step3EvidenceUpload({
+  claimId,
+  thirdPartyInvolved,
+  injuriesReported,
+  towRequired,
+  onContinue,
+  onBack,
+}: Step3Props) {
   const { error, success } = useToast();
-  const [proofs, setProofs] = useState<File[]>([]);
-  const [govId, setGovId] = useState<File | null>(null);
+  const [damagePhotos, setDamagePhotos] = useState<File[]>([]);
+  const [repairEstimate, setRepairEstimate] = useState<File | null>(null);
+  const [driverLicense, setDriverLicense] = useState<File | null>(null);
+  const [vehicleRegistration, setVehicleRegistration] = useState<File | null>(null);
   const [policeReport, setPoliceReport] = useState<File | null>(null);
-  const [medicalBills, setMedicalBills] = useState<File | null>(null);
+  const [towingInvoice, setTowingInvoice] = useState<File | null>(null);
+  const [thirdPartyStatement, setThirdPartyStatement] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [kycVerified, setKycVerified] = useState(false);
+
+  const policeRequired = thirdPartyInvolved || injuriesReported;
 
   useEffect(() => {
     apiJson<KYCStatus>("/api/kyc/status")
@@ -32,27 +47,38 @@ export function Step3EvidenceUpload({ claimId, onContinue, onBack }: Step3Props)
   }, []);
 
   const uploadEvidence = async () => {
-    if (proofs.length === 0) {
-      error("Upload at least one supporting document (bills, reports, photos, FIR, receipts).");
+    if (damagePhotos.length === 0) {
+      error("Upload at least one damage photo.");
       return;
     }
-    if (!kycVerified && !govId) {
-      error("Complete KYC in your profile, or upload government ID for this session.");
+    if (!kycVerified && !driverLicense) {
+      error("Complete KYC in your profile, or upload driver's licence for this session.");
+      return;
+    }
+    if (policeRequired && !policeReport) {
+      error("Police / FIR report is required when third parties or injuries are involved.");
       return;
     }
     setLoading(true);
     try {
       const fd = new FormData();
-      if (govId) fd.append("gov_id", govId);
-      proofs.forEach((p) => fd.append("proofs", p));
+      if (driverLicense) fd.append("driver_license", driverLicense);
+      damagePhotos.forEach((p) => fd.append("damage_photos", p));
+      if (repairEstimate) fd.append("repair_estimate", repairEstimate);
+      if (vehicleRegistration) fd.append("vehicle_registration", vehicleRegistration);
       if (policeReport) fd.append("police_report", policeReport);
-      if (medicalBills) fd.append("medical_bills", medicalBills);
+      if (towingInvoice) fd.append("towing_invoice", towingInvoice);
+      if (thirdPartyStatement) fd.append("third_party_statement", thirdPartyStatement);
 
-      const res = await apiFetch(`/api/claims/${claimId}/evidence`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: fd,
-      }, { redirectOn401: true });
+      const res = await apiFetch(
+        `/api/claims/${claimId}/evidence`,
+        {
+          method: "POST",
+          headers: authHeaders(),
+          body: fd,
+        },
+        { redirectOn401: true },
+      );
       if (res.ok) {
         success("Documents uploaded.");
         onContinue();
@@ -67,49 +93,90 @@ export function Step3EvidenceUpload({ claimId, onContinue, onBack }: Step3Props)
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Supporting Documents</h2>
+      <h2 className="text-xl font-semibold">Accident Evidence & Supporting Documents</h2>
       <p className="text-sm text-muted-foreground">
-        Upload bills, medical reports, photos, FIR, or receipts. {kycVerified ? "Your identity is already verified — no need to upload ID again." : "Complete KYC once in Profile to skip ID upload on future claims."}
+        Upload damage photos, repair estimates, and identity documents.{" "}
+        {kycVerified
+          ? "Your identity is already verified — no need to upload driver's licence again."
+          : "Complete KYC once in Profile to skip licence upload on future claims."}
       </p>
 
       {!kycVerified && (
-        <FormField label="Government ID (required until KYC complete)">
+        <FormField label="Driver's licence (required until KYC complete)">
           <FileInput
             accept=".pdf,.png,.jpg,.jpeg"
-            placeholder="Upload government ID"
-            onFilesSelected={(files) => setGovId(files[0] ?? null)}
+            placeholder="Upload driver's licence"
+            onFilesSelected={(files) => setDriverLicense(files[0] ?? null)}
           />
         </FormField>
       )}
 
-      <FormField label="Supporting documents (required)">
+      <FormField label="Damage photos (required)">
         <FileInput
-          accept=".pdf,.png,.jpg,.jpeg"
+          accept=".png,.jpg,.jpeg,.heic,.heif"
           multiple
-          placeholder="Upload bills, reports, photos, or receipts"
-          onFilesSelected={setProofs}
+          placeholder="Upload one or more photos of the vehicle damage"
+          onFilesSelected={setDamagePhotos}
         />
       </FormField>
 
-      <FormField label="FIR / Police report (optional)">
+      <FormField label="Repair estimate / garage invoice (recommended)">
         <FileInput
           accept=".pdf,.png,.jpg,.jpeg"
-          placeholder="Upload police report (optional)"
+          placeholder="Upload the garage's repair estimate or invoice"
+          onFilesSelected={(files) => setRepairEstimate(files[0] ?? null)}
+        />
+      </FormField>
+
+      <FormField label="Vehicle registration / RC (optional)">
+        <FileInput
+          accept=".pdf,.png,.jpg,.jpeg"
+          placeholder="Upload the vehicle registration certificate"
+          onFilesSelected={(files) => setVehicleRegistration(files[0] ?? null)}
+        />
+      </FormField>
+
+      <FormField
+        label={
+          policeRequired
+            ? "Police / FIR report (required — third party or injuries reported)"
+            : "Police / FIR report (optional)"
+        }
+      >
+        <FileInput
+          accept=".pdf,.png,.jpg,.jpeg"
+          placeholder="Upload police report or FIR"
           onFilesSelected={(files) => setPoliceReport(files[0] ?? null)}
         />
       </FormField>
 
-      <FormField label="Medical bills / reports (optional)">
-        <FileInput
-          accept=".pdf,.png,.jpg,.jpeg"
-          placeholder="Upload medical bills (optional)"
-          onFilesSelected={(files) => setMedicalBills(files[0] ?? null)}
-        />
-      </FormField>
+      {towRequired && (
+        <FormField label="Towing invoice (recommended)">
+          <FileInput
+            accept=".pdf,.png,.jpg,.jpeg"
+            placeholder="Upload the towing invoice"
+            onFilesSelected={(files) => setTowingInvoice(files[0] ?? null)}
+          />
+        </FormField>
+      )}
+
+      {thirdPartyInvolved && (
+        <FormField label="Third-party statement (optional)">
+          <FileInput
+            accept=".pdf,.png,.jpg,.jpeg"
+            placeholder="Signed statement from the other party"
+            onFilesSelected={(files) => setThirdPartyStatement(files[0] ?? null)}
+          />
+        </FormField>
+      )}
 
       <div className="flex gap-3 border-t pt-4">
-        <Button variant="outline" onClick={onBack}>Back</Button>
-        <Button onClick={uploadEvidence} disabled={loading}>{loading ? "Uploading..." : "Continue"}</Button>
+        <Button variant="outline" onClick={onBack}>
+          Back
+        </Button>
+        <Button onClick={uploadEvidence} disabled={loading}>
+          {loading ? "Uploading..." : "Continue"}
+        </Button>
       </div>
     </div>
   );

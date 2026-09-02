@@ -206,7 +206,7 @@ export function ClaimAssistant({
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about policy coverage, payout, or claim status"
+            placeholder="Ask about motor policy coverage, payout, or claim status"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

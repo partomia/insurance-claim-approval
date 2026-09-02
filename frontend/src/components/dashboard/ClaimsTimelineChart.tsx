@@ -24,7 +24,7 @@ export function ClaimsTimelineChart({ data }: { data: MonthSlice[] }) {
           axisLine={{ stroke: colors.border }}
         />
         <Tooltip
-          formatter={(value) => [`${value ?? 0} claims`, "Submitted"]}
+          formatter={(value) => [`${value ?? 0} motor claims`, "Submitted"]}
           contentStyle={{
             background: colors.foreground === "#111827" ? "#fff" : "#1f2937",
             border: `1px solid ${colors.border}`,

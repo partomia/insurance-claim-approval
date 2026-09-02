@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OPEN_ASSISTANT_EVENT } from "@/components/assistant/UniversalAssistant";
+import { formatINR } from "@/lib/currency";
 
 export interface AIAnalysis {
   approval_probability?: number;
@@ -25,14 +26,6 @@ export interface AIAnalysis {
   next_best_action?: string;
   ai_explanation?: string;
   reasoning?: string;
-}
-
-function formatINR(value: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
 }
 
 function pct(value?: number): string {

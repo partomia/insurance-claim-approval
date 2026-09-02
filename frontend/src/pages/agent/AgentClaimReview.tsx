@@ -40,9 +40,10 @@ interface ClaimStatus {
 }
 
 const CHECKLIST = [
-  "All mandatory documents uploaded",
-  "Policy clause coverage confirmed with customer",
-  "Invoice and medical records verified",
+  "All mandatory motor documents uploaded (damage photos, repair estimate, driver's licence)",
+  "Policy clause coverage confirmed (own-damage vs third-party split)",
+  "Damage estimate and repair invoice cross-verified",
+  "VIN on claim matches the policy's covered vehicle",
   "Customer understands next steps with insurer",
 ];
 
@@ -157,10 +158,10 @@ export function AgentClaimReview() {
   return (
     <div className="space-y-6">
       <DetailHeader
-        back={{ to: "/agent/claims", label: "Claims queue" }}
-        eyebrow="Claim consultation workspace"
+        back={{ to: "/agent/claims", label: "Motor Claims Queue" }}
+        eyebrow="Motor claim consultation workspace"
         title={claim.claim_id}
-        subtitle="Review submission, documents, policy requirements, and AI analysis."
+        subtitle="Review motor claim submission, documents, policy requirements, and AI analysis."
         status={<ClaimStatusBadge status={claim.status} />}
         actions={
           <Link to={`/agent/claims/${id}/audit`}>

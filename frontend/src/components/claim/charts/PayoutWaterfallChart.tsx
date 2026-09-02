@@ -1,5 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, ReferenceLine } from "recharts";
 import { useChartColors } from "@/lib/chartTheme";
+import { formatINR, formatINRCompact } from "@/lib/currency";
 
 interface PayoutStep {
   name: string;
@@ -30,7 +31,7 @@ export function PayoutWaterfallChart({ payout }: { payout: PayoutBreakdown }) {
           const payable = payout.payable || 0;
           return [
             { name: "Claimed", value: gross },
-            { name: "Deductible", value: -deductible },
+            { name: "Compulsory excess", value: -deductible },
             ...(coPay > 0 ? [{ name: "Co-pay", value: -coPay }] : []),
             ...(depreciation > 0 ? [{ name: "Depreciation", value: -depreciation }] : []),
             { name: "Payable", value: payable },
@@ -60,11 +61,11 @@ export function PayoutWaterfallChart({ payout }: { payout: PayoutBreakdown }) {
           <YAxis
             tick={{ fill: colors.muted, fontSize: 10 }}
             axisLine={{ stroke: colors.border }}
-            tickFormatter={(v) => `$${Math.abs(v / 1000).toFixed(0)}k`}
+            tickFormatter={(v) => formatINRCompact(Number(v))}
           />
           <ReferenceLine y={0} stroke={colors.border} />
           <Tooltip
-            formatter={(value) => `$${Math.abs(Number(value ?? 0)).toLocaleString()}`}
+            formatter={(value) => formatINR(Math.abs(Number(value ?? 0)))}
             contentStyle={{
               background: colors.foreground === "#111827" ? "#fff" : "#1f2937",
               border: `1px solid ${colors.border}`,
@@ -80,8 +81,8 @@ export function PayoutWaterfallChart({ payout }: { payout: PayoutBreakdown }) {
         </BarChart>
       </ResponsiveContainer>
       <div className="flex justify-between text-xs text-muted-foreground mt-1 px-1">
-        <span>Gross ${gross.toLocaleString()}</span>
-        <span className="font-semibold text-green-600">Payable ${Math.abs(Number(payable)).toLocaleString()}</span>
+        <span>Gross {formatINR(gross)}</span>
+        <span className="font-semibold text-green-600">Payable {formatINR(Math.abs(Number(payable)))}</span>
       </div>
     </div>
   );
