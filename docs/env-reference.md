@@ -7,7 +7,12 @@ All settings live in `backend/config.py` (`Settings`). Values are read from
 
 | Var | Default | Notes |
 |---|---|---|
-| `DATABASE_URL` | `sqlite:///./insurance.db` | Postgres URL for prod/Docker |
+| `IMPALA_HOST` | `go01-aws-rtdm-gateway...` | CDP Impala gateway host |
+| `IMPALA_PORT` | `443` | |
+| `IMPALA_DATABASE` | `default` | Impala schema/database |
+| `IMPALA_AUTH_MECHANISM` | `GSSAPI` | Kerberos; use `LDAP` + `IMPALA_USER`/`IMPALA_PASSWORD` locally |
+| `IMPALA_HTTP_PATH` | `go01-aws-rtdm/cdp-proxy-api/impala` | CDP proxy path |
+| `IMPALA_USER` / `IMPALA_PASSWORD` | empty | LDAP credentials when Kerberos unavailable |
 | `REDIS_URL` | `redis://redis:6379/0` | Celery broker + result backend |
 | `JWT_SECRET` | `cloudera-insurance-secret-key-for-demo` | **Rotate in prod** |
 | `JWT_ALGORITHM` | `HS256` | |

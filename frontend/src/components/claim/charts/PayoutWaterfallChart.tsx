@@ -44,6 +44,7 @@ export function PayoutWaterfallChart({ payout }: { payout: PayoutBreakdown }) {
   const stepColors: Record<string, string> = {
     Claimed: colors.primary,
     Deductible: colors.red,
+    "Compulsory excess": colors.red,
     "Co-pay": colors.amber,
     Depreciation: colors.amber,
     Payable: colors.green,

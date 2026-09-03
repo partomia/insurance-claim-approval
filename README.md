@@ -1,6 +1,6 @@
-# AI-Powered Insurance Claim Processing System
+# AI-Powered Motor Vehicle Insurance Claim Processing System
 
-Production-grade insurance claim processing with FastAPI, Celery, Redis, PostgreSQL, FAISS RAG, fraud detection, and a Confidence & Explainability Layer.
+Production-grade **motor-vehicle** insurance claim processing with FastAPI, Celery, Redis, Impala (CDP), Chroma RAG, motor-tuned fraud detection, own-damage / third-party payout split, total-loss detection, and a Confidence & Explainability Layer.
 
 ## Architecture
 
@@ -55,10 +55,16 @@ Optional: `START_CELERY=1 ./start.sh` if Redis is running. For Docker: `./start.
   "claim_id": "CLM12345",
   "status": "APPROVED",
   "payable_amount": 125000,
+  "own_damage_payable": 100000,
+  "third_party_payable": 0,
+  "gst_amount": 22500,
+  "is_total_loss": false,
+  "salvage_deduction": 0,
+  "next_cycle_ncb_pct": 0,
   "fraud_score": 0.12,
   "confidence_score": 0.91,
   "retrieved_clauses": ["Section 4.2", "Section 7.1"],
-  "reasoning": "Incident is covered under comprehensive coverage...",
+  "reasoning": "Motor collision covered under own-damage; deductible and age-based depreciation applied...",
   "human_review_required": false
 }
 ```
@@ -111,6 +117,13 @@ See [`backend/.env.example`](backend/.env.example) and [`frontend/.env.example`]
 **Backend** (`backend/.env` on CML session):
 
 ```env
+DATABASE_BACKEND=impala
+IMPALA_HOST=go01-aws-rtdm-gateway.go01-dem.ylcu-atmi.cloudera.site
+IMPALA_PORT=443
+IMPALA_USE_SSL=true
+IMPALA_AUTH_MECHANISM=GSSAPI
+IMPALA_USE_HTTP_TRANSPORT=true
+IMPALA_HTTP_PATH=go01-aws-rtdm/cdp-proxy-api/impala
 ROOT_PATH=/proxy/7878
 CORS_ORIGINS=https://icn-agents.vercel.app,http://localhost:5173
 CLAIM_PROCESSING_MODE=sync
@@ -125,10 +138,28 @@ VITE_API_URL=https://YOUR-SESSION.ml-....cloudera.site/proxy/7878
 
 Use the exact proxy URL from the CML **PORTS** tab (no trailing slash). Restart the backend after changing `.env`.
 
+## Test Impala connection (local or CML)
+
+```bash
+cd backend
+cp .env.example .env   # set IMPALA_* vars
+pip install -e ".[dev]"
+python scripts/test_impala_connection.py
+python scripts/test_impala_connection.py --query "SHOW DATABASES"
+```
+
+For **LDAP** auth when Kerberos is unavailable locally, set in `backend/.env`:
+
+```env
+IMPALA_AUTH_MECHANISM=LDAP
+IMPALA_USER=your-workload-username
+IMPALA_PASSWORD=your-password
+```
+
 ## Live Claim Processing
 
 After submitting a claim, open the track page — it connects to `GET /api/claims/{id}/stream` (SSE) and shows each agent step live:
 
 1. Policy Validation → 2. RAG Retrieval → 3. Customer Profile → 4. Evidence → 5. Fraud → 6. Groq Decision → 7. Payout
 
-Local SQLite dev runs the pipeline **in-process** (`sync` mode) so it works without a Celery worker.
+Use `CLAIM_PROCESSING_MODE=sync` on CML so the pipeline runs in-process without Celery.

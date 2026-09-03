@@ -34,13 +34,10 @@ source .venv/bin/activate
 echo "Installing backend dependencies..."
 pip install -q -e ".[dev]" 2>/dev/null || pip install -q -e .
 
-export DATABASE_URL="${DATABASE_URL:-sqlite:///${BACKEND}/insurance.db}"
 export REDIS_URL="${REDIS_URL:-redis://localhost:6379/0}"
 
-if [[ "${DATABASE_URL}" == sqlite* ]] && [[ -z "${UVICORN_WORKERS:-}" ]]; then
-  export UVICORN_WORKERS=1
-fi
-
+echo "Testing Impala connection..."
+python scripts/test_impala_connection.py
 echo "Seeding database..."
 python seed.py
 

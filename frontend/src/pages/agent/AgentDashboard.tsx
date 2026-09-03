@@ -244,8 +244,8 @@ export function AgentDashboard() {
             ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={stats.claims_by_customer}>
-                  <XAxis dataKey="customer_name" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <XAxis dataKey="customer_name" tick={{ fill: colors.muted, fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fill: colors.muted, fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
                       background: colors.foreground === "#111827" ? "#fff" : "#1f2937",
