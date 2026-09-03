@@ -7,7 +7,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Impala (CDP Data Warehouse) — sole application database
+    # Database backend selector — "sqlite" (default, local dev) or "impala" (CDP).
+    db_backend: str = "sqlite"
+
+    # SQLite (default local backend)
+    database_url: str = f"sqlite:///{Path(__file__).parent / 'insurance.db'}"
+
+    # Impala (CDP Data Warehouse) — used only when DB_BACKEND=impala
     impala_host: str = "go01-aws-rtdm-gateway.go01-dem.ylcu-atmi.cloudera.site"
     impala_port: int = 443
     impala_database: str = "default"
@@ -62,6 +68,14 @@ class Settings(BaseSettings):
     assistant_summary_max_tokens: int = 512
     assistant_ltm_extract_max_tokens: int = 256
     assistant_backfill_on_startup: bool = True
+
+    @property
+    def uses_impala(self) -> bool:
+        return self.db_backend.strip().lower() == "impala"
+
+    @property
+    def uses_sqlite(self) -> bool:
+        return not self.uses_impala
 
     def cors_origin_list(self) -> list[str]:
         raw = self.cors_origins.strip()

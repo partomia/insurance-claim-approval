@@ -7,7 +7,7 @@ settings = get_settings()
 
 
 def ensure_schema(force_reset: bool = False) -> None:
-    """Create missing Impala/Hive tables. Only wipe when explicitly forced."""
+    """Create missing tables for the configured backend. Only wipe when forced."""
     should_reset = force_reset or os.getenv("FORCE_DB_RESET", "").lower() in ("1", "true", "yes")
 
     if should_reset:

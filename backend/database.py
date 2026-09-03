@@ -10,8 +10,12 @@ _engine = None
 _SessionLocal = None
 
 
+# --------------------------------------------------------------------------- #
+# Impala (CDP) backend
+# --------------------------------------------------------------------------- #
 def _impala_connect_kwargs(*, database: str | None = None) -> dict:
     db = database or settings.impala_database
+
     kwargs = {
         "host": settings.impala_host,
         "port": settings.impala_port,
@@ -20,12 +24,17 @@ def _impala_connect_kwargs(*, database: str | None = None) -> dict:
         "auth_mechanism": settings.impala_auth_mechanism,
         "use_http_transport": settings.impala_use_http_transport,
         "http_path": settings.impala_http_path,
-        "kerberos_service_name": settings.impala_kerberos_service_name,
     }
+
+    if settings.impala_auth_mechanism.upper() == "GSSAPI":
+        kwargs["kerberos_service_name"] = settings.impala_kerberos_service_name
+
     if settings.impala_user:
         kwargs["user"] = settings.impala_user
+
     if settings.impala_password:
         kwargs["password"] = settings.impala_password
+
     return kwargs
 
 
@@ -35,7 +44,7 @@ def _impala_connect(database: str | None = None):
     return connect(**_impala_connect_kwargs(database=database))
 
 
-def create_db_engine(*, database: str | None = None):
+def _create_impala_engine(database: str | None = None):
     db = database or settings.impala_database
 
     def creator():
@@ -47,6 +56,34 @@ def create_db_engine(*, database: str | None = None):
         pool_pre_ping=True,
         pool_recycle=3600,
     )
+
+
+# --------------------------------------------------------------------------- #
+# SQLite (default local backend)
+# --------------------------------------------------------------------------- #
+def _create_sqlite_engine(url: str | None = None):
+    dsn = url or settings.database_url
+    return create_engine(
+        dsn,
+        pool_pre_ping=True,
+        # Allow the connection to be shared across threads (FastAPI/Celery).
+        connect_args={"check_same_thread": False},
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Engine factory — chooses backend from DB_BACKEND
+# --------------------------------------------------------------------------- #
+def create_db_engine(*, database: str | None = None):
+    """Create a SQLAlchemy engine for the configured backend.
+
+    `database` is an optional override:
+      - Impala: the target database/schema name.
+      - SQLite: a full SQLAlchemy URL (used by tests for isolated DBs).
+    """
+    if settings.uses_impala:
+        return _create_impala_engine(database)
+    return _create_sqlite_engine(database)
 
 
 def get_engine():
@@ -82,9 +119,15 @@ class _SessionLocalProxy:
 SessionLocal = _SessionLocalProxy()
 
 
-def test_impala_connection() -> None:
-    with create_db_engine().connect() as conn:
+def test_db_connection(*, database: str | None = None) -> None:
+    """Smoke-test the configured backend with a trivial query."""
+    with create_db_engine(database=database).connect() as conn:
         conn.execute(text("SELECT 1"))
+
+
+# Backwards-compatible alias (older callers/scripts import this name).
+def test_impala_connection() -> None:
+    test_db_connection()
 
 
 def get_db():

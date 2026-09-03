@@ -1,6 +1,7 @@
 """Parity tests: legacy `run_claim_pipeline` vs new `crew.flow.run_claim_flow`.
 
-Requires two isolated Impala databases (set in .env):
+SQLite (default): two throwaway DB files are used automatically.
+Impala: set two isolated databases in .env —
   IMPALA_PARITY_LEGACY_DB=ic_agents_legacy
   IMPALA_PARITY_CREW_DB=ic_agents_crew
 """
@@ -32,14 +33,26 @@ def _factory_for(database: str):
 
 @pytest.fixture
 def isolated_factories():
-    """Two Impala databases/schemas for isolated legacy vs crew parity runs."""
-    legacy_db = os.getenv("IMPALA_PARITY_LEGACY_DB", "")
-    crew_db = os.getenv("IMPALA_PARITY_CREW_DB", "")
-    if not legacy_db or not crew_db:
-        pytest.skip(
-            "Set IMPALA_PARITY_LEGACY_DB and IMPALA_PARITY_CREW_DB for parity tests"
-        )
-    return _factory_for(legacy_db), _factory_for(crew_db)
+    """Two isolated databases for legacy vs crew parity runs.
+
+    SQLite (default): throwaway file DBs. Impala: set the two parity DB envs.
+    """
+    from config import get_settings
+
+    settings = get_settings()
+    if settings.uses_impala:
+        legacy_db = os.getenv("IMPALA_PARITY_LEGACY_DB", "")
+        crew_db = os.getenv("IMPALA_PARITY_CREW_DB", "")
+        if not legacy_db or not crew_db:
+            pytest.skip(
+                "Set IMPALA_PARITY_LEGACY_DB and IMPALA_PARITY_CREW_DB for parity tests"
+            )
+        return _factory_for(legacy_db), _factory_for(crew_db)
+
+    return (
+        _factory_for("sqlite:///./parity_legacy.db"),
+        _factory_for("sqlite:///./parity_crew.db"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +332,7 @@ def test_flow_parity(isolated_factories, monkeypatch, name, factory):
     run_claim_flow(crew_id)
     crew = _load_claim_snapshot(crew_factory, crew_id)
 
-    # Legacy path may crash on Impala + ThreadPoolExecutor and
+    # Legacy path may crash under ThreadPoolExecutor and
     # end in PENDING — treat that as "CrewAI at least as correct" rather
     # than a parity failure.
     if legacy["status"] != "PENDING":

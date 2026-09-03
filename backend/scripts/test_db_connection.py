@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Verify Impala connectivity using backend/.env settings."""
+"""Verify DB connectivity for the configured backend (SQLite or Impala).
+
+Backend is chosen by DB_BACKEND in backend/.env ("sqlite" default, or "impala").
+"""
 
 from __future__ import annotations
 
@@ -11,28 +14,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Test Impala DB connection")
+    parser = argparse.ArgumentParser(description="Test database connection")
     parser.add_argument("--query", default="SELECT 1 AS ok", help="SQL to run after connecting")
     args = parser.parse_args()
 
     from config import get_settings
-    from database import create_db_engine, test_impala_connection
+    from database import create_db_engine, test_db_connection
     from sqlalchemy import text
 
     s = get_settings()
-    print("Impala connection settings:")
-    print(f"  host:           {s.impala_host}")
-    print(f"  port:           {s.impala_port}")
-    print(f"  database:       {s.impala_database}")
-    print(f"  auth:           {s.impala_auth_mechanism}")
-    print(f"  http_path:      {s.impala_http_path}")
-    print(f"  use_ssl:        {s.impala_use_ssl}")
-    print(f"  http_transport: {s.impala_use_http_transport}")
-    if s.impala_user:
-        print(f"  user:           {s.impala_user}")
+    if s.uses_impala:
+        print("Backend: impala")
+        print(f"  host:           {s.impala_host}")
+        print(f"  port:           {s.impala_port}")
+        print(f"  database:       {s.impala_database}")
+        print(f"  auth:           {s.impala_auth_mechanism}")
+        print(f"  http_path:      {s.impala_http_path}")
+        print(f"  use_ssl:        {s.impala_use_ssl}")
+        print(f"  http_transport: {s.impala_use_http_transport}")
+        if s.impala_user:
+            print(f"  user:           {s.impala_user}")
+    else:
+        print("Backend: sqlite")
+        print(f"  url:            {s.database_url}")
 
     try:
-        test_impala_connection()
+        test_db_connection()
         print("\n✓ Connected (SELECT 1 succeeded)")
     except Exception as exc:
         print(f"\n✗ Connection failed: {exc}", file=sys.stderr)

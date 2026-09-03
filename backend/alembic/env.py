@@ -2,11 +2,17 @@ from logging.config import fileConfig
 
 from alembic import context
 
+from config import get_settings
 from database import Base, create_db_engine
 import models  # noqa: F401
 
+settings = get_settings()
 config = context.config
-config.set_main_option("sqlalchemy.url", "impala://")
+# Impala uses a creator-based engine (dummy URL); SQLite uses its real URL.
+config.set_main_option(
+    "sqlalchemy.url",
+    "impala://" if settings.uses_impala else settings.database_url,
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

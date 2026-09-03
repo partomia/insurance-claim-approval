@@ -36,8 +36,8 @@ pip install -q -e ".[dev]" 2>/dev/null || pip install -q -e .
 
 export REDIS_URL="${REDIS_URL:-redis://localhost:6379/0}"
 
-echo "Testing Impala connection..."
-python scripts/test_impala_connection.py
+echo "Testing database connection..."
+python scripts/test_db_connection.py
 echo "Seeding database..."
 python seed.py
 

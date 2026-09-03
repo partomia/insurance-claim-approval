@@ -6,17 +6,27 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
 from sqlalchemy.orm import sessionmaker
 
-from database import Base, create_db_engine, get_db, test_impala_connection
+from config import get_settings
+from database import Base, create_db_engine, get_db, test_db_connection
 
 
 @pytest.fixture(scope="session")
-def impala_engine():
-    """Shared Impala engine; skip entire session if CDP Impala is unreachable."""
-    try:
-        test_impala_connection()
-    except Exception as exc:
-        pytest.skip(f"Impala not reachable: {exc}")
-    engine = create_db_engine()
+def db_engine():
+    """Shared engine for the configured backend.
+
+    SQLite (default) builds a throwaway file DB; Impala reuses the live engine
+    and skips the whole session if CDP is unreachable.
+    """
+    settings = get_settings()
+    if settings.uses_impala:
+        try:
+            test_db_connection()
+        except Exception as exc:
+            pytest.skip(f"Impala not reachable: {exc}")
+        engine = create_db_engine()
+    else:
+        engine = create_db_engine(database="sqlite:///./test.db")
+
     import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
@@ -39,8 +49,8 @@ def isolate_chroma_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def db_session(impala_engine):
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=impala_engine)
+def db_session(db_engine):
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
     session = TestingSessionLocal()
     try:
         yield session

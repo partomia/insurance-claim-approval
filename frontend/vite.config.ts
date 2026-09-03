@@ -15,8 +15,14 @@ export default defineConfig({
     },
   },
   server: {
-    host: true,
-    // Allow Cloudflare Tunnel, ngrok, and other dev proxies
-    allowedHosts: [".trycloudflare.com", ".ngrok-free.app", ".ngrok.io", "localhost"],
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:5550",
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/api/, ""),
+      },
+    },
+
+    allowedHosts: [".trycloudflare.com", ".ngrok-free.app", ".ngrok.io", "localhost", ".cloudera.site"],
   },
 })

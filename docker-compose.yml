@@ -24,7 +24,7 @@ services:
       redis:
         condition: service_healthy
     command: >
-      sh -c "python scripts/test_impala_connection.py && python seed.py && uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"
+      sh -c "python scripts/test_db_connection.py && python seed.py && uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"
 
   celery-worker:
     build: .
