@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
 
+    # Custom OpenAI-compatible LLM endpoint (e.g. Cloudera-hosted Hermes on CML).
+    # When `endpoint` + `api_key` are set, this is used instead of Groq — useful
+    # in locked-down workspaces where api.groq.com is unreachable.
+    endpoint: str = ""
+    api_key: str = ""
+    llm_model: str = "hermes-3-llama-3-1-8b"
+
     claim_processing_mode: str = "auto"
     use_crewai_flow: bool = False
 
@@ -68,6 +75,11 @@ class Settings(BaseSettings):
     assistant_summary_max_tokens: int = 512
     assistant_ltm_extract_max_tokens: int = 256
     assistant_backfill_on_startup: bool = True
+
+    @property
+    def uses_custom_llm_endpoint(self) -> bool:
+        """True when a custom OpenAI-compatible endpoint (e.g. Hermes) is set."""
+        return bool(self.endpoint.strip()) and bool(self.api_key.strip())
 
     @property
     def uses_impala(self) -> bool:

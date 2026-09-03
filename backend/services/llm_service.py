@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 
 from config import get_settings
 
@@ -35,23 +36,57 @@ def sections_related(retrieved_ref: str, expected_ref: str, schedule_refs: list[
 
 class LLMService:
     def __init__(self) -> None:
-        self._llm: Optional[ChatGroq] = None
+        self._llm: Optional[Any] = None
+
+    @property
+    def provider(self) -> str:
+        """Active LLM provider: 'openai_compatible' (custom endpoint) or 'groq'."""
+        return "openai_compatible" if settings.uses_custom_llm_endpoint else "groq"
 
     def _has_valid_key(self) -> bool:
+        # A custom OpenAI-compatible endpoint (e.g. Cloudera Hermes) takes
+        # priority and is considered valid whenever endpoint + api_key are set.
+        if settings.uses_custom_llm_endpoint:
+            return True
         key = settings.groq_api_key or ""
         return bool(key) and not key.startswith("your_")
 
-    @property
-    def llm(self) -> Optional[ChatGroq]:
+    def _build_llm(self, *, temperature: float = 0, max_tokens: int | None = None):
+        """Build a chat client for the active provider, or None if unconfigured."""
+        if settings.uses_custom_llm_endpoint:
+            kwargs: dict[str, Any] = {
+                "model": settings.llm_model,
+                "api_key": settings.api_key,
+                "base_url": settings.endpoint,
+                "temperature": temperature,
+                "max_retries": 2,
+            }
+            if max_tokens is not None:
+                kwargs["max_tokens"] = max_tokens
+            return ChatOpenAI(**kwargs)
+
         if not self._has_valid_key():
             return None
+        kwargs = {
+            "model": settings.groq_model,
+            "api_key": settings.groq_api_key,
+            "temperature": temperature,
+            "max_retries": 2,
+        }
+        if max_tokens is not None:
+            # Groq "gpt-oss" models are reasoning models: they spend tokens on
+            # hidden reasoning_content first, so a low ceiling (e.g. 280) can be
+            # fully consumed before any visible answer, yielding empty content.
+            # Give reasoning room by enforcing a floor for these models.
+            if "gpt-oss" in (settings.groq_model or "").lower():
+                max_tokens = max(max_tokens, 700)
+            kwargs["max_tokens"] = max_tokens
+        return ChatGroq(**kwargs)
+
+    @property
+    def llm(self) -> Optional[Any]:
         if self._llm is None:
-            self._llm = ChatGroq(
-                model=settings.groq_model,
-                api_key=settings.groq_api_key,
-                temperature=0,
-                max_retries=2,
-            )
+            self._llm = self._build_llm(temperature=0)
         return self._llm
 
     def invoke(self, system: str, user: str) -> str:
@@ -63,7 +98,7 @@ class LLMService:
             )
             return str(response.content).strip()
         except Exception as exc:
-            logger.warning("Groq LLM call failed: %s", exc)
+            logger.warning("LLM call failed (%s): %s", self.provider, exc)
             return ""
 
     def invoke_assistant(
@@ -77,13 +112,9 @@ class LLMService:
         if not self._has_valid_key():
             return ""
         try:
-            llm = ChatGroq(
-                model=settings.groq_model,
-                api_key=settings.groq_api_key,
-                temperature=temperature,
-                max_retries=2,
-                max_tokens=max_tokens,
-            )
+            llm = self._build_llm(temperature=temperature, max_tokens=max_tokens)
+            if llm is None:
+                return ""
             response = llm.invoke(
                 [SystemMessage(content=system), HumanMessage(content=user)]
             )
@@ -94,7 +125,7 @@ class LLMService:
             finish = (response.response_metadata or {}).get("finish_reason")
             reasoning = (response.additional_kwargs or {}).get("reasoning_content", "")
             if reasoning and max_tokens < 900:
-                logger.info("Groq assistant empty content — retrying with higher token budget")
+                logger.info("Assistant empty content — retrying with higher token budget")
                 return self.invoke_assistant(
                     system,
                     user,
@@ -103,13 +134,14 @@ class LLMService:
                 )
 
             logger.warning(
-                "Groq assistant returned empty content (finish_reason=%s, max_tokens=%s)",
+                "Assistant returned empty content (provider=%s, finish_reason=%s, max_tokens=%s)",
+                self.provider,
                 finish,
                 max_tokens,
             )
             return ""
         except Exception as exc:
-            logger.warning("Groq assistant call failed: %s", exc)
+            logger.warning("Assistant call failed (%s): %s", self.provider, exc)
             return ""
 
     def invoke_summarize(
@@ -159,7 +191,7 @@ class LLMService:
             "is covered under the retrieved policy clauses. Consider own-damage vs third-party "
             "distinctions and standard exclusions (unlicensed driver, DUI, racing, commercial use).",
             f"""Policy type: Motor
-Claim amount (estimated repair/replacement): ${claim_amount:,.2f}
+Claim amount (estimated repair/replacement): ₹{claim_amount:,.2f}
 Incident: {incident}
 
 Relevant policy clauses:
@@ -183,7 +215,7 @@ Return JSON: {{"is_covered": boolean, "confidence": float 0-1, "summary": string
             "incidents, license-suspended driver, incident location far from customer's registered "
             "address, and rapid successive claims.",
             f"""Incident: {incident}
-Claim amount: ${claim_amount:,.2f}
+Claim amount: ₹{claim_amount:,.2f}
 Rule-based signals: {signals or ['none']}
 Evidence summary: {evidence_summary}
 
@@ -401,8 +433,8 @@ Set matches_type=false for clearly unrelated content: technical diagrams, flowch
             "You are an insurance payout analyst. Extract payout calculation parameters from "
             "policy documents and claim context. Return ONLY valid JSON.",
             f"""Policy type: {policy_type}
-Claim amount: ${claim_amount:,.2f}
-Coverage limit: ${coverage_limit:,.2f}
+Claim amount: ₹{claim_amount:,.2f}
+Coverage limit: ₹{coverage_limit:,.2f}
 Incident: {incident}
 
 Policy context summary: {policy_context.get('coverage_summary', '')}
