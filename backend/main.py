@@ -63,8 +63,8 @@ app.include_router(assistant.router)
 app.include_router(rag.router)
 
 
-@app.get("/")
-def read_root():
+@app.get("/api/health")
+def api_root():
     return {
         "message": "ClaimCopilot API — AI Insurance Claim Assistant",
         "docs": "/docs",
@@ -75,3 +75,71 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+# --------------------------------------------------------------------------- #
+# Serve the built frontend (single same-origin CML Application)
+# --------------------------------------------------------------------------- #
+def _resolve_frontend_dist() -> Path | None:
+    if not settings.serve_frontend:
+        return None
+    if settings.frontend_dist_dir:
+        candidate = Path(settings.frontend_dist_dir)
+        return candidate if (candidate / "index.html").exists() else None
+    # Auto-detect ../frontend/dist relative to the backend package.
+    candidate = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+    return candidate if (candidate / "index.html").exists() else None
+
+
+_frontend_dist = _resolve_frontend_dist()
+
+if _frontend_dist is not None:
+    from fastapi.responses import FileResponse, JSONResponse
+    from fastapi.staticfiles import StaticFiles
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    # Hashed build assets (JS/CSS/img) live under /assets.
+    _assets_dir = _frontend_dist / "assets"
+    if _assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
+
+    _index_file = str(_frontend_dist / "index.html")
+
+    @app.get("/", include_in_schema=False)
+    def _serve_index():
+        return FileResponse(_index_file)
+
+    # API route prefixes that must 404 as JSON (never fall back to index.html),
+    # so a bad API path doesn't silently return the SPA shell.
+    _api_prefixes = ("/api", "/auth", "/agent", "/insurer", "/docs", "/openapi.json", "/redoc")
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _spa_fallback(request, exc: StarletteHTTPException):
+        # For unknown GET routes that aren't API calls, serve the SPA shell so
+        # client-side routing (React Router) can handle the path on reload.
+        if (
+            exc.status_code == 404
+            and request.method == "GET"
+            and not request.url.path.startswith(_api_prefixes)
+        ):
+            return FileResponse(_index_file)
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def _serve_spa(full_path: str):
+        # Serve a real static file if it exists (favicon, manifest, etc.),
+        # otherwise the SPA shell.
+        candidate = _frontend_dist / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(_index_file)
+
+else:
+    # API-only mode (no built frontend present): keep a JSON root.
+    @app.get("/")
+    def read_root():
+        return {
+            "message": "ClaimCopilot API — AI Insurance Claim Assistant",
+            "docs": "/docs",
+            "health": "ok",
+        }

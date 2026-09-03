@@ -1,12 +1,10 @@
 import { authHeaders, getRefreshToken, redirectToLogin, refreshSession } from "./auth";
 
-const API_URL = import.meta.env.VITE_API_URL as string | undefined;
-
-if (!API_URL && import.meta.env.PROD) {
-  console.error(
-    "VITE_API_URL is not set. Add it in Vercel → Project Settings → Environment Variables, then redeploy."
-  );
-}
+// Backend base URL. When VITE_API_URL is empty/unset the app calls its OWN
+// origin with relative paths (single same-origin deploy, e.g. one CML
+// Application serving both the built UI and the API). Set VITE_API_URL only
+// when the backend lives on a different origin.
+const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/+$/, "");
 
 export class ApiError extends Error {
   status: number;
@@ -20,10 +18,9 @@ export class ApiError extends Error {
 }
 
 export function apiUrl(path: string): string {
-  if (!API_URL) {
-    throw new Error("VITE_API_URL is not configured");
-  }
-  return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  const suffix = path.startsWith("/") ? path : `/${path}`;
+  // Empty API_URL → relative path against the app's own origin.
+  return `${API_URL}${suffix}`;
 }
 
 export async function apiFetch(

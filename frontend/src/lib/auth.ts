@@ -1,3 +1,6 @@
+// Same-origin safe base: empty VITE_API_URL → relative paths against own origin.
+const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/+$/, "");
+
 const TOKEN_KEY = "token";
 const REFRESH_KEY = "refresh_token";
 
@@ -46,7 +49,7 @@ export function authHeaders(json = false): HeadersInit {
 export function logout(): void {
   const refresh = getRefreshToken();
   if (refresh) {
-    fetch(`${import.meta.env.VITE_API_URL}/auth/logout`, {
+    fetch(`${API_BASE}/auth/logout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
@@ -68,7 +71,7 @@ export async function refreshSession(): Promise<boolean> {
   if (!refresh) return false;
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/refresh`, {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),

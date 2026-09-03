@@ -12,6 +12,22 @@ from config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Some reasoning models (e.g. Qwen, DeepSeek-R1) emit a chain-of-thought wrapped
+# in <think>...</think> INSIDE the message content. Strip it so it never reaches
+# users or downstream JSON parsing.
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_reasoning(text: str) -> str:
+    if not text:
+        return text
+    cleaned = _THINK_BLOCK.sub("", text)
+    # Drop an unclosed leading <think> (response truncated before </think>).
+    if "<think>" in cleaned and "</think>" not in cleaned:
+        cleaned = cleaned.split("<think>", 1)[0]
+    return cleaned.strip()
+
+
 _SECTION_NUM_PATTERN = re.compile(r"(\d+(?:\.\d+)*)")
 
 
@@ -74,12 +90,13 @@ class LLMService:
             "max_retries": 2,
         }
         if max_tokens is not None:
-            # Groq "gpt-oss" models are reasoning models: they spend tokens on
-            # hidden reasoning_content first, so a low ceiling (e.g. 280) can be
-            # fully consumed before any visible answer, yielding empty content.
-            # Give reasoning room by enforcing a floor for these models.
-            if "gpt-oss" in (settings.groq_model or "").lower():
-                max_tokens = max(max_tokens, 700)
+            # Reasoning models (Groq "gpt-oss", "qwen") spend tokens on a
+            # reasoning/<think> pass first, so a low ceiling (e.g. 280) can be
+            # fully consumed before any visible answer — yielding empty or
+            # truncated content. Enforce a floor so the real answer fits.
+            model_lc = (settings.groq_model or "").lower()
+            if any(tag in model_lc for tag in ("gpt-oss", "qwen", "deepseek", "-r1", "reason")):
+                max_tokens = max(max_tokens, 900)
             kwargs["max_tokens"] = max_tokens
         return ChatGroq(**kwargs)
 
@@ -96,7 +113,7 @@ class LLMService:
             response = self.llm.invoke(
                 [SystemMessage(content=system), HumanMessage(content=user)]
             )
-            return str(response.content).strip()
+            return _strip_reasoning(str(response.content))
         except Exception as exc:
             logger.warning("LLM call failed (%s): %s", self.provider, exc)
             return ""
@@ -118,7 +135,7 @@ class LLMService:
             response = llm.invoke(
                 [SystemMessage(content=system), HumanMessage(content=user)]
             )
-            content = str(response.content or "").strip()
+            content = _strip_reasoning(str(response.content or ""))
             if content:
                 return content
 

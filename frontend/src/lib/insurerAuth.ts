@@ -1,3 +1,6 @@
+// Same-origin safe base: empty VITE_API_URL → relative paths against own origin.
+const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/+$/, "");
+
 const TOKEN_KEY = "insurer_token";
 const REFRESH_KEY = "insurer_refresh_token";
 
@@ -38,7 +41,7 @@ export function insurerAuthHeaders(json = false): HeadersInit {
 export function insurerLogout(): void {
   const refresh = getInsurerRefreshToken();
   if (refresh) {
-    fetch(`${import.meta.env.VITE_API_URL}/insurer/auth/logout`, {
+    fetch(`${API_BASE}/insurer/auth/logout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
@@ -60,7 +63,7 @@ export async function refreshInsurerSession(): Promise<boolean> {
   if (!refresh) return false;
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/insurer/auth/refresh`, {
+    const res = await fetch(`${API_BASE}/insurer/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),

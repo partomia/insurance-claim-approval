@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
 
     groq_api_key: str = ""
-    groq_model: str = "openai/gpt-oss-120b"
+    groq_model: str = "qwen/qwen3.6-27b"
 
     # Custom OpenAI-compatible LLM endpoint (e.g. Cloudera-hosted Hermes on CML).
     # When `endpoint` + `api_key` are set, this is used instead of Groq — useful
@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 25
     agent_invite_code: str = "CLOUDERA2026"
     root_path: str = ""
+
+    # Serve the built frontend (frontend/dist) from FastAPI so a SINGLE CML
+    # Application hosts both the UI and the API at the same origin. Empty path =
+    # auto-detect ../frontend/dist; set SERVE_FRONTEND=false to disable.
+    serve_frontend: bool = True
+    frontend_dist_dir: str = ""
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     assistant_recent_turn_limit: int = 8
