@@ -22,6 +22,7 @@ def ensure_schema(force_reset: bool = False) -> None:
     # so heal simple additive drift (new nullable/default columns) in place.
     if settings.uses_sqlite and not should_reset:
         _heal_sqlite_column_drift()
+        _heal_sqlite_enum_drift()
 
     _backfill_assistant_threads()
 
@@ -56,6 +57,57 @@ def _heal_sqlite_column_drift() -> None:
                     continue
                 print(f"Healing schema: adding {table.name}.{column.name}")
                 conn.execute(text(ddl))
+
+
+def _heal_sqlite_enum_drift() -> None:
+    """Rewrite stored enum values that are no longer defined by the ORM enum.
+
+    When an Enum member is renamed/removed (e.g. a legacy DocumentType 'PROOF'),
+    SQLAlchemy raises LookupError while *loading* any row that still holds the
+    old string — turning every query that touches it into a 500. We can't drop
+    the data, so map orphaned values to a safe bucket. Only enums that define an
+    'OTHER' member are healed; status-like enums without a neutral fallback are
+    left untouched (and reported) so we never silently mislabel them.
+    """
+    from sqlalchemy import Enum as SAEnum
+
+    engine = get_engine()
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue
+            for column in table.columns:
+                if not isinstance(column.type, SAEnum):
+                    continue
+                valid = set(column.type.enums)
+                rows = conn.execute(
+                    text(f'SELECT DISTINCT "{column.name}" FROM "{table.name}"')
+                ).fetchall()
+                orphaned = {r[0] for r in rows if r[0] is not None} - valid
+                if not orphaned:
+                    continue
+                if "OTHER" not in valid:
+                    print(
+                        f"⚠ {table.name}.{column.name} holds values not in the "
+                        f"current enum ({sorted(orphaned)}) and has no 'OTHER' "
+                        f"fallback. Set FORCE_DB_RESET=1 or migrate manually."
+                    )
+                    continue
+                for bad in orphaned:
+                    print(
+                        f"Healing enum drift: {table.name}.{column.name} "
+                        f"'{bad}' → 'OTHER'"
+                    )
+                    conn.execute(
+                        text(
+                            f'UPDATE "{table.name}" SET "{column.name}" = \'OTHER\' '
+                            f'WHERE "{column.name}" = :bad'
+                        ),
+                        {"bad": bad},
+                    )
 
 
 def _sqlite_add_column_ddl(table_name: str, column) -> str | None:
