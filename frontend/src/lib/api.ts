@@ -71,9 +71,38 @@ export async function apiJson<T>(
   config?: { json?: boolean; redirectOn401?: boolean }
 ): Promise<T> {
   const response = await apiFetch(path, options, config);
+  return parseJsonResponse<T>(response, path);
+}
+
+/**
+ * Safely parse a JSON API response. Guards against the case where the backend
+ * (or a proxy) returns HTML — e.g. the SPA index.html or a gateway error page —
+ * with a 200 or error status. Without this guard, `response.json()` throws a raw
+ * "Unexpected token '<'" SyntaxError that crashes the caller.
+ */
+export async function parseJsonResponse<T>(response: Response, path = ""): Promise<T> {
+  const contentType = response.headers.get("content-type") ?? "";
+  const isJson = contentType.includes("application/json");
+
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new ApiError(response.status, error.detail ?? response.statusText);
+    if (isJson) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new ApiError(response.status, error?.detail ?? response.statusText);
+    }
+    // Non-JSON error body (HTML/text) — surface a clean message, not the markup.
+    await response.text().catch(() => "");
+    throw new ApiError(response.status, response.statusText || "Request failed");
   }
+
+  if (!isJson) {
+    // 2xx but not JSON: almost always the SPA shell served for an API path,
+    // which means the API route wasn't hit (stale deploy / wrong base URL).
+    throw new ApiError(
+      response.status,
+      `Expected JSON from ${path || "the API"} but received ${contentType || "a non-JSON response"}. ` +
+        "The API request did not reach the backend."
+    );
+  }
+
   return response.json() as Promise<T>;
 }
