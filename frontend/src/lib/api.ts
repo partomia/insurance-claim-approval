@@ -19,8 +19,14 @@ export class ApiError extends Error {
 
 export function apiUrl(path: string): string {
   const suffix = path.startsWith("/") ? path : `/${path}`;
-  // Empty API_URL → relative path against the app's own origin.
-  return `${API_URL}${suffix}`;
+  // All API paths already carry the shared "/api" prefix. If VITE_API_URL was
+  // (mis)built ending in "/api", naive concatenation doubles it into
+  // "/api/api/..." (→ 500s). Drop the base's trailing "/api" in that case so a
+  // bad build env can't break every request. Empty API_URL → relative path.
+  const base = API_URL.endsWith("/api") && suffix.startsWith("/api/")
+    ? API_URL.slice(0, -4)
+    : API_URL;
+  return `${base}${suffix}`;
 }
 
 export async function apiFetch(
