@@ -77,6 +77,46 @@ def health_check():
     return {"status": "healthy"}
 
 
+def _build_marker() -> str:
+    """Short git SHA (or BUILD_MARKER env) so you can confirm the live version."""
+    import os
+    import subprocess
+
+    env_marker = os.getenv("BUILD_MARKER", "").strip()
+    if env_marker:
+        return env_marker
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=str(Path(__file__).resolve().parent),
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
+    except Exception:
+        return "unknown"
+
+
+_BUILD_MARKER = _build_marker()
+
+
+@app.get("/api/version")
+def api_version():
+    """Deploy marker — hit this to confirm CML is running the current build.
+    Also reports whether the SPA is served and which LLM provider/model is active.
+    """
+    return {
+        "version": app.version,
+        "build": _BUILD_MARKER,
+        "serves_frontend": _frontend_dist is not None,
+        "db_backend": settings.db_backend,
+        "llm_model": settings.groq_model if not settings.uses_custom_llm_endpoint else settings.llm_model,
+        "llm_provider": "openai_compatible" if settings.uses_custom_llm_endpoint else "groq",
+    }
+
+
 @app.get("/api/llm/health")
 def llm_health():
     """Live LLM diagnostic — pings the active model and returns the real error."""
