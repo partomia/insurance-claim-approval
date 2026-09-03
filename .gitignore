@@ -64,3 +64,4 @@ docs/diagrams/node_modules/
 # Nested git repos (should not exist)
 backend/.git/
 frontend/.git/
+backend/chroma_db.corrupt-*/
