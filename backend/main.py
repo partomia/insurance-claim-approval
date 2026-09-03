@@ -118,29 +118,37 @@ if _frontend_dist is not None:
         return FileResponse(_index_file)
 
     # API route prefixes that must 404 as JSON (never fall back to index.html),
-    # so a bad API path doesn't silently return the SPA shell.
+    # so a bad/unauthenticated API path can't silently return the SPA shell and
+    # crash the frontend's JSON parsing.
     _api_prefixes = ("/api", "/auth", "/agent", "/insurer", "/docs", "/openapi.json", "/redoc")
 
+    # NOTE: SPA fallback is handled ENTIRELY by the 404 exception handler below —
+    # NOT by a catch-all GET route. A catch-all `/{full_path:path}` would match
+    # unknown /api/* GETs and return 200 index.html, breaking API error handling.
     @app.exception_handler(StarletteHTTPException)
     async def _spa_fallback(request, exc: StarletteHTTPException):
-        # For unknown GET routes that aren't API calls, serve the SPA shell so
-        # client-side routing (React Router) can handle the path on reload.
-        if (
-            exc.status_code == 404
-            and request.method == "GET"
-            and not request.url.path.startswith(_api_prefixes)
-        ):
-            return FileResponse(_index_file)
-        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        path = request.url.path
+        is_api = path.startswith(_api_prefixes)
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    def _serve_spa(full_path: str):
-        # Serve a real static file if it exists (favicon, manifest, etc.),
-        # otherwise the SPA shell.
-        candidate = _frontend_dist / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(str(candidate))
-        return FileResponse(_index_file)
+        # Only fall back to the SPA for browser GET navigations to non-API paths.
+        if exc.status_code == 404 and request.method == "GET" and not is_api:
+            # Serve a real static asset if one exists at that path (favicon,
+            # manifest, robots.txt, etc.), otherwise the SPA shell so React
+            # Router can handle the client-side route on reload.
+            rel = path.lstrip("/")
+            if rel:
+                candidate = _frontend_dist / rel
+                # Guard against path traversal outside the dist directory.
+                try:
+                    candidate.resolve().relative_to(_frontend_dist.resolve())
+                    if candidate.is_file():
+                        return FileResponse(str(candidate))
+                except (ValueError, OSError):
+                    pass
+            return FileResponse(_index_file)
+
+        # Everything else (all API errors) stays JSON.
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 else:
     # API-only mode (no built frontend present): keep a JSON root.

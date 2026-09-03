@@ -1,4 +1,4 @@
-import { apiUrl, ApiError } from "./api";
+import { apiUrl, parseJsonResponse } from "./api";
 import {
   getInsurerRefreshToken,
   insurerAuthHeaders,
@@ -48,9 +48,5 @@ export async function insurerApiJson<T>(
   config?: { json?: boolean; redirectOn401?: boolean }
 ): Promise<T> {
   const response = await insurerApiFetch(path, options, config);
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new ApiError(response.status, error.detail ?? response.statusText);
-  }
-  return response.json() as Promise<T>;
+  return parseJsonResponse<T>(response, path);
 }
