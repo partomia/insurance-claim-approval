@@ -53,11 +53,18 @@ export function Step4ReviewSubmit({
         </div>
       </div>
 
-      <div className="flex justify-between gap-3 border-t pt-4">
+      <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
         <Button variant="outline" onClick={onBack}>← Back</Button>
-        <Button onClick={onSubmit} disabled={loading || !policyContext}>
-          {loading ? "Submitting..." : "Submit Motor Claim →"}
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button onClick={onSubmit} disabled={loading || !policyContext}>
+            {loading ? "Submitting..." : "Submit Motor Claim →"}
+          </Button>
+          {!policyContext && !loading && (
+            <p className="text-xs text-muted-foreground">
+              Complete Step 2 (policy papers) to enable submit.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
