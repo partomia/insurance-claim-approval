@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { X, CheckCircle2, AlertCircle, Info } from "lucide-react";
 
 export type ToastVariant = "success" | "error" | "info";
@@ -65,12 +65,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setTimeout(() => dismiss(id), 5000);
   }, [dismiss]);
 
-  const value: ToastContextValue = {
-    toast: addToast,
-    success: (msg) => addToast(msg, "success"),
-    error: (msg) => addToast(msg, "error"),
-    info: (msg) => addToast(msg, "info"),
-  };
+  // Stable references so consumers can safely list these in effect/useCallback
+  // dependency arrays without causing infinite re-render loops.
+  const success = useCallback((msg: string) => addToast(msg, "success"), [addToast]);
+  const error = useCallback((msg: string) => addToast(msg, "error"), [addToast]);
+  const info = useCallback((msg: string) => addToast(msg, "info"), [addToast]);
+
+  const value: ToastContextValue = useMemo(
+    () => ({ toast: addToast, success, error, info }),
+    [addToast, success, error, info]
+  );
 
   return (
     <ToastContext.Provider value={value}>
