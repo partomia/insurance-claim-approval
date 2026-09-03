@@ -59,6 +59,11 @@ class LLMService:
         """Active LLM provider: 'openai_compatible' (custom endpoint) or 'groq'."""
         return "openai_compatible" if settings.uses_custom_llm_endpoint else "groq"
 
+    @property
+    def _active_model(self) -> str:
+        """Model id used by the active provider."""
+        return settings.llm_model if settings.uses_custom_llm_endpoint else settings.groq_model
+
     def _has_valid_key(self) -> bool:
         # A custom OpenAI-compatible endpoint (e.g. Cloudera Hermes) takes
         # priority and is considered valid whenever endpoint + api_key are set.
@@ -89,14 +94,22 @@ class LLMService:
             "temperature": temperature,
             "max_retries": 2,
         }
+        model_lc = (settings.groq_model or "").lower()
+        is_reasoning = any(
+            tag in model_lc for tag in ("gpt-oss", "qwen", "deepseek", "-r1", "reason")
+        )
+        if is_reasoning:
+            # Reasoning models otherwise burn the whole token budget on a hidden
+            # reasoning/<think> pass and return empty/truncated visible content
+            # (finish_reason=length) at small ceilings like 280. Disabling
+            # reasoning gives a direct answer that fits a normal budget and is
+            # much faster. Groq accepts reasoning_effort="none" for these models.
+            kwargs["reasoning_effort"] = "none"
         if max_tokens is not None:
-            # Reasoning models (Groq "gpt-oss", "qwen") spend tokens on a
-            # reasoning/<think> pass first, so a low ceiling (e.g. 280) can be
-            # fully consumed before any visible answer — yielding empty or
-            # truncated content. Enforce a floor so the real answer fits.
-            model_lc = (settings.groq_model or "").lower()
-            if any(tag in model_lc for tag in ("gpt-oss", "qwen", "deepseek", "-r1", "reason")):
-                max_tokens = max(max_tokens, 900)
+            # Keep a modest floor as a safety net for models that ignore the
+            # reasoning switch.
+            if is_reasoning:
+                max_tokens = max(max_tokens, 512)
             kwargs["max_tokens"] = max_tokens
         return ChatGroq(**kwargs)
 
@@ -115,7 +128,13 @@ class LLMService:
             )
             return _strip_reasoning(str(response.content))
         except Exception as exc:
-            logger.warning("LLM call failed (%s): %s", self.provider, exc)
+            logger.warning(
+                "LLM call failed (provider=%s, model=%s): %s: %s",
+                self.provider,
+                self._active_model,
+                type(exc).__name__,
+                exc,
+            )
             return ""
 
     def invoke_assistant(
@@ -158,7 +177,13 @@ class LLMService:
             )
             return ""
         except Exception as exc:
-            logger.warning("Assistant call failed (%s): %s", self.provider, exc)
+            logger.warning(
+                "Assistant call failed (provider=%s, model=%s): %s: %s",
+                self.provider,
+                self._active_model,
+                type(exc).__name__,
+                exc,
+            )
             return ""
 
     def invoke_summarize(
@@ -474,6 +499,38 @@ Return JSON:
 
 Derive all values from the policy documents and incident — do not use generic defaults unless the policy is silent.""",
         )
+
+
+    def health(self) -> dict[str, Any]:
+        """Live diagnostic: attempt a minimal call and report the real result.
+
+        Unlike invoke()/invoke_assistant(), this does NOT swallow the provider
+        error — it returns it so operators can distinguish a bad model id, a bad
+        key, or an unreachable endpoint from a generic "LLM not configured".
+        """
+        result: dict[str, Any] = {
+            "provider": self.provider,
+            "model": self._active_model,
+            "configured": self._has_valid_key(),
+            "ok": False,
+            "error": None,
+        }
+        if not result["configured"]:
+            result["error"] = "No valid API key / endpoint configured."
+            return result
+        try:
+            llm = self._build_llm(temperature=0, max_tokens=8)
+            if llm is None:
+                result["error"] = "LLM client could not be built."
+                return result
+            response = llm.invoke(
+                [SystemMessage(content="ping"), HumanMessage(content="ping")]
+            )
+            _ = str(response.content)
+            result["ok"] = True
+        except Exception as exc:
+            result["error"] = f"{type(exc).__name__}: {exc}"
+        return result
 
 
 llm_service = LLMService()

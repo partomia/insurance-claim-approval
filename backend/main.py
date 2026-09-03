@@ -77,6 +77,14 @@ def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/api/llm/health")
+def llm_health():
+    """Live LLM diagnostic — pings the active model and returns the real error."""
+    from services.llm_service import llm_service
+
+    return llm_service.health()
+
+
 # --------------------------------------------------------------------------- #
 # Serve the built frontend (single same-origin CML Application)
 # --------------------------------------------------------------------------- #
