@@ -73,30 +73,101 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> list[str
     return chunks
 
 
+# Substrings that identify a ChromaDB Rust-bindings panic caused by a corrupt
+# or version-mismatched persistent store (chroma.sqlite3 / HNSW segments).
+_RUST_PANIC_MARKERS = (
+    "range start index",
+    "out of range",
+    "slice of length",
+    "index out of bounds",
+    "panic",
+)
+
+
+def _is_rust_panic(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _RUST_PANIC_MARKERS)
+
+
 class ChromaStore:
     def __init__(self) -> None:
         self._client: Optional[chromadb.PersistentClient] = None
         self._collection: Optional[Collection] = None
         self._embeddings: Optional[OpenAIEmbeddings] = None
+        self._degraded: bool = False
+        self._recovery_attempted: bool = False
+
+    @property
+    def degraded(self) -> bool:
+        """True when Chroma could not be initialised and RAG is disabled."""
+        return self._degraded
+
+    def _new_client(self) -> chromadb.PersistentClient:
+        path = Path(settings.chroma_db_path)
+        path.mkdir(parents=True, exist_ok=True)
+        return chromadb.PersistentClient(path=str(path))
+
+    def _quarantine_corrupt_store(self) -> None:
+        """Move the corrupt persistent dir aside so a clean one can be rebuilt."""
+        import shutil
+        import time
+
+        path = Path(settings.chroma_db_path)
+        if not path.exists():
+            return
+        backup = path.with_name(f"{path.name}.corrupt-{int(time.time())}")
+        try:
+            shutil.move(str(path), str(backup))
+            logger.warning(
+                "Chroma store appeared corrupt; moved %s -> %s and rebuilding.",
+                path,
+                backup,
+            )
+        except Exception as exc:
+            # Last resort: delete it outright so the app can start.
+            logger.warning("Could not back up corrupt Chroma store (%s); deleting.", exc)
+            shutil.rmtree(path, ignore_errors=True)
 
     @property
     def client(self) -> chromadb.PersistentClient:
         if self._client is None:
-            path = Path(settings.chroma_db_path)
-            path.mkdir(parents=True, exist_ok=True)
-            self._client = chromadb.PersistentClient(path=str(path))
+            # PanicException from the Rust bindings subclasses BaseException in
+            # some pyo3 builds, so catch broadly here.
+            try:
+                self._client = self._new_client()
+            except BaseException as exc:  # noqa: BLE001 — must catch pyo3 panic
+                if _is_rust_panic(exc) and not self._recovery_attempted:
+                    self._recovery_attempted = True
+                    self._quarantine_corrupt_store()
+                    self._client = self._new_client()  # retry once, clean dir
+                else:
+                    raise
         return self._client
 
-    def ensure_collection(self) -> Collection:
+    def ensure_collection(self) -> Optional[Collection]:
+        """Return the collection, or None if Chroma is unavailable (degraded)."""
+        if self._degraded:
+            return None
         if self._collection is None:
             name = settings.chroma_collection_name
             try:
-                self._collection = self.client.get_collection(name=name)
-            except Exception:
-                self._collection = self.client.create_collection(name=name)
+                try:
+                    self._collection = self.client.get_collection(name=name)
+                except Exception:
+                    self._collection = self.client.create_collection(name=name)
+            except BaseException as exc:  # noqa: BLE001 — pyo3 panic may leak here
+                self._degraded = True
+                logger.error(
+                    "Chroma unavailable — RAG disabled for this run (%s). "
+                    "The API will run; policy clause retrieval returns empty.",
+                    exc,
+                )
+                return None
         return self._collection
 
-    def rebuild_collection(self) -> Collection:
+    def rebuild_collection(self) -> Optional[Collection]:
+        if self._degraded:
+            return None
         name = settings.chroma_collection_name
         try:
             self.client.delete_collection(name=name)
@@ -141,7 +212,8 @@ class ChromaStore:
         return self.embeddings.embed_query(query)
 
     def count(self) -> int:
-        return self.ensure_collection().count()
+        collection = self.ensure_collection()
+        return collection.count() if collection is not None else 0
 
     def add_clauses(
         self,
@@ -153,6 +225,8 @@ class ChromaStore:
             return []
 
         collection = self.ensure_collection()
+        if collection is None:
+            return []
         texts = [c["clause_text"] for c in clauses]
         embeddings = self._embed_texts(texts)
 
@@ -185,7 +259,7 @@ class ChromaStore:
         policy_id: Optional[int] = None,
     ) -> list[RetrievedClause]:
         collection = self.ensure_collection()
-        if collection.count() == 0:
+        if collection is None or collection.count() == 0:
             return []
 
         query_embedding = self._embed_query(query)
@@ -228,7 +302,7 @@ class ChromaStore:
 
     def count_by_policy_id(self, policy_id: int) -> int:
         collection = self.ensure_collection()
-        if collection.count() == 0:
+        if collection is None or collection.count() == 0:
             return 0
 
         try:
@@ -240,7 +314,7 @@ class ChromaStore:
 
     def delete_by_policy_id(self, policy_id: int) -> int:
         collection = self.ensure_collection()
-        if collection.count() == 0:
+        if collection is None or collection.count() == 0:
             return 0
 
         try:
@@ -255,7 +329,7 @@ class ChromaStore:
 
     def delete_by_document_id(self, policy_id: int, document_id: int) -> int:
         collection = self.ensure_collection()
-        if collection.count() == 0:
+        if collection is None or collection.count() == 0:
             return 0
 
         try:

@@ -214,9 +214,20 @@ def _run_fraud_detection(claim_id: int, evidence_data: dict) -> dict[str, Any]:
             rule_result.signals,
             evidence_summary,
         )
+        # Rules-dominant combiner: the deterministic rule engine is authoritative.
+        # The LLM may only RAISE suspicion (catch patterns the rules miss); it can
+        # never suppress a hard rule signal. Averaging previously let a lenient LLM
+        # (which routinely under-scores fraud) drag a clear-fraud score below the
+        # review threshold and silently auto-pass real fraud.
         fraud_score = rule_result.fraud_score
-        if llm_fraud.get("fraud_score") is not None:
-            fraud_score = round((fraud_score + float(llm_fraud["fraud_score"])) / 2, 4)
+        llm_score_raw = llm_fraud.get("fraud_score")
+        if llm_score_raw is not None:
+            try:
+                llm_score = float(llm_score_raw)
+            except (TypeError, ValueError):
+                llm_score = 0.0
+            llm_score = max(0.0, min(llm_score, 1.0))
+            fraud_score = round(max(fraud_score, llm_score), 4)
 
         rule_result.fraud_score = fraud_score
         if llm_fraud.get("rationale"):

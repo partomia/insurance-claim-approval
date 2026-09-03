@@ -28,18 +28,22 @@ class FraudDetectionService:
     baselines from the general layer.
     """
 
+    # Weights are calibrated so any single "hard" fraud signal (blacklist, VIN
+    # mismatch, duplicate claim, device-hash reuse) on its own meets the review
+    # threshold (settings.fraud_review_threshold, default 0.40). "Soft" signals
+    # stay below it individually and only push into review when they stack.
     SIGNAL_WEIGHTS = {
-        "duplicate_claim": 0.30,
+        "duplicate_claim": 0.45,
         "abnormal_amount": 0.25,
-        "blacklist": 0.35,
-        "duplicate_document": 0.15,
-        "policy_abuse": 0.20,
+        "blacklist": 0.50,
+        "duplicate_document": 0.20,
+        "policy_abuse": 0.25,
         # Motor-specific
-        "vin_mismatch": 0.35,
+        "vin_mismatch": 0.45,
         "idv_ratio_aged_vehicle": 0.20,
-        "third_party_no_police_report": 0.20,
-        "device_hash_reuse": 0.30,
-        "unlicensed_driver": 0.30,
+        "third_party_no_police_report": 0.25,
+        "device_hash_reuse": 0.45,
+        "unlicensed_driver": 0.40,
     }
 
     def detect(
