@@ -248,7 +248,8 @@ export function AgentDashboard() {
                   <YAxis allowDecimals={false} tick={{ fill: colors.muted, fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
-                      background: colors.foreground === "#111827" ? "#fff" : "#1f2937",
+                      background: colors.tooltipBg,
+              color: colors.tooltipText,
                       border: `1px solid ${colors.border}`,
                       borderRadius: 8,
                       fontSize: 12,

@@ -68,7 +68,8 @@ export function PayoutWaterfallChart({ payout }: { payout: PayoutBreakdown }) {
           <Tooltip
             formatter={(value) => formatINR(Math.abs(Number(value ?? 0)))}
             contentStyle={{
-              background: colors.foreground === "#111827" ? "#fff" : "#1f2937",
+              background: colors.tooltipBg,
+              color: colors.tooltipText,
               border: `1px solid ${colors.border}`,
               borderRadius: 8,
               fontSize: 12,

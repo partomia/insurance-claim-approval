@@ -177,7 +177,7 @@ export function AssignPolicyAgentModal({
           {agents.length > 0 && (
             <button
               type="button"
-              className="text-xs text-[#F96702] hover:underline"
+              className="text-xs text-primary hover:underline"
               onClick={() => setUseCustomName(!useCustomName)}
             >
               {useCustomName ? "Choose from registered agents" : "Enter custom name instead"}

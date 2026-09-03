@@ -19,9 +19,21 @@ export interface ChartColors {
   chart1: string;
   chart2: string;
   chart3: string;
+  /** True when the app is in dark mode (`.dark` on <html>). */
+  isDark: boolean;
+  /** Themed Recharts tooltip background — light surface in light mode, dark in dark. */
+  tooltipBg: string;
+  /** Themed Recharts tooltip text color. */
+  tooltipText: string;
+}
+
+function isDarkMode(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.documentElement.classList.contains("dark");
 }
 
 export function getChartColors(): ChartColors {
+  const dark = isDarkMode();
   return {
     primary: readVar("--primary", "#F96702"),
     secondary: readVar("--secondary", "#201A5C"),
@@ -35,6 +47,9 @@ export function getChartColors(): ChartColors {
     chart1: readVar("--chart-1", "#F96702"),
     chart2: readVar("--chart-2", "#201A5C"),
     chart3: readVar("--chart-3", "#3b82f6"),
+    isDark: dark,
+    tooltipBg: dark ? "#1f2937" : "#ffffff",
+    tooltipText: dark ? "#f9fafb" : "#111827",
   };
 }
 

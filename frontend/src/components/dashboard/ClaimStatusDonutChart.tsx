@@ -60,7 +60,8 @@ export function ClaimStatusDonutChart({
             (item?.payload as StatusSlice | undefined)?.label ?? "Status",
           ]}
           contentStyle={{
-            background: colors.foreground === "#111827" ? "#fff" : "#1f2937",
+            background: colors.tooltipBg,
+              color: colors.tooltipText,
             border: `1px solid ${colors.border}`,
             borderRadius: 8,
             fontSize: 12,

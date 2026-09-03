@@ -26,7 +26,8 @@ export function ClaimsTimelineChart({ data }: { data: MonthSlice[] }) {
         <Tooltip
           formatter={(value) => [`${value ?? 0} motor claims`, "Submitted"]}
           contentStyle={{
-            background: colors.foreground === "#111827" ? "#fff" : "#1f2937",
+            background: colors.tooltipBg,
+              color: colors.tooltipText,
             border: `1px solid ${colors.border}`,
             borderRadius: 8,
             fontSize: 12,
