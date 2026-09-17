@@ -1,35 +1,37 @@
 #!/usr/bin/env bash
-# Upload the insurance lakehouse Airflow DAG to CDE's Airflow service.
-# Same pattern as Cloudera-CDE-Workshop-with-Orchestration-and-CI-CD/scripts/deploy_dag.sh.
+# Register the insurance lakehouse Airflow DAG on CDE — sourced directly from
+# the CDE Git repository (same one deploy_jobs.sh creates/syncs), not a
+# manually-uploaded `files` Resource.
 #
 # Requires: CDE CLI configured, an Airflow-enabled CDE virtual cluster, and
-# the four jobs from deploy_jobs.sh already created.
+# the four jobs from deploy_jobs.sh already created (deploy_jobs.sh also
+# creates the repository resource — run that first if you haven't).
 #
 # Usage:
 #   ./cde/scripts/deploy_dag.sh
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-DAG_RESOURCE="insurance-lakehouse-dags"
-DAG_FILE="${REPO_ROOT}/cde/dags/insurance_lakehouse_dag.py"
+REPO_NAME="insurance-claim-approval-repo"
+DAG_JOB_NAME="insurance-lakehouse-pipeline-dag"
+DAG_PATH_IN_REPO="cde/dags/insurance_lakehouse_dag.py"
 
-echo "==> Creating/updating DAG resource: ${DAG_RESOURCE}"
-cde resource create --name "${DAG_RESOURCE}" --type files 2>/dev/null || true
+echo "==> Syncing repository to latest commit: ${REPO_NAME}"
+cde repository sync --name "${REPO_NAME}"
 
-echo "==> Uploading DAG: ${DAG_FILE}"
-cde resource upload --name "${DAG_RESOURCE}" --local-path "${DAG_FILE}"
-
-echo "==> Creating/updating Airflow job for DAG"
-if cde job describe --name "insurance-lakehouse-pipeline-dag" &>/dev/null; then
-  cde job update --name "insurance-lakehouse-pipeline-dag" \
-    --dag-file "insurance_lakehouse_dag.py" \
-    --mount-1-resource "${DAG_RESOURCE}"
+echo "==> Creating/updating Airflow job for DAG: ${DAG_JOB_NAME}"
+if cde job describe --name "${DAG_JOB_NAME}" &>/dev/null; then
+  cde job update --name "${DAG_JOB_NAME}" \
+    --dag-file "${DAG_PATH_IN_REPO}" \
+    --mount-1-resource "${REPO_NAME}"
 else
-  cde job create --name "insurance-lakehouse-pipeline-dag" \
+  cde job create --name "${DAG_JOB_NAME}" \
     --type airflow \
-    --dag-file "insurance_lakehouse_dag.py" \
-    --mount-1-resource "${DAG_RESOURCE}"
+    --dag-file "${DAG_PATH_IN_REPO}" \
+    --mount-1-resource "${REPO_NAME}"
 fi
 
-echo "DAG deployed. Find it in CDE Airflow UI -> DAGs -> insurance_lakehouse_pipeline."
+echo "DAG deployed from repository. Find it in CDE Airflow UI -> DAGs -> insurance_lakehouse_pipeline."
+echo ""
+echo "After your next 'git push', re-sync + re-run this script to pick up DAG changes:"
+echo "  cde repository sync --name ${REPO_NAME} && ./cde/scripts/deploy_dag.sh"
