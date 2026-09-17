@@ -21,6 +21,7 @@ Commands:
   smoke [base-url]    Hit /health /api/health /api/version /api/llm/health.
   update [--no-pull]  git pull + reinstall only what changed + schema check.
   reset [--yes]       Delete local SQLite/Chroma/storage demo state.
+  portcheck [port]    Who's listening on a port + HTTP probe (no ss/lsof needed).
 
 Typical first run:
   bash cml/cli.sh doctor
@@ -38,6 +39,7 @@ case "$cmd" in
   smoke)  exec bash "$SCRIPT_DIR/smoke.sh" "$@" ;;
   update) exec bash "$SCRIPT_DIR/update.sh" "$@" ;;
   reset)  exec bash "$SCRIPT_DIR/reset.sh" "$@" ;;
+  portcheck) exec bash "$SCRIPT_DIR/portcheck.sh" "$@" ;;
   help|-h|--help) usage ;;
   *) echo "Unknown command: $cmd" >&2; echo; usage; exit 2 ;;
 esac

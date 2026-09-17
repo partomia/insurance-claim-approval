@@ -53,6 +53,32 @@ ensure_uv() {
   ok "uv installed: $(uv --version)"
 }
 
+# ensure_net_tools — best-effort install of `ss` (iproute2) and `fuser`
+# (psmisc), used to debug "address already in use" on CDSW_APP_PORT.
+# Purely a convenience: requires root/apt, which many CAI runtimes don't
+# grant to the session user — silently no-ops if it can't install them.
+# `cml/portcheck.sh` diagnoses ports without these anyway, via /proc.
+ensure_net_tools() {
+  if command -v ss >/dev/null 2>&1 && command -v fuser >/dev/null 2>&1; then
+    ok "ss/fuser already available"
+    return 0
+  fi
+  if command -v apt-get >/dev/null 2>&1; then
+    if apt-get update -qq >/dev/null 2>&1 && \
+       apt-get install -y --no-install-recommends iproute2 psmisc >/dev/null 2>&1; then
+      :
+    elif command -v sudo >/dev/null 2>&1; then
+      sudo -n apt-get update -qq >/dev/null 2>&1 || true
+      sudo -n apt-get install -y --no-install-recommends iproute2 psmisc >/dev/null 2>&1 || true
+    fi
+  fi
+  if command -v ss >/dev/null 2>&1 && command -v fuser >/dev/null 2>&1; then
+    ok "ss/fuser installed"
+  else
+    warn "Could not install ss/fuser (no root/apt on this runtime) — use 'bash cml/portcheck.sh <port>' instead, it needs no extra packages"
+  fi
+}
+
 # start_logging <name> — mirror all subsequent stdout/stderr to a timestamped
 # file under cml/logs/, in addition to the terminal.
 start_logging() {

@@ -48,6 +48,7 @@ log "Repo root: $ROOT"
 
 # --- 1. ensure uv -----------------------------------------------------------
 ensure_uv || exit 1
+ensure_net_tools
 
 # --- 2. backend/.env --------------------------------------------------------
 if [[ ! -f "$BACKEND/.env" ]]; then
