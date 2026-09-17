@@ -156,11 +156,13 @@ if `IMPALA_AUTH_MECHANISM=GSSAPI` (default), run `kinit` in the session first.
 Target schema name is `LAKEHOUSE_DATABASE` in `backend/.env` (default
 `insurance_lakehouse`). Script: `backend/scripts/lakehouse_seed.py`.
 
+**Phase 2 (available now, separate toolkit):** a real Spark medallion
+pipeline (bronze → silver → gold) on Cloudera Data Engineering (CDE),
+orchestrated with Airflow, that replaces the hand-seeded rows above with
+~60 pipeline-produced ones in the same gold tables — see
+[`cde/README.md`](../cde/README.md).
+
 **Roadmap (not built yet):**
-- **Phase 2** — a Spark medallion pipeline (bronze → silver → gold) that
-  produces `policy_master`/`policy_clauses` at real volume from source
-  files, replacing the hand-seeded rows above. Same target schema, so
-  nothing downstream has to change when this lands.
 - **Phase 3** — an app-side ingestion script (`cml.data_v1`, same pattern as
   a typical "load gold table via Impala into pandas" CML job) that pulls the
   gold tables into SQLite + Chroma, so the app's policy/RAG data actually
