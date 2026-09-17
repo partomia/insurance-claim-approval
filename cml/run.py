@@ -24,7 +24,30 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+
+def _resolve_root() -> Path:
+    """Resolve the repo root, robust to how Cloudera AI executes this script.
+
+    Run as a subprocess (`python3 cml/run.py` — a Session terminal, or
+    cml/appctl.sh), `__file__` is defined normally. But a Cloudera AI
+    **Application** configured with a JupyterLab-kernel runtime executes the
+    script INSIDE an IPython kernel (visible in the Application's error log
+    as `Cell In[N]` — the same mechanism as a notebook `%run`), where
+    `__file__` is never injected into globals, raising NameError. Fall back
+    to the current working directory, which Cloudera AI always sets to the
+    project root for both Sessions and Applications, with `/home/cdsw` (the
+    standard CDSW/CML project mount) as a last resort.
+    """
+    try:
+        return Path(__file__).resolve().parent.parent
+    except NameError:
+        cwd = Path.cwd()
+        if (cwd / "cml" / "run.py").exists():
+            return cwd
+        return Path("/home/cdsw")
+
+
+ROOT = _resolve_root()
 BACKEND = ROOT / "backend"
 FRONTEND_DIST = ROOT / "frontend" / "dist"
 
