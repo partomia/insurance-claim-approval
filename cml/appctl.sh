@@ -49,19 +49,33 @@ do_start() {
   disown "$pid" 2>/dev/null || true
   echo "$pid" > "$PID_FILE"
   echo "$port" > "$PORT_FILE"
-  sleep 1
-  if kill -0 "$pid" 2>/dev/null; then
-    ok "Started (pid $pid)"
-    echo "  Logs:    $logfile"
-    echo "  Check:   bash cml/cli.sh status"
-    echo "  Tail:    bash cml/cli.sh logs -f"
-    echo "  Stop:    bash cml/cli.sh stop"
-  else
-    err "Process exited immediately — check $logfile"
-    tail -n 30 "$logfile" 2>/dev/null
-    rm -f "$PID_FILE" "$PORT_FILE"
-    return 1
-  fi
+
+  # Poll /health instead of a flat sleep — cold imports (crewai/langchain/
+  # chromadb) can take well over a second, and a bare "process is alive"
+  # check reports success before the server has actually bound the port,
+  # producing a confusing false-positive followed by failing smoke tests.
+  log "Waiting for it to become healthy (up to 60s — first cold start is slowest)"
+  local waited=0
+  while [[ "$waited" -lt 60 ]]; do
+    if curl -fsS --max-time 2 "http://127.0.0.1:$port/health" >/dev/null 2>&1; then
+      ok "Started (pid $pid) — healthy after ${waited}s"
+      echo "  Logs:    $logfile"
+      echo "  Check:   bash cml/cli.sh status"
+      echo "  Tail:    bash cml/cli.sh logs -f"
+      echo "  Stop:    bash cml/cli.sh stop"
+      return 0
+    fi
+    if ! kill -0 "$pid" 2>/dev/null; then
+      err "Process exited while starting up — check $logfile"
+      tail -n 30 "$logfile" 2>/dev/null
+      rm -f "$PID_FILE" "$PORT_FILE"
+      return 1
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  warn "Still not responding to /health after 60s (pid $pid still alive)."
+  warn "Not necessarily broken — check: bash cml/cli.sh logs -f"
 }
 
 do_stop() {
