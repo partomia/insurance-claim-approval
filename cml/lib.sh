@@ -14,6 +14,18 @@ STATE_DIR="$CML_DIR/.state"
 LOG_DIR="$CML_DIR/logs"
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 
+# Auto-source nvm if it was installed (e.g. via `nvm install --lts`) but the
+# current shell never sourced ~/.bashrc for it — true for CAI Application
+# launches (which exec a script directly, not a login shell) and for any
+# fresh Session terminal opened after `nvm install` if no profile file
+# existed for the installer to append to. Without this, `command -v npm`
+# would silently fail here even though Node is actually installed.
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+  # shellcheck disable=SC1091
+  \. "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+fi
+
 log()  { printf '\n\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
 err()  { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; }
