@@ -35,6 +35,7 @@ fi
 
 ensure_uv
 
-log "Running lakehouse $mode against $host (schema: $(env_get LAKEHOUSE_DATABASE || echo insurance_lakehouse))"
+lakehouse_db="$(env_get LAKEHOUSE_DATABASE)"; lakehouse_db="${lakehouse_db:-insurance_lakehouse}"
+log "Running lakehouse $mode against $host (schema: $lakehouse_db)"
 cd "$BACKEND"
 uv run python scripts/lakehouse_seed.py "$mode"
