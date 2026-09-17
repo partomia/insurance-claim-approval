@@ -55,10 +55,39 @@ with everything needed to debug, instead of five separate pastes.
 
 ### As a Cloudera AI Application
 
-Set the Application **Script** to `cml/run.py` directly (not `cli.sh`/`appctl.sh`
-— those are for Session-terminal testing; CML's Application launcher manages
-the real process lifecycle itself). Run `cml/cli.sh setup` once in a Session
-first so `.venv` / `frontend/dist` exist before the Application starts.
+Prerequisite: run `bash cml/cli.sh setup` once in a Session first, so
+`backend/.venv` and `frontend/dist` already exist on disk before the
+Application starts (the Application launcher doesn't run `setup` for you).
+
+Then go to **Project → Applications → New Application**:
+
+![Create Application form](screenshots/create-application.png)
+
+Fill in exactly this:
+
+| Field | Value |
+|---|---|
+| **Name** | Anything descriptive, e.g. `Insurance Claim Copilot` |
+| **Run Application as** | `me` (default) |
+| **Subdomain** *(required)* | Short/unique, e.g. `insurance-claim-copilot` — becomes part of the public URL |
+| **Description** | Optional |
+| **Allow Unauthenticated Access** | **Check this** — the app has its own login (customer/agent/insurer demo credentials); leaving this unchecked would require separate Cloudera workspace SSO just to reach the page |
+| **Script** | `cml/run.py` |
+| **Editor / Kernel** | Doesn't matter — leave defaults (e.g. `JupyterLab` / `Python 3.11`). `run.py` execs `backend/.venv/bin/uvicorn` directly, bypassing whatever Python launched it |
+| **Edition / Version** | Leave defaults |
+| **Enable Spark** | Leave **off** — not used |
+| **Enable GPU** | Leave **off** — LLM calls go to a hosted API (Groq / Cloudera AI Inference), no local GPU needed |
+| **Resource Group / vCPU/Memory** | `4 vCPU / 8 GiB` is enough for a demo; increase later only if it feels slow |
+| **Environment Variables** (`CDSW_APP_POLLING_ENDPOINT`) | Leave as `/` — the FastAPI root serves the SPA `index.html` with a 200, so the default health-poll works. No other env vars needed here — everything (`GROQ_API_KEY`, `DB_BACKEND`, etc.) already lives in `backend/.env` on disk |
+
+Click **Create Application**. First boot can take **10–30+ seconds**
+(`crewai`/`langchain`/`chromadb` cold imports — same delay you'll have seen
+testing `start --bg` in a Session) before it responds — that's normal, not
+a failure.
+
+**Not `cli.sh`/`appctl.sh` for this** — those are for Session-terminal
+testing only. The real Application launcher manages the process lifecycle
+itself (start, restart on crash, logs in the Application's own Logs tab).
 
 ### Ongoing maintenance
 
