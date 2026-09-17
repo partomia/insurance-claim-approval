@@ -19,6 +19,28 @@ warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
 err()  { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; }
 ok()   { printf '\033[1;32m[ok]\033[0m %s\n' "$*"; }
 
+# ensure_uv — install `uv` if missing, exporting PATH so it's usable
+# immediately in the calling script. Shared by setup.sh and update.sh so
+# `update` never crashes with a bare "uv: command not found" on a session
+# that hasn't run `setup` yet.
+ensure_uv() {
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+  if command -v uv >/dev/null 2>&1; then ok "uv present: $(uv --version)"; return 0; fi
+  log "Installing uv..."
+  if command -v pip >/dev/null 2>&1; then
+    pip install --user -q uv || pip install -q uv
+  else
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  fi
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+  if ! command -v uv >/dev/null 2>&1; then
+    err "uv still not on PATH after install attempt."
+    err "Run 'bash cml/cli.sh setup' once — it bootstraps uv + all deps from scratch."
+    return 1
+  fi
+  ok "uv installed: $(uv --version)"
+}
+
 # start_logging <name> — mirror all subsequent stdout/stderr to a timestamped
 # file under cml/logs/, in addition to the terminal.
 start_logging() {

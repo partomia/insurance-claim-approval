@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "$SCRIPT_DIR/lib.sh"
 start_logging update
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+ensure_uv || exit 1
 
 NO_PULL=0
 for arg in "$@"; do [[ "$arg" == "--no-pull" ]] && NO_PULL=1; done
