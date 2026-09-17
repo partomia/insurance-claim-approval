@@ -15,6 +15,7 @@ cml/
 ├── smoke.sh     ← post-deploy endpoint checks
 ├── portcheck.sh ← what's listening on a port (no ss/lsof/fuser needed)
 ├── diagnose.sh  ← bundles doctor+status+portcheck+logs into one shareable file
+├── lakehouse.sh ← Iceberg/Impala datalakehouse seed + verify (Phase 1)
 ├── run.py       ← Application launcher (serves UI + API)
 ├── .state/      ← cached lockfile hashes + app pid/port (gitignored)
 └── logs/        ← timestamped run/app logs (gitignored)
@@ -35,6 +36,7 @@ bash cml/cli.sh update [--no-pull]  # git pull + reinstall only changed deps + s
 bash cml/cli.sh reset [--yes]       # delete local demo DB/Chroma/storage
 bash cml/cli.sh portcheck [port]    # who's bound to a port + HTTP probe
 bash cml/cli.sh diagnose [port]     # one file with doctor+status+portcheck+logs, for sharing
+bash cml/cli.sh lakehouse <seed|verify>  # Iceberg/Impala datalakehouse Phase 1 (see below)
 ```
 
 `setup` flags: `--skip-frontend` `--skip-seed` `--reset-db` `--run`
@@ -123,6 +125,46 @@ IMPALA_HOST=...        # + IMPALA_HTTP_PATH, etc.
 # Kerberos: run `kinit` in the session, or use LDAP:
 # IMPALA_AUTH_MECHANISM=LDAP / IMPALA_USER / IMPALA_PASSWORD
 ```
+This swaps the app's live OLTP database itself to Impala — not recommended for
+this app (see the lakehouse section below for why); it exists mainly so the
+schema-parity/`test_db_connection.py` path is available if you ever need it.
+
+## Data lakehouse (Impala + Iceberg) — Phase 1
+
+**Why not just put the whole app DB on Impala?** Impala/Iceberg is an
+analytical MPP engine — great for BI/ML-style reads over large tables, not
+built for a live web app's per-request single-row `INSERT`/`UPDATE` traffic
+(auth sessions, claim status changes, chat messages). Per-query latency is
+typically hundreds of ms–seconds, not the ~1–5ms SQLite/Postgres give a web
+request. So: **the app's OLTP data stays on SQLite** (`DB_BACKEND=sqlite`,
+unchanged). Impala/Iceberg is used instead for what it's actually good at —
+a separate reference-data lakehouse — to demonstrate the Cloudera
+datalakehouse story without breaking the live app.
+
+**Phase 1 (available now):** a small Iceberg schema, hand-seeded, to prove
+the plumbing works:
+
+```bash
+bash cml/cli.sh lakehouse seed     # creates insurance_lakehouse.{policy_master,policy_clauses}
+                                    # (STORED AS ICEBERG) and inserts 3 demo motor policies
+                                    # + their clause text — same shape as models/policy.py
+bash cml/cli.sh lakehouse verify   # read-only: row counts, confirms STORED AS ICEBERG, sample rows
+```
+
+Uses the same `IMPALA_*` connection settings as above (`IMPALA_HOST` etc.) —
+if `IMPALA_AUTH_MECHANISM=GSSAPI` (default), run `kinit` in the session first.
+Target schema name is `LAKEHOUSE_DATABASE` in `backend/.env` (default
+`insurance_lakehouse`). Script: `backend/scripts/lakehouse_seed.py`.
+
+**Roadmap (not built yet):**
+- **Phase 2** — a Spark medallion pipeline (bronze → silver → gold) that
+  produces `policy_master`/`policy_clauses` at real volume from source
+  files, replacing the hand-seeded rows above. Same target schema, so
+  nothing downstream has to change when this lands.
+- **Phase 3** — an app-side ingestion script (`cml.data_v1`, same pattern as
+  a typical "load gold table via Impala into pandas" CML job) that pulls the
+  gold tables into SQLite + Chroma, so the app's policy/RAG data actually
+  originates from the lakehouse instead of the synthetic seed script.
 
 ## Notes / gotchas
 

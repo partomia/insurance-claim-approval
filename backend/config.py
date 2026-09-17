@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     impala_user: str = ""
     impala_password: str = ""
 
+    # Data lakehouse (Iceberg via Impala) — additive, independent of DB_BACKEND.
+    # Reuses the IMPALA_* connection settings above (same CDP cluster) but
+    # targets a separate Iceberg-format schema used to demonstrate the
+    # datalakehouse story (policy reference data), while the live app keeps
+    # running its OLTP workload on DB_BACKEND=sqlite. See cml/cli.sh lakehouse.
+    lakehouse_database: str = "insurance_lakehouse"
+
     redis_url: str = "redis://localhost:6379/0"
 
     jwt_secret: str = "cloudera-insurance-secret-key-for-demo"

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Phase 1 of the Cloudera datalakehouse story: create + seed a small Iceberg
+# schema (insurance_lakehouse.policy_master / policy_clauses) via Impala.
+#
+# Independent of DB_BACKEND — the app keeps running on SQLite. This only
+# proves out Iceberg read/write on the same CDP cluster, reusing the
+# IMPALA_* connection settings already in backend/.env.
+#
+#   bash cml/cli.sh lakehouse seed     # create schema/tables + insert demo rows
+#   bash cml/cli.sh lakehouse verify   # read-only: counts + sample rows + DDL check
+#
+set -euo pipefail
+# shellcheck source=cml/lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+
+mode="${1:-seed}"
+case "$mode" in
+  seed|verify) ;;
+  *) err "Usage: cml/cli.sh lakehouse <seed|verify>"; exit 2 ;;
+esac
+
+[[ -f "$BACKEND/.env" ]] || { err "backend/.env missing — run 'bash cml/cli.sh setup' first"; exit 1; }
+
+auth="$(env_get IMPALA_AUTH_MECHANISM)"; auth="${auth:-GSSAPI}"
+host="$(env_get IMPALA_HOST)"
+if [[ -z "$host" ]]; then
+  err "IMPALA_HOST is empty in backend/.env — set the IMPALA_* block (see backend/.env.example)"
+  exit 1
+fi
+if [[ "$auth" == "GSSAPI" ]]; then
+  if command -v klist >/dev/null 2>&1 && ! klist -s 2>/dev/null; then
+    warn "No active Kerberos ticket detected — run 'kinit' first if this fails."
+  fi
+fi
+
+ensure_uv
+
+log "Running lakehouse $mode against $host (schema: $(env_get LAKEHOUSE_DATABASE || echo insurance_lakehouse))"
+cd "$BACKEND"
+uv run python scripts/lakehouse_seed.py "$mode"
