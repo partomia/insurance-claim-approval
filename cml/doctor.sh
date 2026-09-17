@@ -23,6 +23,8 @@ req "git available"       command -v git
 opt "uv available"        command -v uv
 opt "npm available"       command -v npm
 opt "tesseract-ocr available (needed for evidence OCR)" command -v tesseract
+opt "ss available (port diagnostics)"     command -v ss
+opt "fuser available (port diagnostics)"  command -v fuser
 if command -v uv >/dev/null 2>&1; then ok "uv version: $(uv --version)"; fi
 if command -v npm >/dev/null 2>&1; then ok "npm version: $(npm --version)"; fi
 

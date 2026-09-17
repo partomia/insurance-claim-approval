@@ -12,6 +12,7 @@ cml/
 ├── update.sh    ← git pull + reinstall only what changed
 ├── reset.sh     ← wipe local demo state (SQLite/Chroma/storage)
 ├── smoke.sh     ← post-deploy endpoint checks
+├── portcheck.sh ← what's listening on a port (no ss/lsof/fuser needed)
 ├── run.py       ← Application launcher (serves UI + API)
 ├── .state/      ← cached lockfile hashes (gitignored)
 └── logs/        ← timestamped run logs from setup/update (gitignored)
@@ -26,6 +27,7 @@ bash cml/cli.sh start               # launch the app in this terminal
 bash cml/cli.sh smoke [base-url]    # hit /health, /api/health, /api/version, /api/llm/health
 bash cml/cli.sh update [--no-pull]  # git pull + reinstall only changed deps + schema check
 bash cml/cli.sh reset [--yes]       # delete local demo DB/Chroma/storage
+bash cml/cli.sh portcheck [port]    # who's bound to a port + HTTP probe
 ```
 
 `setup` flags: `--skip-frontend` `--skip-seed` `--reset-db` `--run`
@@ -88,6 +90,13 @@ IMPALA_HOST=...        # + IMPALA_HTTP_PATH, etc.
   set `ROOT_PATH=/proxy/<port>` if you expose it via a Session **PORTS** proxy
   (absolute `/assets` paths don't survive a path-prefix proxy).
 - Keep `UVICORN_WORKERS=1` with SQLite and for SSE claim streaming.
+- `CDSW_APP_PORT` (e.g. `8090`) may already be bound by the CAI **Session**
+  container's own placeholder before you run anything. `setup` tries to
+  install `ss`/`fuser` for diagnostics (best-effort, needs root/apt — often
+  unavailable) but `bash cml/cli.sh portcheck [port]` works either way. For
+  ad-hoc testing in a Session, just use a different port:
+  `CDSW_APP_PORT=8099 bash cml/cli.sh start`. The real CAI **Application**
+  resource owns `CDSW_APP_PORT` correctly — that's the one that should bind it.
 - Requires a runtime with **Node/npm** for the SPA build; otherwise run
   `setup --skip-frontend` and host the frontend elsewhere (e.g. Vercel).
 - Python is pinned to **3.13** via `uv`; `setup` tries `uv python install 3.13`
