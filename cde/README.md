@@ -3,10 +3,14 @@
 Phase 2 of the datalakehouse story: a real bronze → silver → gold Spark
 pipeline on Cloudera Data Engineering (CDE), orchestrated with Airflow,
 replacing Phase 1's hand-seeded Iceberg tables (`cml/cli.sh lakehouse seed`)
-with a proper pipeline. Same pattern as
-[`Cloudera-CDE-Workshop-with-Orchestration-and-CI-CD`](https://github.com/partomia/Cloudera-CDE-Workshop-with-Orchestration-and-CI-CD)
-— CDE file resources + `cde job create --type spark`, chained via
-`CDEJobRunOperator` in an Airflow DAG.
+with a proper pipeline. Orchestration pattern (jobs + `CDEJobRunOperator`
+Airflow DAG) follows
+[`Cloudera-CDE-Workshop-with-Orchestration-and-CI-CD`](https://github.com/partomia/Cloudera-CDE-Workshop-with-Orchestration-and-CI-CD),
+but job/DAG **source files come from a CDE Repository** (Git integration,
+GA since CDE 1.24.1 / June 2025) pointed at this GitHub repo, instead of
+manually uploading each script as a `files` Resource — push to `main`,
+`cde repository sync`, and every job picks up the new code with no
+re-upload step.
 
 ```
 cde/
@@ -20,13 +24,31 @@ cde/
 ├── resources/
 │   └── requirements.txt               ← CDE python-env deps (empty today — see below)
 └── scripts/
-    ├── deploy_jobs.sh                 ← Upload jobs + create CDE Job defs
-    └── deploy_dag.sh                  ← Upload + register the Airflow DAG
+    ├── deploy_jobs.sh                 ← Create/sync the CDE Repository + create the 4 Spark jobs
+    └── deploy_dag.sh                  ← Register the Airflow DAG (sourced from the same Repository)
+```
+
+## Source: CDE Repository, not uploaded files
+
+`deploy_jobs.sh` creates a CDE **Repository** resource (`insurance-claim-approval-repo`) pointing at this GitHub repo on branch `main`, syncs it, then creates each job with `--mount-1-resource insurance-claim-approval-repo` and `--application-file cde/jobs/.../*.py` — the real repo-relative path, since a Repository mount preserves the directory structure (unlike a flat `files` Resource). The Airflow job (`deploy_dag.sh`) uses the same Repository via `--dag-file cde/dags/insurance_lakehouse_dag.py`.
+
+**Day-2 workflow** — after any code change:
+```bash
+git push origin main
+cde repository sync --name insurance-claim-approval-repo
+# Spark jobs pick this up on their next run automatically.
+# For the DAG file specifically, also re-run:
+./cde/scripts/deploy_dag.sh
+```
+
+**Private repo?** Pass a GitHub Personal Access Token (repo:read scope):
+```bash
+GIT_CREDENTIAL=ghp_xxx ./cde/scripts/deploy_jobs.sh
 ```
 
 ## Python environment
 
-`deploy_jobs.sh` also creates a CDE `python-env` resource (`insurance-lakehouse-python-env`) from `cde/resources/requirements.txt` and attaches it to all 4 jobs via `--python-env-resource-name`. It's intentionally empty right now — all 4 jobs use only PySpark, which the CDE Spark runtime already provides — but it's wired up so adding a real dependency later (Faker for richer synthetic data, Great Expectations for the validate stage, etc.) is just editing that one file and re-running `deploy_jobs.sh` (or syncing it via the CDE UI's **Repositories** feature if this repo is linked there), no job redefinition needed.
+`deploy_jobs.sh` also creates a separate CDE `python-env` Resource (`insurance-lakehouse-python-env`) from `cde/resources/requirements.txt` and attaches it to all 4 jobs via `--python-env-resource-name` — this stays a regular uploaded Resource since a Repository can't build a Python environment. It's intentionally empty right now — all 4 jobs use only PySpark, which the CDE Spark runtime already provides — but it's wired up so adding a real dependency later (Faker for richer synthetic data, Great Expectations for the validate stage, etc.) is just editing that one file and re-running `deploy_jobs.sh`, no job redefinition needed.
 
 ## Data flow
 
@@ -43,13 +65,10 @@ All tables are `STORED AS ICEBERG` (`format-version=2`), written via `CREATE TAB
 
 ## Deploy
 
-Requires the CDE CLI installed and configured (`~/.cde/config.yaml` with your vcluster endpoint — see the reference workshop repo's Part 0 setup if you need this from scratch).
+Requires the CDE CLI installed and configured (`~/.cde/config.yaml` with your vcluster endpoint). No local clone of this repo is needed on the machine running the CLI — `deploy_jobs.sh` just needs `cde/resources/requirements.txt` locally to upload the python-env; everything else is pulled by CDE directly from GitHub.
 
 ```bash
-git clone <this-repo>   # or pull, if already cloned in your CDE dev environment
-cd loan-approval
-
-./cde/scripts/deploy_jobs.sh   # creates insurance-generate-bronze, -validate-bronze, -transform-silver, -curate-gold
+./cde/scripts/deploy_jobs.sh   # creates the Repository + insurance-generate-bronze, -validate-bronze, -transform-silver, -curate-gold
 ./cde/scripts/deploy_dag.sh    # registers insurance_lakehouse_pipeline in CDE Airflow
 ```
 
