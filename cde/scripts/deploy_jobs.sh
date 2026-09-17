@@ -77,6 +77,12 @@ create_or_update_job "rsingh-insurance-validate-bronze"  "cde/jobs/validate/vali
 create_or_update_job "rsingh-insurance-transform-silver" "cde/jobs/transform/transform_silver.py"
 create_or_update_job "rsingh-insurance-curate-gold"      "cde/jobs/curate/curate_gold.py"
 
+# Claims history + risk-signals analytics (runs after curate-gold in the DAG).
+create_or_update_job "rsingh-insurance-generate-claims-bronze"   "cde/jobs/generate/generate_claims_bronze.py"
+create_or_update_job "rsingh-insurance-validate-claims-bronze"   "cde/jobs/validate/validate_claims_bronze.py"
+create_or_update_job "rsingh-insurance-transform-claims-silver"  "cde/jobs/transform/transform_claims_silver.py"
+create_or_update_job "rsingh-insurance-curate-risk-signals-gold" "cde/jobs/curate/curate_risk_signals_gold.py"
+
 echo ""
 echo "All CDE jobs deployed from repository '${REPO_NAME}' (${REPO_BRANCH})."
 echo "Try one directly:"
