@@ -101,10 +101,12 @@ class LLMService:
         if is_reasoning:
             # Reasoning models otherwise burn the whole token budget on a hidden
             # reasoning/<think> pass and return empty/truncated visible content
-            # (finish_reason=length) at small ceilings like 280. Disabling
-            # reasoning gives a direct answer that fits a normal budget and is
-            # much faster. Groq accepts reasoning_effort="none" for these models.
-            kwargs["reasoning_effort"] = "none"
+            # (finish_reason=length) at small ceilings like 280. Groq's API
+            # only accepts "low" | "medium" | "high" for reasoning_effort —
+            # "none" 400s (confirmed live against openai/gpt-oss-120b: "`
+            # reasoning_effort` must be one of `low`, `medium`, or `high`").
+            # "low" is the closest available analog to disabling it.
+            kwargs["reasoning_effort"] = "low"
         if max_tokens is not None:
             # Keep a modest floor as a safety net for models that ignore the
             # reasoning switch.
