@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
 
     groq_api_key: str = ""
-    groq_model: str = "qwen/qwen3.6-27b"
+    groq_model: str = "openai/gpt-oss-120b"
 
     # Custom OpenAI-compatible LLM endpoint (e.g. Cloudera-hosted Hermes on CML).
     # When `endpoint` + `api_key` are set, this is used instead of Groq — useful
