@@ -9,13 +9,15 @@ cml/
 ├── lib.sh       ← shared helpers (logging, .env validation, change detection)
 ├── doctor.sh    ← preflight checks, read-only
 ├── setup.sh     ← one-shot bootstrap (idempotent, incremental)
+├── appctl.sh    ← start/stop/status/logs for Session-terminal testing
 ├── update.sh    ← git pull + reinstall only what changed
 ├── reset.sh     ← wipe local demo state (SQLite/Chroma/storage)
 ├── smoke.sh     ← post-deploy endpoint checks
 ├── portcheck.sh ← what's listening on a port (no ss/lsof/fuser needed)
+├── diagnose.sh  ← bundles doctor+status+portcheck+logs into one shareable file
 ├── run.py       ← Application launcher (serves UI + API)
-├── .state/      ← cached lockfile hashes (gitignored)
-└── logs/        ← timestamped run logs from setup/update (gitignored)
+├── .state/      ← cached lockfile hashes + app pid/port (gitignored)
+└── logs/        ← timestamped run/app logs (gitignored)
 ```
 
 ## Commands
@@ -23,11 +25,16 @@ cml/
 ```bash
 bash cml/cli.sh doctor              # check tools + .env sanity, no changes
 bash cml/cli.sh setup [flags]       # bootstrap: deps, .env, DB, seed, RAG, SPA build
-bash cml/cli.sh start               # launch the app in this terminal
+bash cml/cli.sh start [--bg]        # launch — foreground, or detached (--bg)
+bash cml/cli.sh stop                # stop a --bg instance
+bash cml/cli.sh status              # pid/port + /health check
+bash cml/cli.sh logs [-f]           # tail the --bg instance's log
+bash cml/cli.sh restart             # stop + start --bg
 bash cml/cli.sh smoke [base-url]    # hit /health, /api/health, /api/version, /api/llm/health
 bash cml/cli.sh update [--no-pull]  # git pull + reinstall only changed deps + schema check
 bash cml/cli.sh reset [--yes]       # delete local demo DB/Chroma/storage
 bash cml/cli.sh portcheck [port]    # who's bound to a port + HTTP probe
+bash cml/cli.sh diagnose [port]     # one file with doctor+status+portcheck+logs, for sharing
 ```
 
 `setup` flags: `--skip-frontend` `--skip-seed` `--reset-db` `--run`
@@ -35,21 +42,23 @@ bash cml/cli.sh portcheck [port]    # who's bound to a port + HTTP probe
 ### First run in a Session terminal
 
 ```bash
-bash cml/cli.sh doctor     # see what's missing before you start
-bash cml/cli.sh setup      # one-shot bootstrap
-bash cml/cli.sh start      # foreground; Ctrl+C to stop
+bash cml/cli.sh doctor      # see what's missing before you start
+bash cml/cli.sh setup       # one-shot bootstrap
+bash cml/cli.sh start --bg  # detached — terminal stays free
+bash cml/cli.sh smoke       # verify it's up
+bash cml/cli.sh logs -f     # watch it live (Ctrl+C just stops watching, not the app)
+bash cml/cli.sh stop        # when done testing
 ```
 
-From a second terminal, once it's up:
-```bash
-bash cml/cli.sh smoke
-```
+Hit an error and want to ask for help? `bash cml/cli.sh diagnose` — one file
+with everything needed to debug, instead of five separate pastes.
 
 ### As a Cloudera AI Application
 
-Set the Application **Script** to `cml/run.py` (not `cli.sh start` — Applications
-invoke a script directly, not a shell dispatcher). Run `cml/cli.sh setup` once
-in a Session first so `.venv` / `frontend/dist` exist before the Application starts.
+Set the Application **Script** to `cml/run.py` directly (not `cli.sh`/`appctl.sh`
+— those are for Session-terminal testing; CML's Application launcher manages
+the real process lifecycle itself). Run `cml/cli.sh setup` once in a Session
+first so `.venv` / `frontend/dist` exist before the Application starts.
 
 ### Ongoing maintenance
 
@@ -61,6 +70,8 @@ in a Session first so `.venv` / `frontend/dist` exist before the Application sta
   (SQLite/Chroma/storage only — never touches remote Impala/CDP data).
 - Every `setup`/`update` run is logged to `cml/logs/<cmd>-<timestamp>.log` for
   debugging failed runs later.
+- `setup` generates a random `JWT_SECRET` the first time it creates `backend/.env`
+  (no longer the shared demo placeholder).
 
 ## Before you start — edit `backend/.env`
 
