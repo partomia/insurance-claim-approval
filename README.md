@@ -143,7 +143,7 @@ See [`backend/.env.example`](backend/.env.example) and
 |----------|-------|---------|
 | `DB_BACKEND` | backend | `sqlite` (default, local) or `impala` (CDP Data Warehouse) |
 | `GROQ_API_KEY` | backend | Groq API key for LLM agents in claim flow |
-| `GROQ_MODEL` | backend | Default: `qwen/qwen3.6-27b` |
+| `GROQ_MODEL` | backend | Default: `openai/gpt-oss-120b` (Production tier — Preview-tier models like `qwen/qwen3.6-27b` may 404 depending on your key's access) |
 | `ENDPOINT` / `API_KEY` / `LLM_MODEL` | backend | Custom OpenAI-compatible endpoint (e.g. Cloudera AI Inference) — used instead of Groq when both are set; preferred on CML where `api.groq.com` is often blocked |
 | `CLAIM_PROCESSING_MODE` | backend | `sync` (local/CML, no Redis needed), `celery` (Docker), or `auto` |
 | `SERVE_FRONTEND` | backend | Serve the built `frontend/dist` from FastAPI (single same-origin deploy) |
