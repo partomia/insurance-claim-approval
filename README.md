@@ -56,7 +56,9 @@ bash cml/cli.sh stop         # when done testing
 serves same-origin — one process, one URL, for both the UI and the API. Once
 verified, deploy for real via **Applications → New Application → Script:
 `cml/run.py`** (Cloudera manages that process's lifecycle; `cml/cli.sh`'s
-`start`/`stop`/`status`/`logs` are for Session-terminal testing only).
+`start`/`stop`/`status`/`logs` are for Session-terminal testing only). See
+[`cml/README.md`](cml/README.md#as-a-cloudera-ai-application) for the exact
+field-by-field walkthrough (screenshot included) of the Create Application form.
 
 To update after pulling new commits: `bash cml/cli.sh update`. If something
 breaks and you want one file to share for debugging: `bash cml/cli.sh diagnose`.
