@@ -42,28 +42,33 @@ with DAG(
     tags=["insurance", "iceberg", "medallion"],
 ) as dag:
 
+    # NOTE: job_name must exactly match the CDE Job names created by
+    # cde/scripts/deploy_jobs.sh. Those use an `rsingh-` prefix to avoid
+    # collisions on this shared vcluster -- if you deploy under a different
+    # user/prefix, update both deploy_jobs.sh and these job_name values
+    # together, or CDEJobRunOperator will fail with a 404 "job not found".
     generate = CDEJobRunOperator(
         task_id="generate_bronze",
-        job_name="insurance-generate-bronze",
+        job_name="rsingh-insurance-generate-bronze",
         overrides={"spark": {"args": [N_POLICIES]}},
         wait=True,
     )
 
     validate = CDEJobRunOperator(
         task_id="validate_bronze",
-        job_name="insurance-validate-bronze",
+        job_name="rsingh-insurance-validate-bronze",
         wait=True,
     )
 
     transform = CDEJobRunOperator(
         task_id="transform_silver",
-        job_name="insurance-transform-silver",
+        job_name="rsingh-insurance-transform-silver",
         wait=True,
     )
 
     curate = CDEJobRunOperator(
         task_id="curate_gold",
-        job_name="insurance-curate-gold",
+        job_name="rsingh-insurance-curate-gold",
         wait=True,
     )
 
