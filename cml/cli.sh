@@ -31,6 +31,11 @@ Commands:
   reset [--yes]       Delete local SQLite/Chroma/storage demo state.
   portcheck [port]    Who's listening on a port + HTTP probe (no ss/lsof needed).
   diagnose [port]     Bundle doctor+status+portcheck+logs into one file to share.
+  lakehouse <seed|verify>
+                      Phase 1 of the datalakehouse story: create/seed (or
+                       verify) Iceberg tables (policy_master, policy_clauses)
+                       via Impala. Independent of DB_BACKEND — app stays on
+                       SQLite; this only proves out the Iceberg layer.
 
 Typical first run:
   bash cml/cli.sh doctor
@@ -56,6 +61,7 @@ case "$cmd" in
   reset)    exec bash "$SCRIPT_DIR/reset.sh" "$@" ;;
   portcheck) exec bash "$SCRIPT_DIR/portcheck.sh" "$@" ;;
   diagnose) exec bash "$SCRIPT_DIR/diagnose.sh" "$@" ;;
+  lakehouse) exec bash "$SCRIPT_DIR/lakehouse.sh" "$@" ;;
   help|-h|--help) usage ;;
   *) echo "Unknown command: $cmd" >&2; echo; usage; exit 2 ;;
 esac
