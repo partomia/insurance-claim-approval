@@ -1,0 +1,12 @@
+# Python environment for the insurance lakehouse medallion pipeline (CDE).
+#
+# Currently empty on purpose: all 4 jobs (generate_bronze, validate_bronze,
+# transform_silver, curate_gold) use only PySpark — which is provided by the
+# CDE Spark runtime itself, not this file — plus the Python standard library.
+#
+# Add packages here (then re-run cde/scripts/deploy_jobs.sh, or sync via the
+# CDE UI's Repositories feature) if a future stage needs, e.g.:
+#   faker                # richer synthetic data generation in generate_bronze.py
+#   great-expectations    # richer data-quality suites in validate_bronze.py (see
+#                          # Cloudera-CDE-Workshop-with-Orchestration-and-CI-CD's
+#                          # jobs/validate/validate_data.py for the pattern)

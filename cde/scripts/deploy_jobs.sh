@@ -13,6 +13,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 RESOURCE_NAME="insurance-lakehouse-files"
+PYTHON_ENV="insurance-lakehouse-python-env"
 
 echo "==> Creating/updating CDE file resource: ${RESOURCE_NAME}"
 cde resource create --name "${RESOURCE_NAME}" --type files 2>/dev/null || true
@@ -23,6 +24,14 @@ cde resource upload --name "${RESOURCE_NAME}" \
   --local-path "${REPO_ROOT}/cde/jobs/validate/validate_bronze.py" \
   --local-path "${REPO_ROOT}/cde/jobs/transform/transform_silver.py" \
   --local-path "${REPO_ROOT}/cde/jobs/curate/curate_gold.py"
+
+echo "==> Creating/updating Python environment resource: ${PYTHON_ENV}"
+# Empty today (jobs only use PySpark) — wired up now so adding a dependency
+# later is just editing cde/resources/requirements.txt + re-running this
+# script (or syncing via the CDE UI's Repositories feature), no job changes.
+cde resource create --name "${PYTHON_ENV}" --type python-env 2>/dev/null || true
+cde resource upload --name "${PYTHON_ENV}" \
+  --local-path "${REPO_ROOT}/cde/resources/requirements.txt"
 
 create_or_update_job() {
   local JOB_NAME=$1
@@ -38,7 +47,8 @@ create_or_update_job() {
   cde job create --name "${JOB_NAME}" \
     --type spark \
     --application-file "${SCRIPT}" \
-    --mount-1-resource "${RESOURCE_NAME}"
+    --mount-1-resource "${RESOURCE_NAME}" \
+    --python-env-resource-name "${PYTHON_ENV}"
 }
 
 create_or_update_job "insurance-generate-bronze"  "generate_bronze.py"

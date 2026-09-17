@@ -17,10 +17,16 @@ cde/
 │   └── curate/curate_gold.py          ← Stage 4: enrich + finalize -> gold (app-facing tables)
 ├── dags/
 │   └── insurance_lakehouse_dag.py     ← Airflow DAG chaining the 4 jobs
+├── resources/
+│   └── requirements.txt               ← CDE python-env deps (empty today — see below)
 └── scripts/
     ├── deploy_jobs.sh                 ← Upload jobs + create CDE Job defs
     └── deploy_dag.sh                  ← Upload + register the Airflow DAG
 ```
+
+## Python environment
+
+`deploy_jobs.sh` also creates a CDE `python-env` resource (`insurance-lakehouse-python-env`) from `cde/resources/requirements.txt` and attaches it to all 4 jobs via `--python-env-resource-name`. It's intentionally empty right now — all 4 jobs use only PySpark, which the CDE Spark runtime already provides — but it's wired up so adding a real dependency later (Faker for richer synthetic data, Great Expectations for the validate stage, etc.) is just editing that one file and re-running `deploy_jobs.sh` (or syncing it via the CDE UI's **Repositories** feature if this repo is linked there), no job redefinition needed.
 
 ## Data flow
 
