@@ -47,20 +47,7 @@ done
 log "Repo root: $ROOT"
 
 # --- 1. ensure uv -----------------------------------------------------------
-ensure_uv() {
-  if command -v uv >/dev/null 2>&1; then ok "uv present: $(uv --version)"; return; fi
-  log "Installing uv..."
-  if command -v pip >/dev/null 2>&1; then
-    pip install --user -q uv || pip install -q uv
-  else
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-  fi
-  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-  command -v uv >/dev/null 2>&1 || { err "uv still not on PATH — add \$HOME/.local/bin to PATH"; exit 1; }
-  ok "uv installed: $(uv --version)"
-}
-ensure_uv
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+ensure_uv || exit 1
 
 # --- 2. backend/.env --------------------------------------------------------
 if [[ ! -f "$BACKEND/.env" ]]; then
