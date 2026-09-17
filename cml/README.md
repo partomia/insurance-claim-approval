@@ -101,13 +101,14 @@ IMPALA_HOST=...        # + IMPALA_HTTP_PATH, etc.
   set `ROOT_PATH=/proxy/<port>` if you expose it via a Session **PORTS** proxy
   (absolute `/assets` paths don't survive a path-prefix proxy).
 - Keep `UVICORN_WORKERS=1` with SQLite and for SSE claim streaming.
-- `CDSW_APP_PORT` (e.g. `8090`) may already be bound by the CAI **Session**
-  container's own placeholder before you run anything. `setup` tries to
-  install `ss`/`fuser` for diagnostics (best-effort, needs root/apt — often
-  unavailable) but `bash cml/cli.sh portcheck [port]` works either way. For
-  ad-hoc testing in a Session, just use a different port:
-  `CDSW_APP_PORT=8099 bash cml/cli.sh start`. The real CAI **Application**
-  resource owns `CDSW_APP_PORT` correctly — that's the one that should bind it.
+- **`CDSW_APP_PORT` (e.g. `8090`) is permanently owned by the Session's own
+  JupyterLab/editor process** — confirmed via `portcheck`: the port is bound
+  by `jupyter-lab ... --port=8090`, not a placeholder. You cannot bind it
+  from a Session terminal, ever, for the life of that Session. This is
+  expected and harmless — a real CAI **Application** runs in its own
+  separate container (no Jupyter), so `CDSW_APP_PORT` binds fine there. For
+  Session-terminal testing, just use a different port:
+  `CDSW_APP_PORT=8099 bash cml/cli.sh start --bg`.
 - Requires a runtime with **Node/npm** for the SPA build; otherwise run
   `setup --skip-frontend` and host the frontend elsewhere (e.g. Vercel).
 - Python is pinned to **3.13** via `uv`; `setup` tries `uv python install 3.13`
