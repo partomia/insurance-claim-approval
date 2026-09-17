@@ -56,6 +56,11 @@ if [[ ! -f "$BACKEND/.env" ]]; then
   cp "$BACKEND/.env.example" "$BACKEND/.env"
   env_set CLAIM_PROCESSING_MODE sync
   env_set SERVE_FRONTEND true
+  JWT_SECRET_GEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))' 2>/dev/null || true)"
+  if [[ -n "$JWT_SECRET_GEN" ]]; then
+    env_set JWT_SECRET "$JWT_SECRET_GEN"
+    ok "Generated a random JWT_SECRET (not the demo placeholder)"
+  fi
   warn "backend/.env created with SQLite + sync defaults."
   warn "Edit it to set your LLM (ENDPOINT/API_KEY or GROQ_API_KEY) and, if needed, DB_BACKEND=impala + IMPALA_* / kinit."
 else
