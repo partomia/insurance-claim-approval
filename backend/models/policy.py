@@ -10,6 +10,9 @@ from database import Base
 class PolicyDocumentSource(str, enum.Enum):
     SEED = "SEED"
     UPLOAD = "UPLOAD"
+    # Ingested from the CDE claims-analytics medallion pipeline's Iceberg gold
+    # tables via scripts/ingest_lakehouse.py (see cde/README.md Phase 3).
+    LAKEHOUSE = "LAKEHOUSE"
 
 
 class PolicyStatus(str, enum.Enum):
@@ -60,6 +63,9 @@ class Policy(Base):
     premium_payments = relationship("PremiumPayment", back_populates="policy")
     clause_embeddings = relationship("PolicyClauseEmbedding", back_populates="policy")
     policy_documents = relationship("PolicyDocument", back_populates="policy")
+    risk_signal = relationship(
+        "PolicyRiskSignal", back_populates="policy", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class PolicyDocument(Base):
