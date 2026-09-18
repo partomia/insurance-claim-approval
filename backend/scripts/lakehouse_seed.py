@@ -19,6 +19,9 @@ Roadmap (not built here):
 Usage:
     uv run python scripts/lakehouse_seed.py seed      # create schema/tables + insert demo rows
     uv run python scripts/lakehouse_seed.py verify    # read-only: counts + sample rows + DDL check
+                                                       # (also checks policy_risk_signals /
+                                                       # garage_risk_signals from the CDE
+                                                       # claims-analytics pipeline, if present)
 """
 
 import argparse
@@ -148,6 +151,11 @@ CLAUSE_TEMPLATE = [
 ]
 
 TABLES = ("policy_master", "policy_clauses")
+
+# Phase 2b (CDE claims-analytics pipeline, see cde/README.md) — optional:
+# only present after running rsingh-insurance-curate-risk-signals-gold (or
+# the full Airflow DAG) at least once. Not created/seeded by this script.
+ANALYTICS_TABLES = ("policy_risk_signals", "garage_risk_signals")
 
 
 # --------------------------------------------------------------------------- #
@@ -280,13 +288,19 @@ def seed_policy_clauses(cursor) -> None:
 
 def verify(cursor) -> None:
     print(f"\n==> Verifying `{db()}` on {settings.impala_host}")
-    for table in TABLES:
+    for table in TABLES + ANALYTICS_TABLES:
         full = f"{db()}.{table}"
         try:
             cursor.execute(f"SELECT COUNT(*) FROM {full}")
             (count,) = cursor.fetchone()
         except Exception as exc:  # noqa: BLE001
-            print(f"  [error] {full}: {exc}")
+            hint = (
+                " (not created yet — run the CDE claims-analytics pipeline, "
+                "see cde/README.md)"
+                if table in ANALYTICS_TABLES
+                else ""
+            )
+            print(f"  [error] {full}: {exc}{hint}")
             continue
         print(f"  {full}: {count} rows")
 
