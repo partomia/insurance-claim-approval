@@ -348,7 +348,7 @@ population that a single OLTP row/query could never produce:
 
 ## Roadmap
 
-- **Phase 3** (next) — an app-side ingestion script pulling `insurance_lakehouse.policy_master`/`policy_clauses`/`policy_risk_signals` into the app's SQLite + Chroma RAG index, so the live app's policy and risk data originates from this pipeline instead of `backend/scripts/seed.py`'s synthetic generator.
+- ~~**Phase 3** — an app-side ingestion script pulling `insurance_lakehouse.policy_master`/`policy_clauses`/`policy_risk_signals` into the app's SQLite + Chroma RAG index~~ — **done**, see `backend/scripts/ingest_lakehouse.py` / `bash cml/cli.sh lakehouse ingest` (documented in `cml/README.md`).
 - Swap `generate_bronze.py`/`generate_claims_bronze.py`'s synthetic data for a real source extract (S3/JDBC) once one exists — the validate/transform/curate stages don't need to change.
 - Replace the drop+recreate writes with `MERGE INTO` / `INSERT OVERWRITE` to preserve Iceberg snapshot/time-travel history across runs.
 - Add Great Expectations to the validate stages for richer expectation suites, mirroring the reference workshop's Module 05.
