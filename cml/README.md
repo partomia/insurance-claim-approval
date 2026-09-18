@@ -159,14 +159,25 @@ Target schema name is `LAKEHOUSE_DATABASE` in `backend/.env` (default
 **Phase 2 (available now, separate toolkit):** a real Spark medallion
 pipeline (bronze → silver → gold) on Cloudera Data Engineering (CDE),
 orchestrated with Airflow, that replaces the hand-seeded rows above with
-~60 pipeline-produced ones in the same gold tables — see
+~60 pipeline-produced ones in the same gold tables, plus a claims-analytics
+extension computing per-policy fraud risk scores — see
 [`cde/README.md`](../cde/README.md).
 
-**Roadmap (not built yet):**
-- **Phase 3** — an app-side ingestion script (`cml.data_v1`, same pattern as
-  a typical "load gold table via Impala into pandas" CML job) that pulls the
-  gold tables into SQLite + Chroma, so the app's policy/RAG data actually
-  originates from the lakehouse instead of the synthetic seed script.
+**Phase 3 (available now):** an app-side ingestion script that pulls
+`policy_master` / `policy_clauses` / `policy_risk_signals` via Impala into
+the app's live SQLite DB + Chroma RAG index — so the running app's policy
+data actually originates from the lakehouse pipeline, not just provable via
+`lakehouse verify`. Additive: never touches the seed.py-generated demo
+policies; lakehouse policies (`LH-POL-*`) get their own dedicated customer
+accounts.
+
+```bash
+bash cml/cli.sh lakehouse ingest          # ingest + index into Chroma
+bash cml/cli.sh lakehouse ingest --no-rag # DB only, skip Chroma indexing
+```
+
+Script: `backend/scripts/ingest_lakehouse.py`. Idempotent — safe to re-run
+after every CDE pipeline run to pick up fresh gold-table data.
 
 ## Notes / gotchas
 
