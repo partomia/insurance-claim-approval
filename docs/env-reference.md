@@ -7,12 +7,17 @@ All settings live in `backend/config.py` (`Settings`). Values are read from
 
 | Var | Default | Notes |
 |---|---|---|
+| `DB_BACKEND` | `sqlite` | `sqlite` (default, local/CML) or `impala` (swaps the app's own OLTP DB to Impala — not recommended, see `cml/README.md`) |
 | `IMPALA_HOST` | `go01-aws-rtdm-gateway...` | CDP Impala gateway host |
 | `IMPALA_PORT` | `443` | |
-| `IMPALA_DATABASE` | `default` | Impala schema/database |
+| `IMPALA_DATABASE` | `default` | Impala schema/database (only used when `DB_BACKEND=impala`) |
+| `IMPALA_USE_SSL` | `true` | |
+| `IMPALA_USE_HTTP_TRANSPORT` | `true` | HiveServer2 over HTTP (CDP proxy) vs. binary |
 | `IMPALA_AUTH_MECHANISM` | `GSSAPI` | Kerberos; use `LDAP` + `IMPALA_USER`/`IMPALA_PASSWORD` locally |
 | `IMPALA_HTTP_PATH` | `go01-aws-rtdm/cdp-proxy-api/impala` | CDP proxy path |
+| `IMPALA_KERBEROS_SERVICE_NAME` | `impala` | Only used when `IMPALA_AUTH_MECHANISM=GSSAPI` |
 | `IMPALA_USER` / `IMPALA_PASSWORD` | empty | LDAP credentials when Kerberos unavailable |
+| `LAKEHOUSE_DATABASE` | `insurance_lakehouse` | Iceberg schema for the datalakehouse story (`cml/cli.sh lakehouse seed\|verify\|ingest`, `cde/` pipeline) — reuses the `IMPALA_*` connection settings above but is **independent of `DB_BACKEND`**; the app can stay on SQLite while this is seeded/queried. See `cml/README.md` § Data lakehouse |
 | `REDIS_URL` | `redis://redis:6379/0` | Celery broker + result backend |
 | `JWT_SECRET` | `cloudera-insurance-secret-key-for-demo` | **Rotate in prod** |
 | `JWT_ALGORITHM` | `HS256` | |
