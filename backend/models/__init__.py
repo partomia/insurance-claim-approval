@@ -26,6 +26,7 @@ from models.policy import (
 )
 from models.platform import CustomerProfile, InsuranceProvider, KYCStatus
 from models.policy_agent import PolicyAgent
+from models.policy_risk_signal import PolicyRiskSignal
 
 __all__ = [
     "AgentAuthSession",
@@ -43,6 +44,7 @@ __all__ = [
     "PolicyStatus",
     "PremiumPayment",
     "PremiumPaymentStatus",
+    "PolicyRiskSignal",
     "Claim",
     "ClaimProgressEvent",
     "ClaimStatus",

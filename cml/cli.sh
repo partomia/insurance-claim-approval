@@ -31,11 +31,14 @@ Commands:
   reset [--yes]       Delete local SQLite/Chroma/storage demo state.
   portcheck [port]    Who's listening on a port + HTTP probe (no ss/lsof needed).
   diagnose [port]     Bundle doctor+status+portcheck+logs into one file to share.
-  lakehouse <seed|verify>
-                      Phase 1 of the datalakehouse story: create/seed (or
-                       verify) Iceberg tables (policy_master, policy_clauses)
-                       via Impala. Independent of DB_BACKEND — app stays on
-                       SQLite; this only proves out the Iceberg layer.
+  lakehouse <seed|verify|ingest>
+                      Phase 1: create/seed (or verify) Iceberg tables
+                       (policy_master, policy_clauses) via Impala. Independent
+                       of DB_BACKEND — app stays on SQLite; proves out the
+                       Iceberg layer. `ingest` (Phase 3, see cde/README.md)
+                       pulls the CDE-pipeline-produced gold tables
+                       (policy_master, policy_clauses, policy_risk_signals)
+                       into the app's live SQLite DB + Chroma RAG index.
 
 Typical first run:
   bash cml/cli.sh doctor
