@@ -15,7 +15,7 @@ cml/
 ├── smoke.sh     ← post-deploy endpoint checks
 ├── portcheck.sh ← what's listening on a port (no ss/lsof/fuser needed)
 ├── diagnose.sh  ← bundles doctor+status+portcheck+logs into one shareable file
-├── lakehouse.sh ← Iceberg/Impala datalakehouse seed + verify (Phase 1)
+├── lakehouse.sh ← Iceberg/Impala datalakehouse seed/verify/ingest (Phases 1 & 3)
 ├── run.py       ← Application launcher (serves UI + API)
 ├── .state/      ← cached lockfile hashes + app pid/port (gitignored)
 └── logs/        ← timestamped run/app logs (gitignored)
@@ -36,7 +36,7 @@ bash cml/cli.sh update [--no-pull]  # git pull + reinstall only changed deps + s
 bash cml/cli.sh reset [--yes]       # delete local demo DB/Chroma/storage
 bash cml/cli.sh portcheck [port]    # who's bound to a port + HTTP probe
 bash cml/cli.sh diagnose [port]     # one file with doctor+status+portcheck+logs, for sharing
-bash cml/cli.sh lakehouse <seed|verify>  # Iceberg/Impala datalakehouse Phase 1 (see below)
+bash cml/cli.sh lakehouse <seed|verify|ingest>  # Iceberg/Impala datalakehouse, Phases 1-3 (see below)
 ```
 
 `setup` flags: `--skip-frontend` `--skip-seed` `--reset-db` `--run`
@@ -129,7 +129,7 @@ This swaps the app's live OLTP database itself to Impala — not recommended for
 this app (see the lakehouse section below for why); it exists mainly so the
 schema-parity/`test_db_connection.py` path is available if you ever need it.
 
-## Data lakehouse (Impala + Iceberg) — Phase 1
+## Data lakehouse (Impala + Iceberg) — Phases 1-3
 
 **Why not just put the whole app DB on Impala?** Impala/Iceberg is an
 analytical MPP engine — great for BI/ML-style reads over large tables, not

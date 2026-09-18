@@ -66,6 +66,29 @@ See [`cml/README.md`](cml/README.md) for the full command reference and gotchas
 (port conflicts with `CDSW_APP_PORT`, Node/Python runtime requirements, Impala
 Kerberos/LDAP auth, etc).
 
+## Data Lakehouse (Impala + Iceberg + CDE)
+
+The app's live OLTP data always stays on SQLite (`DB_BACKEND=sqlite`) — it's
+not built for a web app's per-request read/write traffic. Separately, a full
+**datalakehouse** is built on the same CDP cluster using Impala/Iceberg, to
+demonstrate that story without touching the live app's database:
+
+1. **Iceberg schema** (`insurance_lakehouse.policy_master` / `policy_clauses`),
+   hand-seeded or pipeline-produced.
+2. **CDE Spark medallion pipeline** (bronze → silver → gold), orchestrated
+   with Airflow, plus a claims-analytics extension computing per-policy
+   `fraud_risk_score` / `claim_risk_band` over an ~800-policy synthetic
+   claims-history population.
+3. **App-side ingestion** pulling those gold tables back into the app's
+   SQLite DB + Chroma RAG index.
+
+```bash
+bash cml/cli.sh lakehouse seed|verify|ingest   # Phases 1 & 3, from a CAI Session
+```
+
+See [`cml/README.md`](cml/README.md) (§ Data lakehouse) for Phases 1 & 3, and
+[`cde/README.md`](cde/README.md) for the CDE Spark/Airflow pipeline (Phase 2).
+
 ## API Endpoints
 
 | Method | Path | Description |
@@ -134,6 +157,7 @@ backend/
 └── tests/           # Unit tests
 frontend/            # React + Vite UI
 cml/                 # Cloudera AI (Workbench/CML) automation — see cml/README.md
+cde/                 # CDE Spark medallion pipeline (datalakehouse) — see cde/README.md
 ```
 
 ## Environment Variables
@@ -144,6 +168,7 @@ See [`backend/.env.example`](backend/.env.example) and
 | Variable | Where | Purpose |
 |----------|-------|---------|
 | `DB_BACKEND` | backend | `sqlite` (default, local) or `impala` (CDP Data Warehouse) |
+| `LAKEHOUSE_DATABASE` | backend | Iceberg schema for the datalakehouse story (default `insurance_lakehouse`) — independent of `DB_BACKEND`, see below |
 | `GROQ_API_KEY` | backend | Groq API key for LLM agents in claim flow |
 | `GROQ_MODEL` | backend | Default: `openai/gpt-oss-120b` (Production tier — Preview-tier models like `qwen/qwen3.6-27b` may 404 depending on your key's access) |
 | `ENDPOINT` / `API_KEY` / `LLM_MODEL` | backend | Custom OpenAI-compatible endpoint (e.g. Cloudera AI Inference) — used instead of Groq when both are set; preferred on CML where `api.groq.com` is often blocked |
