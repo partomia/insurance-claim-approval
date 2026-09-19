@@ -83,6 +83,7 @@ else
 fi
 
 # --- 4. DB connectivity -----------------------------------------------------
+fix_openssl_ciphers_if_broken
 log "Testing DB connection"
 if uv run python scripts/test_db_connection.py; then
   ok "DB reachable"
