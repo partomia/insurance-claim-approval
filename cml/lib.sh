@@ -66,6 +66,36 @@ ensure_uv() {
   ok "uv installed: $(uv --version)"
 }
 
+# ensure_node — install Node/npm via nvm if missing. No root needed: nvm
+# installs entirely under $HOME/.nvm, same as ensure_uv() installing uv
+# under $HOME/.local/bin. Self-heals the "npm not found in this runtime"
+# case instead of just warning and permanently skipping the SPA build.
+ensure_node() {
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  if command -v npm >/dev/null 2>&1; then
+    ok "npm present: $(npm --version) (node $(node --version 2>/dev/null))"
+    return 0
+  fi
+  log "Installing Node via nvm (npm not found)..."
+  if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh 2>/dev/null | bash >/dev/null 2>&1
+  fi
+  # shellcheck disable=SC1091
+  \. "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+  if ! command -v npm >/dev/null 2>&1; then
+    nvm install --lts >/dev/null 2>&1
+    nvm use --lts >/dev/null 2>&1 || true
+  fi
+  if command -v npm >/dev/null 2>&1; then
+    ok "Node installed via nvm: $(node --version) / npm $(npm --version)"
+  else
+    warn "Could not install Node via nvm (no internet egress on this runtime?) —"
+    warn "  skipping SPA build. Use an ML Runtime with Node, or deploy the"
+    warn "  frontend separately (e.g. Vercel) pointed at this backend."
+    return 1
+  fi
+}
+
 # ensure_net_tools — best-effort install of `ss` (iproute2) and `fuser`
 # (psmisc), used to debug "address already in use" on CDSW_APP_PORT.
 # Purely a convenience: requires root/apt, which many CAI runtimes don't
