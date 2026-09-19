@@ -31,6 +31,7 @@ fi
 log "Re-checking DB schema (safe, additive only)"
 uv run python -c "from db_init import ensure_schema; ensure_schema()"
 
+ensure_node || true
 if command -v npm >/dev/null 2>&1; then
   cd "$FRONTEND"
   if hash_changed frontend_lock package-lock.json package.json; then

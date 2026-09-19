@@ -105,6 +105,7 @@ fi
 
 # --- 6. frontend build -------------------------------------------------------
 if [[ "$SKIP_FRONTEND" -eq 0 ]]; then
+  ensure_node || true
   if command -v npm >/dev/null 2>&1; then
     cd "$FRONTEND"
     if hash_changed frontend_lock package-lock.json package.json; then
