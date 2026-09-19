@@ -16,6 +16,7 @@ from services.explainability import ExplainabilityService
 from services.insights_service import InsightsService
 from services.insurer_service import insurer_service
 from services.notification import NotificationService
+from services.policy_risk_service import policy_risk_service
 
 router = APIRouter(prefix="/api/insurer", tags=["Insurer Portal"])
 insights_service = InsightsService()
@@ -29,6 +30,38 @@ def insurer_dashboard_stats(
     db: Session = Depends(get_db),
 ):
     return insurer_service.get_dashboard_stats(db)
+
+
+@router.get("/book-of-business", response_model=list[schemas.BookOfBusinessPolicyItem])
+def insurer_book_of_business(
+    risk_band: str | None = Query(None, description="Filter to LOW, MEDIUM, or HIGH"),
+    min_score: float | None = Query(None, ge=0, le=100),
+    high_risk_garage_only: bool = Query(False),
+    sort: str = Query("score_desc", description="score_desc | score_asc | claims_desc"),
+    _insurer: InsurerUser = Depends(get_current_insurer),
+    db: Session = Depends(get_db),
+):
+    """Lakehouse-ingested policies with their CDE-computed fraud risk signal.
+
+    Only includes policies with a matching PolicyRiskSignal row (i.e. those
+    ingested by scripts/ingest_lakehouse.py) — the seed.py demo policies
+    (POL-MTR-*) never appear here since they have no lakehouse counterpart.
+    """
+    return policy_risk_service.list_policies(
+        db,
+        risk_band=risk_band,
+        min_score=min_score,
+        high_risk_garage_only=high_risk_garage_only,
+        sort=sort,
+    )
+
+
+@router.get("/book-of-business/stats", response_model=schemas.BookOfBusinessStatsResponse)
+def insurer_book_of_business_stats(
+    _insurer: InsurerUser = Depends(get_current_insurer),
+    db: Session = Depends(get_db),
+):
+    return policy_risk_service.get_stats(db)
 
 
 @router.get("/claims", response_model=list[schemas.InsurerClaimListItem])

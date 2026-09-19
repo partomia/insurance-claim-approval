@@ -16,6 +16,8 @@ cml/
 ├── portcheck.sh ← what's listening on a port (no ss/lsof/fuser needed)
 ├── diagnose.sh  ← bundles doctor+status+portcheck+logs into one shareable file
 ├── lakehouse.sh ← Iceberg/Impala datalakehouse seed/verify/ingest (Phases 1 & 3)
+├── jobs/
+│   └── lakehouse_ingest_job.py ← CML Job wrapper: scheduled lakehouse ingest refresh (Phase 4)
 ├── run.py       ← Application launcher (serves UI + API)
 ├── .state/      ← cached lockfile hashes + app pid/port (gitignored)
 └── logs/        ← timestamped run/app logs (gitignored)
@@ -178,6 +180,25 @@ bash cml/cli.sh lakehouse ingest --no-rag # DB only, skip Chroma indexing
 
 Script: `backend/scripts/ingest_lakehouse.py`. Idempotent — safe to re-run
 after every CDE pipeline run to pick up fresh gold-table data.
+
+**Phase 4 (available now):** an insurer-facing UI on top of the ingested
+risk data — a **Book of Business** page (browse/filter/sort all lakehouse
+policies by `claim_risk_band`/`fraud_risk_score`) and a **Claim Insights risk
+card** (surfaces the same signal, if present, when reviewing a claim). Both
+read through one shared query path (`backend/services/policy_risk_service.py`)
+so a policy's risk band is always identical in both views.
+
+This closes the loop with a **scheduled refresh** so the data doesn't go
+stale between manual `lakehouse ingest` runs: register
+[`cml/jobs/lakehouse_ingest_job.py`](jobs/lakehouse_ingest_job.py) as a CML
+**Job** (Project → Jobs → New Job → Script: `cml/jobs/lakehouse_ingest_job.py`),
+scheduled to run after the CDE Airflow DAG typically completes (e.g. daily).
+It's a thin wrapper around `scripts/ingest_lakehouse.py` using the same
+robust venv/repo-root resolution as `cml/run.py` — Jobs run independently of
+whether the Application is currently up. Test it manually first:
+```bash
+python cml/jobs/lakehouse_ingest_job.py
+```
 
 ## Notes / gotchas
 

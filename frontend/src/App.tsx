@@ -31,6 +31,7 @@ import { InsurerDashboard } from "./pages/insurer/InsurerDashboard";
 import { InsurerClaims } from "./pages/insurer/InsurerClaims";
 import { InsurerClaimReview } from "./pages/insurer/InsurerClaimReview";
 import { InsurerAuditReport } from "./pages/insurer/InsurerAuditReport";
+import { InsurerBookOfBusiness } from "./pages/insurer/InsurerBookOfBusiness";
 
 function defaultHome() {
   if (isAuthenticated()) return "/dashboard";
@@ -77,6 +78,7 @@ function App() {
         <Route element={<InsurerProtectedRoute />}>
           <Route element={<InsurerLayout />}>
             <Route path="/insurer/dashboard" element={<InsurerDashboard />} />
+            <Route path="/insurer/book-of-business" element={<InsurerBookOfBusiness />} />
             <Route path="/insurer/claims" element={<InsurerClaims />} />
             <Route path="/insurer/claims/:id" element={<InsurerClaimReview />} />
             <Route path="/insurer/claims/:id/audit" element={<InsurerAuditReport />} />
