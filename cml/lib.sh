@@ -26,6 +26,19 @@ if [[ -s "$NVM_DIR/nvm.sh" ]]; then
   \. "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
 fi
 
+# Some hardened/FIPS-influenced CML runtimes ship an OpenSSL config that gets
+# picked up even when $OPENSSL_CONF is unset/empty, and ends up activating
+# zero cipher suites for the *uv-managed* Python's bundled OpenSSL — the
+# system python3 on the same host is unaffected, only `uv run python` /
+# `backend/.venv/bin/python` is. First symptom is always
+# `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]` on the very first
+# ssl.create_default_context() call (Impala HTTPS transport, LLM API calls),
+# even with zero LLM config. Confirmed fix: /dev/null (skip loading any
+# external config, fall back to OpenSSL's compiled-in defaults) — verified
+# on an affected cluster without regressing unaffected ones. Only applied
+# when unset/empty so we never clobber an operator's deliberate override.
+export OPENSSL_CONF="${OPENSSL_CONF:-/dev/null}"
+
 log()  { printf '\n\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
 err()  { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; }

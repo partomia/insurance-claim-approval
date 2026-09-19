@@ -263,6 +263,18 @@ one file instead of several separate pastes.
   separate container (no Jupyter), so `CDSW_APP_PORT` binds fine there. For
   Session-terminal testing, just use a different port:
   `CDSW_APP_PORT=8099 bash cml/cli.sh start --bg`.
+- **`ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]`** on the first outbound TLS
+  call (Impala HTTPS transport, LLM API calls) — even with zero LLM
+  configured. Seen on some hardened/FIPS-influenced CML runtimes: an OpenSSL
+  config gets picked up (even when `$OPENSSL_CONF` is unset/empty) that
+  activates zero cipher suites for the **uv-managed Python** specifically —
+  the runtime's own `system python3` is unaffected, confirming it's not a
+  network/cert block. All `cml/*.sh` scripts and `cml/run.py` already
+  default `OPENSSL_CONF=/dev/null` (skip loading any external config, fall
+  back to OpenSSL's compiled-in defaults) to work around this — verified
+  fix, doesn't regress runtimes where it isn't needed. If you hit this
+  anyway (e.g. a bare `python3`/`uv run python` one-off outside these
+  scripts), prefix the command: `OPENSSL_CONF=/dev/null uv run python ...`.
 - Requires a runtime with **Node/npm** for the SPA build; otherwise run
   `setup --skip-frontend` and host the frontend elsewhere (e.g. Vercel).
 - Python is pinned to **3.13** via `uv`; `setup` tries `uv python install 3.13`

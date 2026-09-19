@@ -57,6 +57,16 @@ WORKERS = os.environ.get("UVICORN_WORKERS", "1")
 # CML-friendly defaults (do not clobber anything the operator set explicitly).
 os.environ.setdefault("SERVE_FRONTEND", "true")
 os.environ.setdefault("CLAIM_PROCESSING_MODE", "sync")
+# Some hardened/FIPS-influenced CML runtimes ship an OpenSSL config that gets
+# picked up even when OPENSSL_CONF is unset/empty, activating zero cipher
+# suites for the uv-managed Python this process execs into (uvicorn under
+# backend/.venv) — surfaces as `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]`
+# on the first outbound TLS call (Impala, LLM API), even with no LLM
+# configured. /dev/null (skip external config, use OpenSSL's compiled-in
+# defaults) is a verified fix that doesn't regress unaffected runtimes; only
+# set here if not already set, so an operator's deliberate override wins.
+# See cml/README.md § Notes/gotchas.
+os.environ.setdefault("OPENSSL_CONF", "/dev/null")
 
 print(f"[cml/run] repo root : {ROOT}")
 print(f"[cml/run] backend   : {BACKEND}")
