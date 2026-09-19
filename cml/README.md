@@ -200,6 +200,55 @@ whether the Application is currently up. Test it manually first:
 python cml/jobs/lakehouse_ingest_job.py
 ```
 
+## Verifying Phase 1-3 end-to-end (step-by-step)
+
+Run this checklist after any `git pull` + `bash cml/cli.sh update` — e.g.
+after resuming an idle Session, after a CDE pipeline run, or just to confirm
+`main` is in good shape before branching off for new work.
+
+1. **Pull + reinstall changed deps**
+   ```bash
+   git checkout main && git pull origin main
+   bash cml/cli.sh update
+   ```
+   Watch the output for `[warn] New keys in .env.example not yet in your
+   .env: ...` — add any listed keys to `backend/.env` before continuing.
+
+2. **Start the app on an alternate port.** Session terminals can never bind
+   the default `CDSW_APP_PORT` (`8090`) — it's permanently owned by the
+   Session's own JupyterLab process (see Notes/gotchas below) — so use a
+   free one just for this check:
+   ```bash
+   CDSW_APP_PORT=8099 bash cml/cli.sh restart
+   ```
+   Expect `[ok] Started (pid ...) — healthy after Ns`.
+
+3. **Smoke-test it**, passing the same port used above:
+   ```bash
+   bash cml/cli.sh smoke http://127.0.0.1:8099
+   ```
+   All five checks should print `[ok]`: `/health`, `/api/health`,
+   `/api/version`, `/api/llm/health`, `/`. `/api/version` also echoes the
+   current commit (`build`) — compare against `git rev-parse --short HEAD`
+   if you want to confirm you're testing exactly what you think you pulled.
+
+4. **(Optional) Confirm the datalakehouse is intact** — Phase 1 seed tables,
+   Phase 2/2b CDE gold tables, and Phase 3's ingest into the live app DB:
+   ```bash
+   bash cml/cli.sh lakehouse verify   # Impala/Iceberg row counts + sample rows
+   bash cml/cli.sh lakehouse ingest   # re-pull latest gold tables (idempotent, safe to repeat)
+   ```
+
+5. **Stop when done** to free the port (a real Application doesn't need
+   this — it runs in its own container):
+   ```bash
+   bash cml/cli.sh stop
+   ```
+
+If any step fails, run `bash cml/cli.sh diagnose` and share the resulting
+log file — it bundles `doctor` + `status` + `portcheck` + recent logs into
+one file instead of several separate pastes.
+
 ## Notes / gotchas
 
 - **Deploy as an Application** (clean subdomain) → leave `ROOT_PATH` empty. Only
