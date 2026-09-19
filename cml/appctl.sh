@@ -35,6 +35,7 @@ do_start() {
   fi
   rm -f "$PID_FILE" "$PORT_FILE"
 
+  fix_openssl_ciphers_if_broken
   local port="${CDSW_APP_PORT:-8090}"
 
   if [[ "$bg" -eq 0 ]]; then

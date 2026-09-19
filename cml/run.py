@@ -57,16 +57,6 @@ WORKERS = os.environ.get("UVICORN_WORKERS", "1")
 # CML-friendly defaults (do not clobber anything the operator set explicitly).
 os.environ.setdefault("SERVE_FRONTEND", "true")
 os.environ.setdefault("CLAIM_PROCESSING_MODE", "sync")
-# Some hardened/FIPS-influenced CML runtimes ship an OpenSSL config that gets
-# picked up even when OPENSSL_CONF is unset/empty, activating zero cipher
-# suites for the uv-managed Python this process execs into (uvicorn under
-# backend/.venv) — surfaces as `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]`
-# on the first outbound TLS call (Impala, LLM API), even with no LLM
-# configured. /dev/null (skip external config, use OpenSSL's compiled-in
-# defaults) is a verified fix that doesn't regress unaffected runtimes; only
-# set here if not already set, so an operator's deliberate override wins.
-# See cml/README.md § Notes/gotchas.
-os.environ.setdefault("OPENSSL_CONF", "/dev/null")
 
 print(f"[cml/run] repo root : {ROOT}")
 print(f"[cml/run] backend   : {BACKEND}")
@@ -100,12 +90,59 @@ def _locate_uvicorn() -> list[str]:
     return [sys.executable, "-m", "uvicorn"]
 
 
+def _fix_openssl_ciphers_if_broken(uvicorn_cmd: list[str]) -> None:
+    """See cml/lib.sh's fix_openssl_ciphers_if_broken() for the full story:
+    some hardened/FIPS-influenced CML runtimes make the uv-managed Python's
+    SSL raise `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]` on the first
+    ssl.create_default_context() call (Impala, LLM API calls) — the
+    runtime's own system python3 is unaffected. Probes the EXACT
+    interpreter this process is about to exec into before touching
+    anything, so a runtime that already works is never affected. Always
+    respects an operator's explicit OPENSSL_CONF.
+    """
+    if os.environ.get("OPENSSL_CONF"):
+        return
+
+    venv_python = BACKEND / ".venv" / "bin" / "python"
+    if venv_python.exists():
+        py_cmd = [str(venv_python)]
+    elif uvicorn_cmd[0] == "uv":
+        py_cmd = ["uv", "run", "python"]
+    else:
+        return  # sys.executable fallback — same interpreter running this file, already known-good
+
+    import subprocess
+
+    probe = ["-c", "import ssl; ssl.create_default_context()"]
+
+    def _probe_ok(env=None) -> bool:
+        try:
+            return subprocess.run(py_cmd + probe, cwd=str(BACKEND), capture_output=True, timeout=15, env=env).returncode == 0
+        except Exception:
+            return False
+
+    if _probe_ok():
+        return
+
+    fixed_env = os.environ.copy()
+    fixed_env["OPENSSL_CONF"] = "/dev/null"
+    if _probe_ok(fixed_env):
+        os.environ["OPENSSL_CONF"] = "/dev/null"
+        print("[cml/run] Detected ssl.SSLError: LIBRARY_HAS_NO_CIPHERS — working around it with OPENSSL_CONF=/dev/null (see cml/README.md).")
+    else:
+        print(
+            "[cml/run] WARNING: this Python's SSL looks broken and OPENSSL_CONF=/dev/null didn't fix it — outbound HTTPS (Impala/LLM calls) may fail.",
+            file=sys.stderr,
+        )
+
+
 cmd = _locate_uvicorn() + [
     "main:app",
     "--host", "127.0.0.1",
     "--port", str(PORT),
     "--workers", str(WORKERS),
 ]
+_fix_openssl_ciphers_if_broken(cmd)
 
 print(f"[cml/run] exec: {' '.join(cmd)}  (cwd={BACKEND})")
 os.chdir(BACKEND)
