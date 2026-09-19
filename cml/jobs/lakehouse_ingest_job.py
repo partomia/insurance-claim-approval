@@ -44,6 +44,14 @@ def _resolve_root() -> Path:
 ROOT = _resolve_root()
 BACKEND = ROOT / "backend"
 
+# Some hardened/FIPS-influenced CML runtimes ship an OpenSSL config that gets
+# picked up even when OPENSSL_CONF is unset/empty, activating zero cipher
+# suites for the uv-managed/venv Python this job execs into — surfaces as
+# `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]` on the Impala connection this
+# script relies on. /dev/null is a verified fix (see cml/run.py, cml/lib.sh,
+# cml/README.md § Notes/gotchas); only set if not already set explicitly.
+os.environ.setdefault("OPENSSL_CONF", "/dev/null")
+
 
 def _locate_python() -> str:
     """Prefer the project's own venv; fall back to `uv run python`, then current interpreter."""
