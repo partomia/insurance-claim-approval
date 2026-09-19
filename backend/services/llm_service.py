@@ -4,10 +4,20 @@ import re
 from typing import Any, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
 
 from config import get_settings
+
+# NOTE: ChatGroq/ChatOpenAI are imported lazily inside _build_llm(), not here.
+# langchain_openai creates a global SSL context at *import* time (certifi +
+# ssl.create_default_context() in langchain_openai.chat_models.base), which
+# has been observed to raise `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]` on
+# some hardened/FIPS-restricted CML runtimes — independent of whether an LLM
+# key is even configured. Importing eagerly at module load would crash the
+# whole app on boot (this module is imported by routers main.py loads at
+# startup); deferring it means the app still boots and serves everything
+# that doesn't need an LLM call (dashboard, claims list, book of business,
+# etc.), and only this specific call site fails if the runtime truly can't
+# do outbound TLS.
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -74,6 +84,9 @@ class LLMService:
 
     def _build_llm(self, *, temperature: float = 0, max_tokens: int | None = None):
         """Build a chat client for the active provider, or None if unconfigured."""
+        from langchain_groq import ChatGroq
+        from langchain_openai import ChatOpenAI
+
         if settings.uses_custom_llm_endpoint:
             kwargs: dict[str, Any] = {
                 "model": settings.llm_model,
