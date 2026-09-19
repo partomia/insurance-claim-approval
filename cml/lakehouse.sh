@@ -42,6 +42,7 @@ if [[ "$auth" == "GSSAPI" ]]; then
 fi
 
 ensure_uv
+fix_openssl_ciphers_if_broken
 
 lakehouse_db="$(env_get LAKEHOUSE_DATABASE)"; lakehouse_db="${lakehouse_db:-insurance_lakehouse}"
 log "Running lakehouse $mode against $host (schema: $lakehouse_db)"

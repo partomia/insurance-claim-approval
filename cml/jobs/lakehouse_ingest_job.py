@@ -44,13 +44,41 @@ def _resolve_root() -> Path:
 ROOT = _resolve_root()
 BACKEND = ROOT / "backend"
 
-# Some hardened/FIPS-influenced CML runtimes ship an OpenSSL config that gets
-# picked up even when OPENSSL_CONF is unset/empty, activating zero cipher
-# suites for the uv-managed/venv Python this job execs into — surfaces as
-# `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]` on the Impala connection this
-# script relies on. /dev/null is a verified fix (see cml/run.py, cml/lib.sh,
-# cml/README.md § Notes/gotchas); only set if not already set explicitly.
-os.environ.setdefault("OPENSSL_CONF", "/dev/null")
+
+def _fix_openssl_ciphers_if_broken(py_cmd: list[str]) -> None:
+    """See cml/run.py / cml/lib.sh for the full story: some hardened/
+    FIPS-influenced CML runtimes make the uv-managed Python's SSL raise
+    `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]` on the first
+    ssl.create_default_context() call — this job's Impala connection needs
+    that to work. Probes the EXACT interpreter about to run before touching
+    anything, so a runtime that already works is never affected. Always
+    respects an operator's explicit OPENSSL_CONF."""
+    if os.environ.get("OPENSSL_CONF"):
+        return
+
+    import subprocess
+
+    probe = ["-c", "import ssl; ssl.create_default_context()"]
+
+    def _probe_ok(env=None) -> bool:
+        try:
+            return subprocess.run(py_cmd + probe, cwd=str(BACKEND), capture_output=True, timeout=15, env=env).returncode == 0
+        except Exception:
+            return False
+
+    if _probe_ok():
+        return
+
+    fixed_env = os.environ.copy()
+    fixed_env["OPENSSL_CONF"] = "/dev/null"
+    if _probe_ok(fixed_env):
+        os.environ["OPENSSL_CONF"] = "/dev/null"
+        print("[lakehouse_ingest_job] Detected LIBRARY_HAS_NO_CIPHERS — working around it with OPENSSL_CONF=/dev/null.")
+    else:
+        print(
+            "[lakehouse_ingest_job] WARNING: this Python's SSL looks broken and OPENSSL_CONF=/dev/null didn't fix it.",
+            file=sys.stderr,
+        )
 
 
 def _locate_python() -> str:
@@ -70,11 +98,9 @@ def _locate_python() -> str:
 
 
 python_bin = _locate_python()
-cmd = (
-    [python_bin, "run", "python", "scripts/ingest_lakehouse.py"]
-    if python_bin == "uv"
-    else [python_bin, "scripts/ingest_lakehouse.py"]
-)
+py_cmd = [python_bin, "run", "python"] if python_bin == "uv" else [python_bin]
+_fix_openssl_ciphers_if_broken(py_cmd)
+cmd = py_cmd + ["scripts/ingest_lakehouse.py"]
 
 print(f"[lakehouse_ingest_job] repo root : {ROOT}")
 print(f"[lakehouse_ingest_job] cwd       : {BACKEND}")

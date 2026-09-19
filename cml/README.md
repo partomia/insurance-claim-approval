@@ -269,12 +269,14 @@ one file instead of several separate pastes.
   config gets picked up (even when `$OPENSSL_CONF` is unset/empty) that
   activates zero cipher suites for the **uv-managed Python** specifically —
   the runtime's own `system python3` is unaffected, confirming it's not a
-  network/cert block. All `cml/*.sh` scripts and `cml/run.py` already
-  default `OPENSSL_CONF=/dev/null` (skip loading any external config, fall
-  back to OpenSSL's compiled-in defaults) to work around this — verified
-  fix, doesn't regress runtimes where it isn't needed. If you hit this
-  anyway (e.g. a bare `python3`/`uv run python` one-off outside these
-  scripts), prefix the command: `OPENSSL_CONF=/dev/null uv run python ...`.
+  network/cert block. `setup`/`update`/`lakehouse`/`start`/`restart` and
+  `cml/run.py` all **probe the exact interpreter they're about to run**
+  first, and only export `OPENSSL_CONF=/dev/null` (skip loading any
+  external config, fall back to OpenSSL's compiled-in defaults) if that
+  probe actually fails — a runtime that already works (e.g. GSSAPI/Impala
+  succeeding without this) is never touched. Always respects an operator's
+  explicit `$OPENSSL_CONF`. If you hit this in a bare one-off outside these
+  scripts, prefix the command: `OPENSSL_CONF=/dev/null uv run python ...`.
 - **No Node/npm in the runtime?** `setup`/`update` now auto-install Node via
   `nvm` (no root needed — same pattern as `ensure_uv`, everything lives under
   `$HOME/.nvm`). Only falls back to API-only mode (`--skip-frontend`) if that
