@@ -160,7 +160,29 @@ if _frontend_dist is not None:
     # API route prefixes that must 404 as JSON (never fall back to index.html),
     # so a bad/unauthenticated API path can't silently return the SPA shell and
     # crash the frontend's JSON parsing.
-    _api_prefixes = ("/api", "/auth", "/agent", "/insurer", "/docs", "/openapi.json", "/redoc")
+    #
+    # `/auth`, `/agent/auth`, `/insurer/auth` are a deliberate exception: those
+    # THREE routers (auth.py, agent_auth.py, insurer_auth.py) live at bare
+    # paths instead of under /api for historical/cookie reasons, but those
+    # exact same bare paths are ALSO the frontend's login-page routes
+    # (frontend/src/App.tsx) — and lib/*Auth.ts's redirectTo*Login() helpers
+    # do a hard `window.location.href = "/auth?returnTo=..."` navigation
+    # (not client-side routing), so the browser issues a real GET for that
+    # bare path that this server must answer with the SPA shell, not JSON.
+    # Only SUB-paths (`/auth/login`, `/agent/auth/verify-otp`, etc.) are real
+    # backend endpoints and must stay JSON. Same reasoning would apply to a
+    # bare `/agent` or `/insurer` — except neither is ever a real backend
+    # route (agent/insurer *data* APIs live under /api/agent, /api/insurer),
+    # so those prefixes were simply wrong here and broke deep-linking /
+    # hard-reloads on every /agent/* and /insurer/* portal page (dashboard,
+    # claims, book-of-business, etc.), not just login.
+    _api_prefixes = ("/api", "/docs", "/openapi.json", "/redoc")
+    _bare_auth_router_prefixes = ("/auth", "/agent/auth", "/insurer/auth")
+
+    def _is_api_path(path: str) -> bool:
+        if path.startswith(_api_prefixes):
+            return True
+        return any(path.startswith(p + "/") for p in _bare_auth_router_prefixes)
 
     # NOTE: SPA fallback is handled ENTIRELY by the 404 exception handler below —
     # NOT by a catch-all GET route. A catch-all `/{full_path:path}` would match
@@ -168,7 +190,7 @@ if _frontend_dist is not None:
     @app.exception_handler(StarletteHTTPException)
     async def _spa_fallback(request, exc: StarletteHTTPException):
         path = request.url.path
-        is_api = path.startswith(_api_prefixes)
+        is_api = _is_api_path(path)
 
         # Only fall back to the SPA for browser GET navigations to non-API paths.
         if exc.status_code == 404 and request.method == "GET" and not is_api:
