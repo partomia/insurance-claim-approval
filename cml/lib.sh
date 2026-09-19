@@ -26,18 +26,48 @@ if [[ -s "$NVM_DIR/nvm.sh" ]]; then
   \. "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
 fi
 
-# Some hardened/FIPS-influenced CML runtimes ship an OpenSSL config that gets
-# picked up even when $OPENSSL_CONF is unset/empty, and ends up activating
-# zero cipher suites for the *uv-managed* Python's bundled OpenSSL — the
-# system python3 on the same host is unaffected, only `uv run python` /
-# `backend/.venv/bin/python` is. First symptom is always
-# `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]` on the very first
-# ssl.create_default_context() call (Impala HTTPS transport, LLM API calls),
-# even with zero LLM config. Confirmed fix: /dev/null (skip loading any
-# external config, fall back to OpenSSL's compiled-in defaults) — verified
-# on an affected cluster without regressing unaffected ones. Only applied
-# when unset/empty so we never clobber an operator's deliberate override.
-export OPENSSL_CONF="${OPENSSL_CONF:-/dev/null}"
+# fix_openssl_ciphers_if_broken — some hardened/FIPS-influenced CML runtimes
+# ship an OpenSSL config that gets picked up even when $OPENSSL_CONF is
+# unset/empty, and ends up activating zero cipher suites for the
+# *uv-managed* Python's bundled OpenSSL specifically — the runtime's own
+# system python3 is unaffected, confirming it's not a network/cert block.
+# First symptom is always `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]` on
+# the very first ssl.create_default_context() call (Impala HTTPS transport,
+# LLM API calls), even with zero LLM configured. Confirmed fix: /dev/null
+# (skip loading any external config, fall back to OpenSSL's compiled-in
+# defaults).
+#
+# NOT a blind default: probes the EXACT interpreter that's about to run
+# before touching anything, so a runtime that already works (confirmed:
+# GSSAPI/Impala succeeded on one cluster with $OPENSSL_CONF untouched) is
+# never affected. Always respects an operator's explicit $OPENSSL_CONF.
+# Call explicitly right before running backend Python (setup/update/
+# lakehouse/appctl) — not auto-run on every `source lib.sh`, since the venv
+# may not exist yet.
+fix_openssl_ciphers_if_broken() {
+  [[ -n "${OPENSSL_CONF:-}" ]] && return 0
+
+  local -a py_cmd
+  if [[ -x "$BACKEND/.venv/bin/python" ]]; then
+    py_cmd=("$BACKEND/.venv/bin/python")
+  elif command -v uv >/dev/null 2>&1; then
+    py_cmd=(uv run --project "$BACKEND" python)
+  else
+    return 0 # nothing to probe yet (pre-setup) — harmless, re-checked next run
+  fi
+
+  if "${py_cmd[@]}" -c "import ssl; ssl.create_default_context()" >/dev/null 2>&1; then
+    return 0 # already fine — leave OPENSSL_CONF untouched
+  fi
+
+  if OPENSSL_CONF=/dev/null "${py_cmd[@]}" -c "import ssl; ssl.create_default_context()" >/dev/null 2>&1; then
+    export OPENSSL_CONF=/dev/null
+    warn "Detected ssl.SSLError: LIBRARY_HAS_NO_CIPHERS in the uv-managed Python — working around it with OPENSSL_CONF=/dev/null (see cml/README.md § Notes/gotchas)."
+  else
+    warn "uv-managed Python's SSL looks broken and OPENSSL_CONF=/dev/null didn't fix it — outbound HTTPS (Impala/LLM calls) may fail."
+  fi
+  return 0
+}
 
 log()  { printf '\n\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }

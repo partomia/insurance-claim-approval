@@ -28,6 +28,7 @@ else
   ok "Backend deps unchanged — skipping uv sync"
 fi
 
+fix_openssl_ciphers_if_broken
 log "Re-checking DB schema (safe, additive only)"
 uv run python -c "from db_init import ensure_schema; ensure_schema()"
 
