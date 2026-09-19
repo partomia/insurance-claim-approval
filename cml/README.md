@@ -275,8 +275,11 @@ one file instead of several separate pastes.
   fix, doesn't regress runtimes where it isn't needed. If you hit this
   anyway (e.g. a bare `python3`/`uv run python` one-off outside these
   scripts), prefix the command: `OPENSSL_CONF=/dev/null uv run python ...`.
-- Requires a runtime with **Node/npm** for the SPA build; otherwise run
-  `setup --skip-frontend` and host the frontend elsewhere (e.g. Vercel).
+- **No Node/npm in the runtime?** `setup`/`update` now auto-install Node via
+  `nvm` (no root needed — same pattern as `ensure_uv`, everything lives under
+  `$HOME/.nvm`). Only falls back to API-only mode (`--skip-frontend`) if that
+  install itself fails (e.g. no internet egress) — in that case, host the
+  frontend elsewhere (e.g. Vercel) pointed at this backend's Application URL.
 - Python is pinned to **3.13** via `uv`; `setup` tries `uv python install 3.13`
   (needs egress). If offline, relax `requires-python` and re-lock, or use a
   runtime/custom-runtime that already has 3.13.
