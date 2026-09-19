@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from models.claim import Claim
 from services.progress_service import progress_service
 from services.analysis_service import analysis_to_dict
+from services.policy_risk_service import policy_risk_service
 
 
 class InsightsService:
@@ -75,6 +76,13 @@ class InsightsService:
 
         timeline = progress_service.get_history(claim_id)
 
+        # Phase 4: surface the lakehouse-ingested fraud risk signal, if this
+        # claim's policy has one (only true for LH-POL-* policies pulled in
+        # by scripts/ingest_lakehouse.py — most claims won't match, and that's
+        # expected, not an error). Same lookup Book of Business uses, so the
+        # numbers are always consistent between the two views.
+        policy_risk_signal = policy_risk_service.get_for_policy(db, policy.id) if policy else None
+
         return {
             "claim_id": claim.claim_number,
             "status": claim.status.value,
@@ -107,4 +115,5 @@ class InsightsService:
                 }
                 for e in timeline
             ],
+            "policy_risk_signal": policy_risk_signal,
         }

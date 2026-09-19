@@ -103,6 +103,50 @@ class InsurerDashboardStatsResponse(BaseModel):
     recent_submissions: list[InsurerClaimListItem] = []
 
 
+# --------------------------------------------------------------------------- #
+# Data Lakehouse — Book of Business (Phase 4). Sourced from PolicyRiskSignal,
+# ingested from the CDE claims-analytics gold table (cde/README.md) via
+# scripts/ingest_lakehouse.py. See services/policy_risk_service.py for the
+# single query path shared with the claim-insights risk card below.
+# --------------------------------------------------------------------------- #
+class PolicyRiskSignalSummary(BaseModel):
+    total_claims_count: int
+    claims_count_12m: int
+    total_claimed_amount: float
+    avg_claim_amount: float
+    amount_vs_segment_avg_pct: Optional[float] = None
+    claim_frequency_percentile: Optional[float] = None
+    linked_high_risk_garage: bool
+    fraud_risk_score: float
+    claim_risk_band: str
+    source: str
+    ingested_at: datetime
+
+
+class BookOfBusinessPolicyItem(BaseModel):
+    policy_id: int
+    policy_number: str
+    customer_name: str
+    customer_email: str
+    provider_name: Optional[str] = None
+    policy_type: str
+    status: str
+    coverage_limit: float
+    premium_amount: float
+    covered_make: Optional[str] = None
+    covered_model: Optional[str] = None
+    risk: Optional[PolicyRiskSignalSummary] = None
+
+
+class BookOfBusinessStatsResponse(BaseModel):
+    total_policies: int
+    low_count: int
+    medium_count: int
+    high_count: int
+    high_risk_garage_linked_count: int
+    avg_fraud_risk_score: float
+
+
 class InsurerDecisionSubmit(BaseModel):
     action: str = Field(..., description="APPROVED or REJECTED")
     notes: Optional[str] = None
@@ -508,6 +552,10 @@ class InsightsResponse(BaseModel):
     policy_summary: dict[str, Any] = {}
     timeline: list[dict[str, Any]] = []
     ai_analysis: dict[str, Any] = {}
+    # Phase 4: present only when the claim's policy has a lakehouse-ingested
+    # risk signal (i.e. it's an LH-POL-* policy from ingest_lakehouse.py).
+    # Most claims won't have one — that's expected, not an error.
+    policy_risk_signal: Optional[PolicyRiskSignalSummary] = None
 
 
 class KYCStatusResponse(BaseModel):

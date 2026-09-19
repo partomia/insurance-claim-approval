@@ -7,6 +7,7 @@ import { Building2 } from "lucide-react";
 const nav: NavItem[] = [
   { to: "/insurer/dashboard", label: "Motor Insurance Dashboard" },
   { to: "/insurer/claims", label: "Motor Claims" },
+  { to: "/insurer/book-of-business", label: "Book of Business" },
 ];
 
 export function InsurerLayout() {
