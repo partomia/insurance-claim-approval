@@ -2,14 +2,25 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import chromadb
 import numpy as np
 from chromadb.api.models.Collection import Collection
-from langchain_openai import OpenAIEmbeddings
 
 from config import get_settings
+
+if TYPE_CHECKING:
+    from langchain_openai import OpenAIEmbeddings
+
+# NOTE: OpenAIEmbeddings is imported lazily inside the `embeddings` property,
+# not here. langchain_openai creates a global SSL context at *import* time
+# (certifi + ssl.create_default_context() in langchain_openai.chat_models.base),
+# which has been observed to raise `ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]`
+# on some hardened/FIPS-restricted CML runtimes — independent of whether an
+# OpenAI-compatible embeddings key is even configured. This module is
+# imported directly by main.py at app startup, so an eager import here would
+# crash the whole app on boot rather than just degrading RAG search.
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -93,7 +104,7 @@ class ChromaStore:
     def __init__(self) -> None:
         self._client: Optional[chromadb.PersistentClient] = None
         self._collection: Optional[Collection] = None
-        self._embeddings: Optional[OpenAIEmbeddings] = None
+        self._embeddings: "Optional[OpenAIEmbeddings]" = None
         self._degraded: bool = False
         self._recovery_attempted: bool = False
 
@@ -177,8 +188,10 @@ class ChromaStore:
         return self._collection
 
     @property
-    def embeddings(self) -> Optional[OpenAIEmbeddings]:
+    def embeddings(self) -> "Optional[OpenAIEmbeddings]":
         if self._embeddings is None and self._has_valid_api_key():
+            from langchain_openai import OpenAIEmbeddings
+
             self._embeddings = OpenAIEmbeddings(
                 model=settings.embedding_model,
                 openai_api_key=settings.openai_api_key,
