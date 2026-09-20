@@ -3,13 +3,18 @@
 # (common on stripped-down CAI runtimes). Falls back to reading /proc
 # directly via python3, which is always present.
 #
-# Usage: bash cml/portcheck.sh [port]   (default: $CDSW_APP_PORT or 8090)
+# Usage: bash cml/portcheck.sh [port]
+#   With no port: whatever `cml/cli.sh start`/`restart` actually bound this
+#   Session, else $CDSW_APP_PORT, else 8090 (see resolve_app_port() in
+#   lib.sh — deliberately not just $CDSW_APP_PORT, which Cloudera presets
+#   in a Session terminal's environment too and may not be where the app
+#   actually ended up after a port-conflict fallback).
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "$SCRIPT_DIR/lib.sh"
 
-PORT="${1:-${CDSW_APP_PORT:-8090}}"
+PORT="$(resolve_app_port "${1:-}")"
 log "Inspecting port $PORT"
 
 if command -v ss >/dev/null 2>&1; then

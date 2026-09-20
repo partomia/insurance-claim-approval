@@ -30,9 +30,16 @@ if command -v npm >/dev/null 2>&1; then ok "npm version: $(npm --version)"; fi
 
 log "Cloudera AI runtime signals"
 if [[ -n "${CDSW_APP_PORT:-}" ]]; then
-  ok "CDSW_APP_PORT=$CDSW_APP_PORT (running as an Application)"
+  # NOTE: Cloudera presets CDSW_APP_PORT in a Session terminal's environment
+  # too (usually 8090) — it does NOT reliably indicate a real Application.
+  # `cml/cli.sh start`/`restart` never trust this blindly; they always
+  # verify the port is actually free first (see pick_app_port() in lib.sh).
+  ok "CDSW_APP_PORT=$CDSW_APP_PORT"
 else
-  warn "CDSW_APP_PORT not set — normal in a plain Session terminal, expected once deployed as an Application"
+  warn "CDSW_APP_PORT not set (unusual — expected in both Sessions and Applications)"
+fi
+if [[ -f "$STATE_DIR/app.port" ]]; then
+  ok "This session's app is actually running on port $(cat "$STATE_DIR/app.port")"
 fi
 [[ -n "${CDSW_PROJECT:-}" ]] && ok "CDSW_PROJECT=$CDSW_PROJECT"
 

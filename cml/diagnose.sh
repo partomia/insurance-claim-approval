@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "$SCRIPT_DIR/lib.sh"
 
-PORT="${1:-${CDSW_APP_PORT:-8090}}"
+PORT="$(resolve_app_port "${1:-}")"
 OUT="$LOG_DIR/diagnose-$(date +%Y%m%d-%H%M%S).log"
 
 {
