@@ -186,30 +186,44 @@ finally:
 }
 
 # pick_app_port — resolve + export CDSW_APP_PORT for do_start to launch on.
-# If the operator (or CML itself) already set CDSW_APP_PORT, it's used as-is
-# — never overridden. In practice this means the function's scan below never
-# even runs for a real CAI Application: Cloudera always injects
-# CDSW_APP_PORT itself for those. So the only time this scan executes is a
-# Session terminal, where CDSW_APP_PORT is unset AND the Application default
-# (8090) is *permanently* owned by that Session's own JupyterLab process for
-# its whole lifetime (see README § Notes/gotchas) — no point even probing
-# 8090 first. Goes straight to 8099 (this repo's long-documented go-to test
-# port) and only scans further if that's taken too (e.g. a leftover process
-# from earlier testing).
+# NOTE: CDSW_APP_PORT turns out to be preset to 8090 by the CAI platform in
+# *Session* terminals too, not only in real Application containers — so
+# "is it explicitly set?" can't be used to tell those two apart (an earlier
+# version of this function assumed it could, and wrongly trusted a
+# platform-preset-but-actually-Jupyter-occupied 8090 as free). The only
+# reliable signal is whether the requested port is *actually* free right
+# now, so always verify that first, regardless of where the value came from.
 pick_app_port() {
-  if [[ -n "${CDSW_APP_PORT:-}" ]]; then
+  local requested="${CDSW_APP_PORT:-8090}"
+  if _port_free "$requested"; then
+    export CDSW_APP_PORT="$requested"
     return 0
   fi
-  local p
-  for p in 8099 8100 8101 8102 8103 8104 8105 8106 8107 8108 8109 8110; do
+
+  # $requested is busy — most commonly this Session's own JupyterLab
+  # permanently squatting on 8090 (see README § Notes/gotchas). Fall back
+  # instead of failing outright. For the well-known 8090 case, jump
+  # straight to this repo's long-documented go-to test port (8099) rather
+  # than the immediately-adjacent 8091; for any other explicit port the
+  # operator asked for, just scan upward from there.
+  local -a candidates=()
+  if [[ "$requested" == "8090" ]]; then
+    candidates=(8099 8100 8101 8102 8103 8104 8105 8106 8107 8108 8109 8110)
+  else
+    local p; for p in $(seq $((requested + 1)) $((requested + 20))); do candidates+=("$p"); done
+  fi
+  local reason=""
+  [[ "$requested" == "8090" ]] && reason=" (this Session's own JupyterLab — see cml/README.md § Notes/gotchas)"
+  for p in "${candidates[@]}"; do
     if _port_free "$p"; then
+      warn "Port $requested is already in use${reason} — using $p instead for this run."
+      warn "Pin a specific port anytime: CDSW_APP_PORT=<port> bash cml/cli.sh start"
       export CDSW_APP_PORT="$p"
-      log "CDSW_APP_PORT unset (Session terminal, not a real Application) — using port $p for this test run."
       return 0
     fi
   done
-  warn "No free port found in 8099-8110 — trying 8099 anyway (bind will likely fail). Set CDSW_APP_PORT explicitly to pick a different one."
-  export CDSW_APP_PORT=8099
+  warn "Port $requested is busy and no nearby free port found — trying $requested anyway (bind will likely fail)."
+  export CDSW_APP_PORT="$requested"
 }
 
 # ensure_net_tools — best-effort install of `ss` (iproute2) and `fuser`
