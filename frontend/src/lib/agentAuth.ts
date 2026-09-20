@@ -30,7 +30,9 @@ export function agentAuthHeaders(json = false): HeadersInit {
   const token = getAgentToken();
   const headers: Record<string, string> = {};
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    // See auth.ts authHeaders() — custom header avoids Istio's Authorization-
+    // header JWT check on some Cloudera AI workspaces.
+    headers["X-Auth-Token"] = token;
   }
   if (json) {
     headers["Content-Type"] = "application/json";
