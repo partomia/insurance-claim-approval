@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 # Post-deploy smoke test — hits the running app's key endpoints.
 # Usage: bash cml/smoke.sh [base-url]
-#   Defaults to http://127.0.0.1:$CDSW_APP_PORT (or 8090).
+#   With no base-url: uses $CDSW_APP_PORT if set, else the port
+#   `cml/cli.sh start`/`restart` actually bound (recorded in
+#   cml/.state/app.port — relevant because it may have auto-picked an
+#   alternate port; see pick_app_port() in lib.sh), else 8090.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "$SCRIPT_DIR/lib.sh"
 
-BASE="${1:-http://127.0.0.1:${CDSW_APP_PORT:-8090}}"
+if [[ -n "${1:-}" ]]; then
+  BASE="$1"
+else
+  port="${CDSW_APP_PORT:-}"
+  [[ -z "$port" && -f "$STATE_DIR/app.port" ]] && port="$(cat "$STATE_DIR/app.port" 2>/dev/null)"
+  BASE="http://127.0.0.1:${port:-8090}"
+fi
 log "Smoke-testing $BASE"
 
 FAILN=0

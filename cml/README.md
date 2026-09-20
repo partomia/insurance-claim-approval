@@ -193,18 +193,24 @@ after resuming an idle Session, after a CDE pipeline run, or just to confirm
    Watch the output for `[warn] New keys in .env.example not yet in your
    .env: ...` — add any listed keys to `backend/.env` before continuing.
 
-2. **Start the app on an alternate port.** Session terminals can never bind
-   the default `CDSW_APP_PORT` (`8090`) — it's permanently owned by the
-   Session's own JupyterLab process (see Notes/gotchas below) — so use a
-   free one just for this check:
+2. **Start the app.** Session terminals can never bind the default
+   `CDSW_APP_PORT` (`8090`) — it's permanently owned by the Session's own
+   JupyterLab process (see Notes/gotchas below) — so `start`/`restart`
+   auto-detect that and fall back to a free port (8091-8110) on their own;
+   no need to set `CDSW_APP_PORT` yourself:
    ```bash
-   CDSW_APP_PORT=8099 bash cml/cli.sh restart
+   bash cml/cli.sh restart
    ```
-   Expect `[ok] Started (pid ...) — healthy after Ns`.
+   Expect `[warn] Port 8090 is already in use ... using <port> instead`
+   followed by `[ok] Started (pid ...) — healthy after Ns`. (A real
+   Application's own container has no JupyterLab, so this is a no-op there
+   — it just uses 8090 as always. You can still force a specific port with
+   `CDSW_APP_PORT=<port> bash cml/cli.sh restart`.)
 
-3. **Smoke-test it**, passing the same port used above:
+3. **Smoke-test it** — no need to pass a URL, it reads back whatever port
+   `start`/`restart` actually bound:
    ```bash
-   bash cml/cli.sh smoke http://127.0.0.1:8099
+   bash cml/cli.sh smoke
    ```
    All five checks should print `[ok]`: `/health`, `/api/health`,
    `/api/version`, `/api/llm/health`, `/`. `/api/version` also echoes the
@@ -239,9 +245,14 @@ one file instead of several separate pastes.
   by `jupyter-lab ... --port=8090`, not a placeholder. You cannot bind it
   from a Session terminal, ever, for the life of that Session. This is
   expected and harmless — a real CAI **Application** runs in its own
-  separate container (no Jupyter), so `CDSW_APP_PORT` binds fine there. For
-  Session-terminal testing, just use a different port:
-  `CDSW_APP_PORT=8099 bash cml/cli.sh start --bg`.
+  separate container (no Jupyter), so `CDSW_APP_PORT` binds fine there.
+  `start`/`restart` handle this automatically now: `pick_app_port()` (in
+  `cml/lib.sh`) only kicks in when `CDSW_APP_PORT` isn't explicitly set,
+  probes 8090 first, and falls back to the first free port in 8091-8110 —
+  printing which one it picked. `cml/cli.sh smoke` (no args) reads that same
+  port back from `cml/.state/app.port`, so the whole start→smoke loop needs
+  zero manual port-juggling in a Session terminal. Force a specific port
+  anytime with `CDSW_APP_PORT=<port> bash cml/cli.sh start --bg`.
 - **`ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]`** on the first outbound TLS
   call (Impala HTTPS transport, LLM API calls) — even with zero LLM
   configured. Seen on some hardened/FIPS-influenced CML runtimes: an OpenSSL

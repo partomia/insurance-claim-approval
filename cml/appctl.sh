@@ -36,7 +36,8 @@ do_start() {
   rm -f "$PID_FILE" "$PORT_FILE"
 
   fix_openssl_ciphers_if_broken
-  local port="${CDSW_APP_PORT:-8090}"
+  pick_app_port
+  local port="$CDSW_APP_PORT"
 
   if [[ "$bg" -eq 0 ]]; then
     log "Starting in foreground on port $port (Ctrl+C to stop)"
