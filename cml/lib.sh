@@ -126,6 +126,56 @@ ensure_node() {
   fi
 }
 
+# _port_free <port> — true (0) if a fresh bind to 127.0.0.1:<port> would
+# succeed right now. Pure-python socket bind/close probe, so it works on any
+# runtime with no ss/lsof/fuser/root required (same philosophy as
+# portcheck.sh's /proc-based inspector).
+_port_free() {
+  python3 -c "
+import socket, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+try:
+    s.bind(('127.0.0.1', $1))
+except OSError:
+    sys.exit(1)
+finally:
+    s.close()
+" 2>/dev/null
+}
+
+# pick_app_port — resolve + export CDSW_APP_PORT for do_start to launch on.
+# If the operator (or CML itself, for a real Application) already set
+# CDSW_APP_PORT, it's used as-is — never overridden, so this is a no-op on
+# a real Application (its own container has 8090 free) and respects an
+# explicit choice. Only kicks in for the common Session-terminal case: the
+# default 8090 is *permanently* owned by that Session's own JupyterLab
+# process for its whole lifetime (see README § Notes/gotchas) — previously
+# this required manually remembering `CDSW_APP_PORT=8099` every single
+# time. Now it auto-scans 8091-8110 for a free port and uses the first hit,
+# printing a clear one-line explanation so the fallback is never silent.
+pick_app_port() {
+  if [[ -n "${CDSW_APP_PORT:-}" ]]; then
+    return 0
+  fi
+  local default_port=8090
+  if _port_free "$default_port"; then
+    export CDSW_APP_PORT="$default_port"
+    return 0
+  fi
+  local p
+  for p in $(seq 8091 8110); do
+    if _port_free "$p"; then
+      warn "Port $default_port is already in use (this Session's own JupyterLab permanently owns it — see cml/README.md § Notes/gotchas) — using $p instead."
+      warn "Pin it yourself anytime: CDSW_APP_PORT=<port> bash cml/cli.sh start"
+      export CDSW_APP_PORT="$p"
+      return 0
+    fi
+  done
+  warn "Port $default_port is busy and no free port found in 8091-8110 — trying $default_port anyway (bind will likely fail)."
+  export CDSW_APP_PORT="$default_port"
+}
+
 # ensure_net_tools — best-effort install of `ss` (iproute2) and `fuser`
 # (psmisc), used to debug "address already in use" on CDSW_APP_PORT.
 # Purely a convenience: requires root/apt, which many CAI runtimes don't
