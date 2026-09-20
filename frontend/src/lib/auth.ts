@@ -38,7 +38,11 @@ export function authHeaders(json = false): HeadersInit {
   const token = getToken();
   const headers: Record<string, string> = {};
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    // Sent as a custom header (not `Authorization`) because some Cloudera AI
+    // workspaces front the app with an Istio ingress that runs its own JWT
+    // check against the `Authorization` header and silently 401s anything
+    // that isn't its own SSO-issued token — before it ever reaches our API.
+    headers["X-Auth-Token"] = token;
   }
   if (json) {
     headers["Content-Type"] = "application/json";

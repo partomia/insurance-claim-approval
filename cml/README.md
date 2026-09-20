@@ -285,6 +285,21 @@ one file instead of several separate pastes.
 - Python is pinned to **3.13** via `uv`; `setup` tries `uv python install 3.13`
   (needs egress). If offline, relax `requires-python` and re-lock, or use a
   runtime/custom-runtime that already has 3.13.
+- **Logged in, but every page bounces back to `/auth` right after OTP/login
+  succeeds** (login + verify-otp + refresh all return 200 in DevTools, but the
+  very next API call 401s with an **empty body** from `server: istio-envoy`,
+  not JSON from the app). Root cause: some Cloudera AI workspaces front the
+  Application with an Istio ingress running its own JWT `RequestAuthentication`
+  check against the standard `Authorization` header (expecting a Knox/OIDC
+  SSO token) — it silently rejects our app's own JWT there, before the
+  request ever reaches FastAPI, and retrying/refreshing the token can't fix
+  it because the token never arrives. Fixed by sending the app's token in a
+  custom `X-Auth-Token` header instead (frontend `authHeaders()` /
+  `agentAuthHeaders()` / `insurerAuthHeaders()`), which that mesh policy
+  doesn't inspect; the backend (`dependencies.py`'s `_extract_token`) reads
+  `X-Auth-Token` first and still falls back to `Authorization: Bearer` for
+  deployments without such a mesh policy. No `.env`/infra change needed —
+  just redeploy the app + rebuilt frontend.
 
 ## Ideas not yet automated (tell me if you want these next)
 

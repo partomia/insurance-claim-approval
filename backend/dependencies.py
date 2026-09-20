@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Header, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -15,7 +15,27 @@ from models.policy_agent import PolicyAgent
 
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Some Cloudera AI workspaces front the Application with an Istio ingress
+# that runs its own JWT RequestAuthentication check against the standard
+# `Authorization` header (expecting a Knox/OIDC-issued token) and silently
+# rejects (empty 401, before it ever reaches this app) any other JWT placed
+# there — including our own app-issued tokens. To work around that, the
+# frontend sends our token in a custom `X-Auth-Token` header instead, which
+# that mesh-level policy doesn't inspect. `Authorization: Bearer` is kept as
+# a fallback so this still works unchanged on deployments without such a
+# mesh policy (e.g. plain `uvicorn`, docker, non-Istio clusters).
 security = HTTPBearer(auto_error=False)
+
+
+def _extract_token(
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> Optional[str]:
+    if x_auth_token:
+        return x_auth_token
+    if credentials:
+        return credentials.credentials
+    return None
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -35,10 +55,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def _decode_token(credentials: HTTPAuthorizationCredentials) -> dict:
+def _decode_token(token: str) -> dict:
     try:
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
         )
@@ -51,12 +71,12 @@ def _decode_token(credentials: HTTPAuthorizationCredentials) -> dict:
 
 
 def get_current_customer(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    token: Optional[str] = Depends(_extract_token),
     db: Session = Depends(get_db),
 ) -> Customer:
-    if credentials is None:
+    if token is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    payload = _decode_token(credentials)
+    payload = _decode_token(token)
     if payload.get("role") in ("agent", "insurer"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent token not valid for customer routes")
     email: str = payload["sub"]
@@ -67,12 +87,12 @@ def get_current_customer(
 
 
 def get_current_agent(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    token: Optional[str] = Depends(_extract_token),
     db: Session = Depends(get_db),
 ) -> PolicyAgent:
-    if credentials is None:
+    if token is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    payload = _decode_token(credentials)
+    payload = _decode_token(token)
     if payload.get("role") != "agent":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer token not valid for agent routes")
     agent_id = payload.get("agent_id")
@@ -89,12 +109,12 @@ def get_current_agent(
 
 
 def get_current_insurer(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    token: Optional[str] = Depends(_extract_token),
     db: Session = Depends(get_db),
 ) -> InsurerUser:
-    if credentials is None:
+    if token is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    payload = _decode_token(credentials)
+    payload = _decode_token(token)
     if payload.get("role") != "insurer":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer token not valid for insurer routes")
     insurer_id = payload.get("insurer_id")
@@ -111,27 +131,27 @@ def get_current_insurer(
 
 
 def get_optional_customer(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    token: Optional[str] = Depends(_extract_token),
     db: Session = Depends(get_db),
 ) -> Optional[Customer]:
-    if credentials is None:
+    if token is None:
         return None
     try:
-        return get_current_customer(credentials, db)
+        return get_current_customer(token, db)
     except HTTPException:
         return None
 
 
 def get_customer_flexible(
-    token: Optional[str] = Query(None, description="JWT for EventSource streams"),
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    token_param: Optional[str] = Query(None, alias="token", description="JWT for EventSource streams"),
+    token: Optional[str] = Depends(_extract_token),
     db: Session = Depends(get_db),
 ) -> Customer:
-    if credentials:
-        return get_current_customer(credentials, db)
     if token:
+        return get_current_customer(token, db)
+    if token_param:
         try:
-            payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+            payload = jwt.decode(token_param, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
             if payload.get("role") in ("agent", "insurer"):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agent token not valid")
             email: str = payload.get("sub")
