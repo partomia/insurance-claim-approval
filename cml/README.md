@@ -196,15 +196,17 @@ after resuming an idle Session, after a CDE pipeline run, or just to confirm
 2. **Start the app.** Session terminals can never bind the default
    `CDSW_APP_PORT` (`8090`) — it's permanently owned by the Session's own
    JupyterLab process (see Notes/gotchas below) — so `start`/`restart`
-   auto-detect that and fall back to a free port (8091-8110) on their own;
-   no need to set `CDSW_APP_PORT` yourself:
+   detect that `CDSW_APP_PORT` is unset (a real Application always has it
+   set by Cloudera) and use port `8099` automatically; no need to set
+   `CDSW_APP_PORT` yourself:
    ```bash
    bash cml/cli.sh restart
    ```
-   Expect `[warn] Port 8090 is already in use ... using <port> instead`
-   followed by `[ok] Started (pid ...) — healthy after Ns`. (A real
-   Application's own container has no JupyterLab, so this is a no-op there
-   — it just uses 8090 as always. You can still force a specific port with
+   Expect `[log] CDSW_APP_PORT unset (Session terminal, not a real
+   Application) — using port 8099 for this test run.` followed by `[ok]
+   Started (pid ...) — healthy after Ns`. (A real Application's own
+   container always has `CDSW_APP_PORT` preset by Cloudera, so this is a
+   no-op there. You can still force a specific port with
    `CDSW_APP_PORT=<port> bash cml/cli.sh restart`.)
 
 3. **Smoke-test it** — no need to pass a URL, it reads back whatever port
@@ -247,10 +249,12 @@ one file instead of several separate pastes.
   expected and harmless — a real CAI **Application** runs in its own
   separate container (no Jupyter), so `CDSW_APP_PORT` binds fine there.
   `start`/`restart` handle this automatically now: `pick_app_port()` (in
-  `cml/lib.sh`) only kicks in when `CDSW_APP_PORT` isn't explicitly set,
-  probes 8090 first, and falls back to the first free port in 8091-8110 —
-  printing which one it picked. `cml/cli.sh smoke` (no args) reads that same
-  port back from `cml/.state/app.port`, so the whole start→smoke loop needs
+  `cml/lib.sh`) only kicks in when `CDSW_APP_PORT` isn't explicitly set
+  (i.e. never for a real Application — Cloudera always sets it), and goes
+  straight to `8099` (skipping the always-doomed 8090 probe), scanning up to
+  `8110` only if `8099` itself is also taken. `cml/cli.sh smoke` (no args)
+  reads that same port back from `cml/.state/app.port`, so the whole
+  start→smoke loop needs
   zero manual port-juggling in a Session terminal. Force a specific port
   anytime with `CDSW_APP_PORT=<port> bash cml/cli.sh start --bg`.
 - **`ssl.SSLError: [SSL: LIBRARY_HAS_NO_CIPHERS]`** on the first outbound TLS
