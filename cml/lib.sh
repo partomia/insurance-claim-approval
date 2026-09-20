@@ -126,15 +126,56 @@ ensure_node() {
   fi
 }
 
-# _port_free <port> — true (0) if a fresh bind to 127.0.0.1:<port> would
-# succeed right now. Pure-python socket bind/close probe, so it works on any
-# runtime with no ss/lsof/fuser/root required (same philosophy as
-# portcheck.sh's /proc-based inspector).
+# _port_free <port> — true (0) if nothing is listening on <port> right now.
+# Reads /proc/net/tcp[6] directly for a LISTEN-state entry — the same
+# proven method portcheck.sh already uses to correctly identify Jupyter's
+# listener, with no ss/lsof/fuser/root required. Deliberately NOT a
+# bind()+close() probe: with SO_REUSEADDR set (needed so repeated probes
+# don't pile up in TIME_WAIT), Linux happily lets a probe socket bind to a
+# port that Jupyter is already actively listening on — the probe reports
+# "free" while the real uvicorn bind() moments later (correctly, without
+# SO_REUSEADDR racing an active listener) still fails with EADDRINUSE.
 _port_free() {
+  python3 - "$1" <<'PYEOF' 2>/dev/null
+import sys
+try:
+    port = int(sys.argv[1])
+    port_hex = format(port, '04X')
+    listening = False
+    checked_any = False
+    for path in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            lines = open(path).readlines()[1:]
+        except OSError:
+            continue
+        checked_any = True
+        for line in lines:
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            local, state = parts[1], parts[3]
+            if ':' in local and local.split(':')[1].upper() == port_hex and state == "0A":  # 0A = LISTEN
+                listening = True
+                break
+        if listening:
+            break
+    if not checked_any:
+        sys.exit(2)  # /proc/net/tcp not available — inconclusive
+    sys.exit(1 if listening else 0)
+except Exception:
+    sys.exit(2)  # inconclusive — let the caller fall back to a bind probe
+PYEOF
+  local rc=$?
+  if [[ $rc -eq 0 || $rc -eq 1 ]]; then
+    return $rc
+  fi
+  # Inconclusive (non-Linux runtime, e.g. local dev on macOS, or /proc
+  # unreadable) — fall back to a plain bind probe. Deliberately no
+  # SO_REUSEADDR here, so it can't falsely report "free" against an active
+  # listener the way the original buggy version of this function did.
   python3 -c "
 import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
     s.bind(('127.0.0.1', $1))
 except OSError:
