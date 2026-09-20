@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, Query, status
+from fastapi import Cookie, Depends, Header, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -16,26 +16,51 @@ from models.policy_agent import PolicyAgent
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Some Cloudera AI workspaces front the Application with an Istio ingress
-# that runs its own JWT RequestAuthentication check against the standard
-# `Authorization` header (expecting a Knox/OIDC-issued token) and silently
-# rejects (empty 401, before it ever reaches this app) any other JWT placed
-# there — including our own app-issued tokens. To work around that, the
-# frontend sends our token in a custom `X-Auth-Token` header instead, which
-# that mesh-level policy doesn't inspect. `Authorization: Bearer` is kept as
-# a fallback so this still works unchanged on deployments without such a
-# mesh policy (e.g. plain `uvicorn`, docker, non-Istio clusters).
+# that runs its own JWT-style check on incoming requests (expecting a
+# Knox/OIDC-issued token) and silently rejects (empty 401, before it ever
+# reaches this app) our own app-issued JWT wherever it looks for one.
+# Confirmed it inspects the `Authorization` header; moving our token to a
+# custom `X-Auth-Token` header instead is the first line of defense. As a
+# second, independent line of defense — in case that mesh policy (or a
+# similar one) inspects *any* header carrying a JWT-shaped value rather
+# than being keyed to a specific header name — the frontend also mirrors
+# the token into a plain (non-HttpOnly) cookie, which this class of
+# header-focused policy essentially never inspects. All three (cookie,
+# X-Auth-Token, Authorization: Bearer) are accepted here; `Authorization`
+# is kept purely so this still works unchanged on deployments without any
+# such mesh policy (plain uvicorn, docker, non-Istio clusters).
 security = HTTPBearer(auto_error=False)
 
+# Distinct cookie name per portal (customer/agent/insurer) — cookies, unlike
+# our explicit per-request headers, are auto-attached by the browser to
+# *every* same-origin request regardless of which JS module made the call,
+# so a single shared cookie name would let an insurer/agent login silently
+# clobber a customer session's cookie (and vice versa) in the same browser.
+CUSTOMER_AUTH_COOKIE = "app_auth_token"
+AGENT_AUTH_COOKIE = "app_agent_auth_token"
+INSURER_AUTH_COOKIE = "app_insurer_auth_token"
 
-def _extract_token(
-    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-) -> Optional[str]:
-    if x_auth_token:
-        return x_auth_token
-    if credentials:
-        return credentials.credentials
-    return None
+
+def _make_token_extractor(cookie_name: str):
+    def _extract(
+        auth_cookie: Optional[str] = Cookie(default=None, alias=cookie_name),
+        x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    ) -> Optional[str]:
+        if auth_cookie:
+            return auth_cookie
+        if x_auth_token:
+            return x_auth_token
+        if credentials:
+            return credentials.credentials
+        return None
+
+    return _extract
+
+
+_extract_customer_token = _make_token_extractor(CUSTOMER_AUTH_COOKIE)
+_extract_agent_token = _make_token_extractor(AGENT_AUTH_COOKIE)
+_extract_insurer_token = _make_token_extractor(INSURER_AUTH_COOKIE)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -71,7 +96,7 @@ def _decode_token(token: str) -> dict:
 
 
 def get_current_customer(
-    token: Optional[str] = Depends(_extract_token),
+    token: Optional[str] = Depends(_extract_customer_token),
     db: Session = Depends(get_db),
 ) -> Customer:
     if token is None:
@@ -87,7 +112,7 @@ def get_current_customer(
 
 
 def get_current_agent(
-    token: Optional[str] = Depends(_extract_token),
+    token: Optional[str] = Depends(_extract_agent_token),
     db: Session = Depends(get_db),
 ) -> PolicyAgent:
     if token is None:
@@ -109,7 +134,7 @@ def get_current_agent(
 
 
 def get_current_insurer(
-    token: Optional[str] = Depends(_extract_token),
+    token: Optional[str] = Depends(_extract_insurer_token),
     db: Session = Depends(get_db),
 ) -> InsurerUser:
     if token is None:
@@ -131,7 +156,7 @@ def get_current_insurer(
 
 
 def get_optional_customer(
-    token: Optional[str] = Depends(_extract_token),
+    token: Optional[str] = Depends(_extract_customer_token),
     db: Session = Depends(get_db),
 ) -> Optional[Customer]:
     if token is None:
@@ -144,7 +169,7 @@ def get_optional_customer(
 
 def get_customer_flexible(
     token_param: Optional[str] = Query(None, alias="token", description="JWT for EventSource streams"),
-    token: Optional[str] = Depends(_extract_token),
+    token: Optional[str] = Depends(_extract_customer_token),
     db: Session = Depends(get_db),
 ) -> Customer:
     if token:

@@ -3,6 +3,23 @@ const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").re
 
 const TOKEN_KEY = "token";
 const REFRESH_KEY = "refresh_token";
+const AUTH_COOKIE_NAME = "app_auth_token";
+
+// Mirrors the access token into a plain (JS-readable, non-HttpOnly) cookie
+// in addition to the X-Auth-Token header set in authHeaders() below. Belt
+// and suspenders against some Cloudera AI workspaces' Istio ingress, which
+// silently 401s (before the request reaches our API) our own app-issued
+// JWT wherever it looks for one — confirmed on the `Authorization` header;
+// a plain cookie is essentially never inspected by that class of
+// header-focused mesh policy. Browsers send same-origin cookies
+// automatically, so no fetch()-call changes are needed to use it.
+function setAuthCookie(token: string): void {
+  document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
+}
+
+function clearAuthCookie(): void {
+  document.cookie = `${AUTH_COOKIE_NAME}=; path=/; SameSite=Lax; max-age=0`;
+}
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -15,15 +32,18 @@ export function getRefreshToken(): string | null {
 export function setTokens(accessToken: string, refreshToken: string): void {
   localStorage.setItem(TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_KEY, refreshToken);
+  setAuthCookie(accessToken);
 }
 
 export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
+  setAuthCookie(token);
 }
 
 export function clearTokens(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_KEY);
+  clearAuthCookie();
 }
 
 export function clearToken(): void {
