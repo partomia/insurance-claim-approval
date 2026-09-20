@@ -226,6 +226,33 @@ pick_app_port() {
   export CDSW_APP_PORT="$requested"
 }
 
+# resolve_app_port [explicit] — "what port should a read-only diagnostic
+# script (smoke/portcheck/diagnose) look at?" Priority:
+#   1. $explicit, if the caller was given one (e.g. `portcheck 5555`) —
+#      always wins.
+#   2. cml/.state/app.port — ground truth of whatever `start`/`restart`
+#      (via pick_app_port() above) actually bound last, in THIS same
+#      Session. Deliberately checked before $CDSW_APP_PORT: Cloudera
+#      presets CDSW_APP_PORT (usually 8090) in a Session terminal's
+#      environment too, not only in a real Application's, so it does NOT
+#      reliably describe where our app is actually running.
+#   3. $CDSW_APP_PORT — best-effort platform hint, e.g. no local start/
+#      restart has run yet this Session but this genuinely is a real
+#      Application container.
+#   4. 8090 — last-resort default.
+resolve_app_port() {
+  local explicit="${1:-}"
+  if [[ -n "$explicit" ]]; then
+    echo "$explicit"
+    return 0
+  fi
+  if [[ -f "$STATE_DIR/app.port" ]]; then
+    cat "$STATE_DIR/app.port"
+    return 0
+  fi
+  echo "${CDSW_APP_PORT:-8090}"
+}
+
 # ensure_net_tools — best-effort install of `ss` (iproute2) and `fuser`
 # (psmisc), used to debug "address already in use" on CDSW_APP_PORT.
 # Purely a convenience: requires root/apt, which many CAI runtimes don't
