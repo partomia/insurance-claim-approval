@@ -263,7 +263,8 @@ Also removed a duplicate `is_kyc_verified` import in the same file.
 **Re-verified end-to-end after the fix, 2026-09-21**: submitted claim
 `CLM33EE6D22` (id=2, `LH-POL-2050`, customer `customer50@example.com`)
 via direct API call (`POST /api/claims/2/submit`) since the frontend had
-no way to resume this already-abandoned draft (see next section) — went
+no way to resume this already-abandoned draft (**since fixed**, see next
+section) — went
 `DRAFT` → `PENDING` → `PROCESSING` → **`REJECTED`** (38% likely approved,
 "Higher" risk, flagged fraud risk / VIN mismatch / unclear documents — all
 expected given the synthetic placeholder docs have no real vehicle photo).
@@ -287,10 +288,27 @@ mid-flow (e.g. the old submit-gates bug silently failing, or just closing
 the tab), that draft is stuck forever with no UI path to finish it —
 confirmed via the `CLM82424700` draft (0 documents) still sitting in
 Motor Claim History. Worked around by submitting claim id=2 directly via
-API (see above). **Not yet fixed** — flagged to the user, needs a product
-decision on the UX (e.g. a "Continue draft" button on `/track/:id` when
-`status === DRAFT` that routes into the wizard with that claim's id and
-resumes at the right step).
+API (see above).
+
+**Fixed** (commit `7d5a71c` on `phase4-insurer-risk-ui`, cherry-picked to
+`main` as `05f7114`):
+- Backend: `DraftClaimResponse` gained `incident_description`/
+  `incident_datetime`/`location`/`claim_amount` (previously missing from
+  the schema despite the model having them); new
+  `GET /api/claims/{claim_id}/draft` returns a draft's current field
+  values via the existing `_draft_response` builder.
+- Frontend: new route `/claim/:id` (same `ClaimWizard` component) —
+  fetches the draft (+ policy context/documents/KYC status if the policy
+  step is done), rehydrates all wizard state, and lands on the correct
+  step (2 if policy papers aren't loaded, 3 if evidence is incomplete —
+  mirrors `validate_submit_gates`' own checks, else 4). `TrackClaim.tsx`
+  now shows a "Continue draft →" button in the header when
+  `claim.status === DRAFT`, linking to `/claim/:id`.
+- Universal fix, not Phase-4-specific — applies to any claim.
+- **Not yet re-verified in env1 after this fix** — needs `git pull` +
+  `bash cml/cli.sh update` (rebuilds the frontend) + `restart`, then try
+  "Continue draft" on `CLM82424700` (the still-orphaned draft with 0
+  documents) to confirm it lands on Step 2 as expected.
 
 ### Reusable Phase 4 testing tooling added this session
 
