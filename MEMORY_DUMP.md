@@ -260,12 +260,37 @@ non-KYC-verified customers) and `DocumentType.DAMAGE_PHOTO` (always
 required) — matching the frontend's own `Step3EvidenceUpload` validation.
 Also removed a duplicate `is_kyc_verified` import in the same file.
 
-**Not yet re-verified end-to-end after the fix** — env 1 needs `git pull`
-+ `bash cml/cli.sh update` + `restart`, then retry submitting a claim
-against `LH-POL-2050` (see synthetic docs in
-`docs/demo-assets/claim-docs/`) to confirm submission now actually
-transitions the claim out of `DRAFT` and the AI processing pipeline
-kicks off.
+**Re-verified end-to-end after the fix, 2026-09-21**: submitted claim
+`CLM33EE6D22` (id=2, `LH-POL-2050`, customer `customer50@example.com`)
+via direct API call (`POST /api/claims/2/submit`) since the frontend had
+no way to resume this already-abandoned draft (see next section) — went
+`DRAFT` → `PENDING` → `PROCESSING` → **`REJECTED`** (38% likely approved,
+"Higher" risk, flagged fraud risk / VIN mismatch / unclear documents — all
+expected given the synthetic placeholder docs have no real vehicle photo).
+Confirms the fix works: claims now actually process instead of silently
+staying in `DRAFT`.
+
+**Claim Insights risk card (Phase 4's second surface) also confirmed
+rendering** on this same claim's `/track/2` page: "LAKEHOUSE RISK SIGNAL —
+HIGH RISK", fraud score 70.1/100, "linked to a flagged garage" — matches
+the Book of Business data for `LH-POL-2050`. **Phase 4 is now fully
+verified end-to-end in env 1: both the Book of Business page and the
+Claim Insights risk card.**
+
+### Second frontend gap found: no way to resume an abandoned draft claim
+
+`/claim` (`ClaimWizard.tsx`) always starts a **brand-new** draft — no
+route/mechanism to resume an existing one. `/track/:id` (where
+`History.tsx` always links, regardless of status) is **read-only**, no
+submit action, even for a `DRAFT` claim. So if a user leaves the wizard
+mid-flow (e.g. the old submit-gates bug silently failing, or just closing
+the tab), that draft is stuck forever with no UI path to finish it —
+confirmed via the `CLM82424700` draft (0 documents) still sitting in
+Motor Claim History. Worked around by submitting claim id=2 directly via
+API (see above). **Not yet fixed** — flagged to the user, needs a product
+decision on the UX (e.g. a "Continue draft" button on `/track/:id` when
+`status === DRAFT` that routes into the wizard with that claim's id and
+resumes at the right step).
 
 ### Reusable Phase 4 testing tooling added this session
 
