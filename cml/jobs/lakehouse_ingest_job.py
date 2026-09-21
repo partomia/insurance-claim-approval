@@ -107,4 +107,16 @@ print(f"[lakehouse_ingest_job] cwd       : {BACKEND}")
 print(f"[lakehouse_ingest_job] exec      : {' '.join(cmd)}")
 
 result = subprocess.run(cmd, cwd=str(BACKEND))
-sys.exit(result.returncode)
+
+# Only call sys.exit() on FAILURE. CML Jobs on a JupyterLab-kernel runtime
+# execute this script INSIDE a persistent IPython kernel (same mechanism as
+# cml/run.py's Application launcher, see its _resolve_root() docstring) —
+# calling sys.exit(0) there raises SystemExit, which IPython catches and
+# prints as "An exception has occurred ... SystemExit: 0", and the Job
+# engine then reports "Engine exited with status 1" even though the ingest
+# itself fully succeeded (confirmed: this happened on a real run — 60
+# policies updated, 240 RAG chunks indexed, but the Job showed as Failed).
+# Falling off the end of the script on success avoids ever raising
+# SystemExit in that context. A real failure should still propagate.
+if result.returncode != 0:
+    sys.exit(result.returncode)
