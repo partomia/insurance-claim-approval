@@ -206,3 +206,32 @@ Also saw a one-time warning: `New keys in .env.example not yet in your
 .env: LAKEHOUSE_DATABASE` — harmless, the code defaults to
 `insurance_lakehouse` when unset (matches `.env.example`); only add it to
 `backend/.env` explicitly if env 1 needs a non-default Iceberg schema name.
+
+### Phase 4 verified end-to-end in env 1 (2026-09-21)
+
+Full pipeline confirmed working on the real CAI Application (not just the
+Session terminal): CDE gold tables → Impala/Iceberg → `bash cml/cli.sh
+lakehouse ingest` → app SQLite (`PolicyRiskSignal`) → `/api/insurer/book-of-
+business` → **Book of Business** page.
+
+- `lakehouse verify`: `policy_master` 60 rows, `policy_clauses` 240 rows,
+  `policy_risk_signals` 792 rows, `garage_risk_signals` 40 rows — all
+  `STORED AS ICEBERG`.
+- `lakehouse ingest`: 60 policies updated (idempotent re-run — already
+  ingested in an earlier session), 60/60 risk signals matched, 240 RAG
+  chunks indexed (270 Chroma vectors total).
+- UI at `.../insurer/book-of-business`: 60 lakehouse policies, 6 high-risk,
+  51 linked to a flagged garage, avg fraud score 40.9 — table renders risk
+  band/fraud score/claims/flagged-garage columns correctly, sortable by
+  risk band and fraud score.
+- **Gotcha hit during verification**: insurer auth (`/insurer/auth/login`,
+  `/insurer/auth/verify-otp`) lives at a **bare** path, not under `/api` —
+  by deliberate design (see `main.py`'s `_bare_auth_router_prefixes`
+  comment: these three auth routers share their path with the frontend's
+  login-page route for hard-redirect reasons). Only the data endpoints
+  (`/api/insurer/book-of-business`, etc.) are under `/api`. Demo insurer
+  login: `insurer1@claimcopilot.in` / `password123` / OTP `112233`.
+- **Not yet checked**: the **Claim Insights risk card** (the other Phase 4
+  surface — shows the same risk signal on an individual claim's review
+  page). Needs a claim against an `LH-POL-*` policy to verify; none
+  confirmed to exist yet as of this writing.
