@@ -44,6 +44,16 @@ class FraudDetectionService:
         "third_party_no_police_report": 0.25,
         "device_hash_reuse": 0.45,
         "unlicensed_driver": 0.40,
+        # Lakehouse claims-analytics (Phase 4b) — the policy's aggregate
+        # fraud_risk_score/claim_risk_band, computed by the CDE gold pipeline
+        # over its full historical claims population (see cde/README.md
+        # "Claims-analytics design"). HIGH is set equal to the review
+        # threshold so it independently meets it, same as the other "hard"
+        # signals above; MEDIUM is a "soft" signal that only matters when
+        # stacked. Only populated for lakehouse-ingested policies
+        # (policy.risk_signal is None for demo POL-MTR-* policies).
+        "lakehouse_risk_high": 0.40,
+        "lakehouse_risk_medium": 0.15,
     }
 
     def detect(
@@ -78,6 +88,22 @@ class FraudDetectionService:
         if policy and claim.claim_amount > policy.coverage_limit * 0.9:
             score += self.SIGNAL_WEIGHTS["abnormal_amount"]
             signals.append("Claim amount near or above coverage limit")
+
+        # --- Lakehouse claims-analytics (Phase 4b) -------------------------
+        risk_signal = policy.risk_signal if policy else None
+        if risk_signal and risk_signal.claim_risk_band == "HIGH":
+            score += self.SIGNAL_WEIGHTS["lakehouse_risk_high"]
+            signals.append(
+                f"Policy has a HIGH lakehouse risk profile (score "
+                f"{risk_signal.fraud_risk_score:.1f}/100, "
+                f"{risk_signal.total_claims_count} historical claims)"
+            )
+        elif risk_signal and risk_signal.claim_risk_band == "MEDIUM":
+            score += self.SIGNAL_WEIGHTS["lakehouse_risk_medium"]
+            signals.append(
+                f"Policy has a MEDIUM lakehouse risk profile (score "
+                f"{risk_signal.fraud_risk_score:.1f}/100)"
+            )
 
         recent_claims = (
             db.query(Claim)

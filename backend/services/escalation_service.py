@@ -20,6 +20,11 @@ FLAG_MESSAGES = {
     "unlicensed_driver": "Driver's licence details are missing or invalid on this claim",
     "third_party_injury_reported": "Third-party injuries reported — legal team review required",
     "no_police_report_major_loss": "Major-loss claim without a police / FIR report — additional evidence required",
+    "lakehouse_high_risk_policy": (
+        "This policy's claims history is flagged HIGH risk by the lakehouse "
+        "analytics pipeline (score {score:.0f}/100, {claims} historical claims) "
+        "— underwriting review recommended"
+    ),
 }
 
 
@@ -104,6 +109,15 @@ class EscalationService:
             details["clause_mismatch"] = alignment
 
         # --- Motor-specific escalation checks -----------------------------
+        risk_signal = claim.policy.risk_signal if claim.policy else None
+        if risk_signal and risk_signal.claim_risk_band == "HIGH":
+            flags.append("lakehouse_high_risk_policy")
+            details["lakehouse_high_risk_policy"] = {
+                "fraud_risk_score": risk_signal.fraud_risk_score,
+                "claim_risk_band": risk_signal.claim_risk_band,
+                "total_claims_count": risk_signal.total_claims_count,
+            }
+
         payout_breakdown = merged.get("payout_breakdown") or {}
         if payout_breakdown.get("is_total_loss"):
             flags.append("total_loss_suspected")
@@ -169,6 +183,13 @@ class EscalationService:
                 messages.append(FLAG_MESSAGES[flag].format(message=detail.get("message", "Document type mismatch")))
             elif flag == "extraction_failed":
                 messages.append(FLAG_MESSAGES[flag].format(message=detail.get("message", "Extraction failed")))
+            elif flag == "lakehouse_high_risk_policy":
+                messages.append(
+                    FLAG_MESSAGES[flag].format(
+                        score=detail.get("fraud_risk_score", 0),
+                        claims=detail.get("total_claims_count", 0),
+                    )
+                )
             elif flag in ("total_loss_suspected", "vin_mismatch", "unlicensed_driver",
                           "third_party_injury_reported", "no_police_report_major_loss"):
                 messages.append(FLAG_MESSAGES[flag])

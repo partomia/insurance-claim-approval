@@ -426,7 +426,37 @@ Two bugs found + fixed while verifying:
   `ingested_at` value from each row (falling back to `utcnow()` if
   missing/unparseable) and set it every upsert.
 
-**Items 2 & 3 — not started yet**, logged in `cde/README.md`'s Roadmap.
+**Item 2 — done**: `fraud_risk_score`/`claim_risk_band` (`PolicyRiskSignal`, via
+`Policy.risk_signal`) now genuinely feed the decision pipeline instead of
+only being displayed:
+- `backend/services/fraud_detection.py` — new `SIGNAL_WEIGHTS` entries
+  `lakehouse_risk_high` (0.40, meets the review threshold alone like the
+  other "hard" signals — blacklist, VIN mismatch) and `lakehouse_risk_medium`
+  (0.15, a "soft" signal, only matters when stacked). No-op for non-lakehouse
+  demo policies (`policy.risk_signal is None`).
+- `backend/services/escalation_service.py` — new `lakehouse_high_risk_policy`
+  escalation flag (HIGH band only) with a message naming the score + claim
+  count. `decision_engine.py`'s existing generic `if inputs.escalation_flags:`
+  check (which runs *before* the fraud-score threshold check) routes this
+  straight to `PENDING_REVIEW` — **zero changes needed in `decision_engine.py`
+  itself**.
+- `frontend/src/lib/escalationLabels.ts` — friendly label for the new flag
+  (cosmetic only; the flag already renders everywhere escalation
+  messages do — `TrackClaim`, insurer/agent claim review + audit report,
+  `ClaimHistoryCard`, `ClaimAssistant` — no other frontend changes needed).
+- Deliberately skipped `linked_high_risk_garage` as a separate signal (already
+  folded into the composite `fraud_risk_score`/band by the gold SQL — would
+  double-count). No new `.env`/`config.py` settings — weights are hardcoded
+  in `SIGNAL_WEIGHTS`, consistent with every other signal in that file.
+- **Verification pending**: file a fresh claim on `LH-POL-2050` (HIGH band,
+  score 70.5, 17 claims as of this session) in env1 and confirm
+  `PENDING_REVIEW` with the new reasoning surfaced; spot-check a LOW/MEDIUM
+  band lakehouse policy and a non-lakehouse `POL-MTR-*` demo policy for no
+  regression.
+
+**Item 3 — not started yet** (Iceberg time travel / `MERGE`/`INSERT
+OVERWRITE` instead of drop+recreate gold writes), logged in
+`cde/README.md`'s Roadmap.
 
 ### Reusable Phase 4 testing tooling added this session
 

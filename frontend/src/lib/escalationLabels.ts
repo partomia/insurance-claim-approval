@@ -8,6 +8,7 @@ export const ESCALATION_FLAG_LABELS: Record<string, string> = {
   evidence_mismatch: "An uploaded document may not be the right type",
   extraction_failed: "We could not read one of the uploaded files",
   missing_documents: "Some required documents are still missing",
+  lakehouse_high_risk_policy: "Policy has a high-risk claims history (lakehouse risk analytics)",
 };
 
 export function friendlyEscalationFlag(flag: string): string {
