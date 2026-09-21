@@ -499,6 +499,10 @@ class DraftClaimResponse(BaseModel):
     policy_context_ready: bool
     policy_number: Optional[str] = None
     incident_type: Optional[str] = None
+    incident_description: Optional[str] = None
+    incident_datetime: Optional[datetime] = None
+    location: Optional[str] = None
+    claim_amount: Optional[float] = None
     third_party_involved: bool = False
     injuries_reported: bool = False
     tow_required: bool = False

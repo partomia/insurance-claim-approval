@@ -224,6 +224,10 @@ def _draft_response(claim: Claim, db: Session) -> schemas.DraftClaimResponse:
         policy_context_ready=policy_context_service.has_policy_context(claim),
         policy_number=policy_number,
         incident_type=incident_type_val,
+        incident_description=claim.incident_description,
+        incident_datetime=claim.incident_datetime,
+        location=claim.location,
+        claim_amount=claim.claim_amount,
         third_party_involved=bool(claim.third_party_involved),
         injuries_reported=bool(claim.injuries_reported),
         tow_required=bool(claim.tow_required),
@@ -236,6 +240,24 @@ def _draft_response(claim: Claim, db: Session) -> schemas.DraftClaimResponse:
         driver_license_number=claim.driver_license_number,
         driver_license_class=claim.driver_license_class,
     )
+
+
+@router.get("/{claim_id}/draft", response_model=schemas.DraftClaimResponse)
+def get_draft(
+    claim_id: int,
+    customer: Customer = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+):
+    """Fetch a draft claim's current field values so the wizard can resume it.
+
+    Needed because the wizard (frontend) only ever holds claim state in
+    memory — if a customer navigates away mid-flow (closes the tab, or a
+    submit attempt errors out) there was previously no way back into the
+    wizard for that claim; /track/:id is read-only. See ClaimWizard.tsx's
+    resume-by-id support.
+    """
+    claim = _get_owned_claim(db, claim_id, customer.id)
+    return _draft_response(claim, db)
 
 
 @router.post("/draft", response_model=schemas.DraftClaimResponse, status_code=status.HTTP_201_CREATED)

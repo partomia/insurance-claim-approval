@@ -1,20 +1,65 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { WizardStepper } from "@/components/claim/WizardStepper";
 import { Step1IncidentDetails } from "@/components/claim/Step1IncidentDetails";
 import { Step2PolicyPapers } from "@/components/claim/Step2PolicyPapers";
 import { Step3EvidenceUpload } from "@/components/claim/Step3EvidenceUpload";
 import { Step4ReviewSubmit } from "@/components/claim/Step4ReviewSubmit";
 import { PageHeader } from "@/components/ui/page-header";
-import { apiFetch } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { apiFetch, apiJson } from "@/lib/api";
 import { formatApiError, useToast } from "@/components/ui/toast";
+
+interface DraftClaim {
+  id: number;
+  status: string;
+  submission_step: number;
+  policy_context_ready: boolean;
+  policy_number?: string | null;
+  incident_type?: string | null;
+  incident_description?: string | null;
+  incident_datetime?: string | null;
+  location?: string | null;
+  claim_amount?: number | null;
+  third_party_involved: boolean;
+  injuries_reported: boolean;
+  tow_required: boolean;
+  vehicle_make?: string | null;
+  vehicle_model?: string | null;
+  vehicle_year?: number | null;
+  vin?: string | null;
+  license_plate?: string | null;
+  odometer_km?: number | null;
+  driver_license_number?: string | null;
+  driver_license_class?: string | null;
+}
+
+interface ClaimDoc {
+  doc_type: string;
+}
+
+interface KYCStatus {
+  kyc_status: string;
+}
+
+/** "2026-09-21T06:30:00Z" / with offset -> "2026-09-21T06:30" for a
+ * <input type="datetime-local"> value (which has no timezone). */
+function toDatetimeLocalInput(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function ClaimWizard() {
   const navigate = useNavigate();
+  const { id: resumeId } = useParams();
   const { error, success } = useToast();
   const [step, setStep] = useState(1);
   const [claimId, setClaimId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resuming, setResuming] = useState(Boolean(resumeId));
 
   // Step 1 — motor incident + vehicle + driver
   const [policyNumber, setPolicyNumber] = useState("");
@@ -35,6 +80,77 @@ export default function ClaimWizard() {
   const [injuriesReported, setInjuriesReported] = useState(false);
   const [towRequired, setTowRequired] = useState(false);
   const [policyContext, setPolicyContext] = useState<Record<string, unknown> | null>(null);
+
+  // Resume an existing draft (e.g. navigated here from /track/:id's
+  // "Continue draft" button) instead of always starting fresh. Previously
+  // there was no way back into the wizard for a draft once you left it —
+  // /track/:id is read-only and this page always started a new claim.
+  useEffect(() => {
+    if (!resumeId) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const draft = await apiJson<DraftClaim>(`/api/claims/${resumeId}/draft`);
+        if (cancelled) return;
+
+        setClaimId(String(draft.id));
+        setPolicyNumber(draft.policy_number ?? "");
+        setIncidentType(draft.incident_type ?? "COLLISION");
+        setIncidentDescription(draft.incident_description ?? "");
+        setIncidentDatetime(toDatetimeLocalInput(draft.incident_datetime));
+        setLocation(draft.location ?? "");
+        setClaimAmount(draft.claim_amount != null ? String(draft.claim_amount) : "");
+        setVehicleMake(draft.vehicle_make ?? "");
+        setVehicleModel(draft.vehicle_model ?? "");
+        setVehicleYear(draft.vehicle_year != null ? String(draft.vehicle_year) : "");
+        setVin(draft.vin ?? "");
+        setLicensePlate(draft.license_plate ?? "");
+        setOdometerKm(draft.odometer_km != null ? String(draft.odometer_km) : "");
+        setDriverLicenseNumber(draft.driver_license_number ?? "");
+        setDriverLicenseClass(draft.driver_license_class ?? "");
+        setThirdPartyInvolved(draft.third_party_involved);
+        setInjuriesReported(draft.injuries_reported);
+        setTowRequired(draft.tow_required);
+
+        if (!draft.policy_context_ready) {
+          setStep(2);
+          return;
+        }
+
+        const [context, statusData, kyc] = await Promise.all([
+          apiJson<Record<string, unknown>>(`/api/claims/${resumeId}/policy-context`).catch(() => null),
+          apiJson<{ documents?: ClaimDoc[] }>(`/api/claims/${resumeId}/status`).catch(() => null),
+          apiJson<KYCStatus>("/api/kyc/status").catch(() => null),
+        ]);
+        if (cancelled) return;
+        if (context) setPolicyContext(context);
+
+        const docTypes = new Set((statusData?.documents ?? []).map((d) => d.doc_type));
+        const kycVerified = kyc?.kyc_status === "VERIFIED";
+        const hasDamagePhoto = docTypes.has("DAMAGE_PHOTO");
+        const hasDriverLicense = docTypes.has("DRIVER_LICENSE");
+        const hasPoliceReport = docTypes.has("POLICE_REPORT");
+        const policeRequired = draft.third_party_involved || draft.injuries_reported;
+
+        const evidenceComplete =
+          hasDamagePhoto && (kycVerified || hasDriverLicense) && (!policeRequired || hasPoliceReport);
+
+        setStep(evidenceComplete ? 4 : 3);
+      } catch {
+        if (!cancelled) {
+          error("Could not load that draft claim — starting a new one.");
+        }
+      } finally {
+        if (!cancelled) setResuming(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeId]);
 
   const createDraft = async () => {
     if (!incidentDescription || !incidentDatetime || !location || !claimAmount) {
@@ -99,11 +215,27 @@ export default function ClaimWizard() {
     }
   };
 
+  if (resuming) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-6">
+        <PageHeader
+          title="File a Motor Claim"
+          description="Loading your draft claim..."
+        />
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="File a Motor Claim"
-        description="Complete all 4 steps to submit your motor-vehicle claim for processing."
+        description={
+          resumeId
+            ? "Continuing your draft claim — pick up where you left off."
+            : "Complete all 4 steps to submit your motor-vehicle claim for processing."
+        }
       />
 
       <WizardStepper currentStep={step} />
