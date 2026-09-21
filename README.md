@@ -2,7 +2,54 @@
 
 Production-grade **motor-vehicle** insurance claim processing with FastAPI, Celery, Redis, Impala (CDP), Chroma RAG, motor-tuned fraud detection, own-damage / third-party payout split, total-loss detection, and a Confidence & Explainability Layer.
 
-## Architecture
+## System Architecture
+
+A simple, layer-by-layer view — from the browser down to the data platform:
+
+```mermaid
+flowchart TB
+    subgraph L1["Frontend — React + Vite SPA"]
+        UI["Customer · Agent · Insurer portals"]
+    end
+
+    subgraph L2["Backend — FastAPI (single process)"]
+        API["REST + SSE API"]
+        Pipeline["Claim Orchestrator\n(policy → RAG → evidence → fraud → payout → decision)"]
+    end
+
+    subgraph L3["AI Layer"]
+        LLM["LLM\n(Groq / Cloudera AI Inference)"]
+        RAG["Chroma — policy clause RAG"]
+    end
+
+    subgraph L4["Data Layer"]
+        OLTP[("SQLite\nlive app data")]
+        Lake[("Impala + Iceberg\ndata lakehouse")]
+    end
+
+    subgraph L5["Cloudera AI Workbench (CDP 7.3.2)"]
+        App["CAI Application\n(cml/run.py)"]
+        CDE["CDE Spark + Airflow\n(bronze → silver → gold)"]
+        Job["CAI Job\n(scheduled lakehouse ingest)"]
+    end
+
+    UI -->|HTTP / SSE| API
+    API --> Pipeline
+    Pipeline --> LLM
+    Pipeline --> RAG
+    Pipeline --> OLTP
+    App -.->|hosts| API
+    CDE --> Lake
+    Job -->|app-side ingest| Lake
+    Lake -.->|risk data + clauses| OLTP
+    Lake -.->|policy clauses| RAG
+```
+
+- **Frontend + Backend** are the always-on core — works standalone on `DB_BACKEND=sqlite`, no CDP needed (Docker/Local/plain CAI Workbench).
+- **AI Layer** powers claim decisions and the policy/copilot chat (Groq or a Cloudera AI Inference endpoint).
+- **Data Layer + CDP row** are optional, additive "datalakehouse" phases — only relevant on a full CDP 7.3.2 workspace with CAI↔CDE/CDW/CDF integration (see [Data Lakehouse](#data-lakehouse-impala--iceberg--cde) below).
+
+## Claim Decision Pipeline
 
 ```
 User → API Gateway (FastAPI) → Claim Orchestrator (Celery + Redis)
@@ -81,13 +128,26 @@ demonstrate that story without touching the live app's database:
    claims-history population.
 3. **App-side ingestion** pulling those gold tables back into the app's
    SQLite DB + Chroma RAG index.
+4. **Insurer-facing risk UI** — a **Book of Business** page and a **Claim
+   Insights risk card** surfacing the ingested `fraud_risk_score` /
+   `claim_risk_band`, plus a CAI **Job** to keep step 3 refreshed on a
+   schedule instead of a manual re-run.
 
 ```bash
 bash cml/cli.sh lakehouse seed|verify|ingest   # Phases 1 & 3, from a CAI Session
+bash cml/cli.sh verify-phase4                  # Phase 4 — insurer risk UI, end-to-end
 ```
 
-See [`cml/README.md`](cml/README.md) (§ Data lakehouse) for Phases 1 & 3, and
-[`cde/README.md`](cde/README.md) for the CDE Spark/Airflow pipeline (Phase 2).
+See [`cml/README.md`](cml/README.md) (§ Data lakehouse) for Phases 1, 3 & 4,
+and [`cde/README.md`](cde/README.md) for the CDE Spark/Airflow pipeline
+(Phase 2).
+
+> **Prerequisite:** Phases 1–4 need a full **CDP 7.3.2** workspace where
+> Cloudera AI (CAI) is integrated with CDE/CDW/CDF (i.e. Impala + Iceberg +
+> Spark/Airflow are reachable). A **standalone** CAI workspace — no
+> CDE/CDW/CDF integration, e.g. a plain Cloudera AI Workbench (AWC) release —
+> can't run any of this; just skip the whole Data Lakehouse section and run
+> the core app with `DB_BACKEND=sqlite` (the default) for an OLTP-only demo.
 
 ## API Endpoints
 
