@@ -4,8 +4,17 @@ in depth after validate), trims/standardizes strings, and dedupes by
 claim_id (keeping the most recently ingested row per key). Same pattern as
 transform_silver.py.
 
+Also unions in `app_claims_raw` if it exists -- real, app-filed claims
+pushed by backend/scripts/export_claims_to_lakehouse.py (closing the OLTP ->
+lakehouse loop, see cde/README.md § Closing the loop). That table is
+populated incrementally by the app, not by this pipeline's generate stage,
+so it may not exist yet on a fresh deployment -- handled gracefully (silver
+just falls back to the synthetic-only population in that case). No changes
+needed downstream in curate_risk_signals_gold.py: it just sees more rows.
+
 Reads:
   insurance_lakehouse_bronze.claims_history_raw
+  insurance_lakehouse_bronze.app_claims_raw       (if present; real app claims)
 Writes:
   insurance_lakehouse_silver.claims_history
 
@@ -44,8 +53,26 @@ def clean_claims(df):
     return df
 
 
-def run(spark: SparkSession) -> None:
+def _read_claims_raw(spark: SparkSession):
+    """Synthetic history, unioned with real app-filed claims if that bronze
+    table exists yet (see module docstring)."""
     claims_raw = spark.table(f"{BRONZE_DB}.claims_history_raw")
+    try:
+        app_claims_raw = spark.table(f"{BRONZE_DB}.app_claims_raw")
+        app_count = app_claims_raw.count()
+        claims_raw = claims_raw.unionByName(app_claims_raw)
+        logger.info("Unioned %d real app-filed claim(s) from %s.app_claims_raw", app_count, BRONZE_DB)
+    except Exception as exc:  # noqa: BLE001
+        logger.info(
+            "No %s.app_claims_raw table yet (%s) -- silver will only include "
+            "synthetic claims_history_raw for this run.",
+            BRONZE_DB, exc,
+        )
+    return claims_raw
+
+
+def run(spark: SparkSession) -> None:
+    claims_raw = _read_claims_raw(spark)
     claims_silver = clean_claims(claims_raw)
 
     spark.sql(f"CREATE DATABASE IF NOT EXISTS {SILVER_DB}")

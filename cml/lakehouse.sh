@@ -16,6 +16,14 @@
 #   bash cml/cli.sh lakehouse ingest          # ingest + index into Chroma
 #   bash cml/cli.sh lakehouse ingest --no-rag # DB only, skip Chroma indexing
 #
+# Closing the loop (see cde/README.md § Closing the loop): push app-filed,
+# decided claims into the lakehouse's app_claims_raw bronze table, so the
+# CDE claims-analytics pipeline's fraud/risk analytics include real claims
+# too, not just synthetic history.
+#
+#   bash cml/cli.sh lakehouse export-claims           # export + mark exported
+#   bash cml/cli.sh lakehouse export-claims --dry-run # preview only
+#
 set -euo pipefail
 # shellcheck source=cml/lib.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -23,8 +31,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 mode="${1:-seed}"
 shift || true
 case "$mode" in
-  seed|verify|ingest) ;;
-  *) err "Usage: cml/cli.sh lakehouse <seed|verify|ingest> [--no-rag]"; exit 2 ;;
+  seed|verify|ingest|export-claims) ;;
+  *) err "Usage: cml/cli.sh lakehouse <seed|verify|ingest|export-claims> [--no-rag|--dry-run]"; exit 2 ;;
 esac
 
 [[ -f "$BACKEND/.env" ]] || { err "backend/.env missing — run 'bash cml/cli.sh setup' first"; exit 1; }
@@ -49,6 +57,8 @@ log "Running lakehouse $mode against $host (schema: $lakehouse_db)"
 cd "$BACKEND"
 if [[ "$mode" == "ingest" ]]; then
   uv run python scripts/ingest_lakehouse.py "$@"
+elif [[ "$mode" == "export-claims" ]]; then
+  uv run python scripts/export_claims_to_lakehouse.py "$@"
 else
   uv run python scripts/lakehouse_seed.py "$mode"
 fi

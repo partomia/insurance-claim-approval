@@ -15,9 +15,10 @@ cml/
 ├── smoke.sh     ← post-deploy endpoint checks
 ├── portcheck.sh ← what's listening on a port (no ss/lsof/fuser needed)
 ├── diagnose.sh  ← bundles doctor+status+portcheck+logs into one shareable file
-├── lakehouse.sh ← Iceberg/Impala datalakehouse seed/verify/ingest (Phases 1 & 3)
+├── lakehouse.sh ← Iceberg/Impala datalakehouse seed/verify/ingest/export-claims
 ├── jobs/
-│   └── lakehouse_ingest_job.py ← CML Job wrapper: scheduled lakehouse ingest refresh (Phase 4)
+│   ├── lakehouse_ingest_job.py        ← CML Job wrapper: scheduled lakehouse ingest refresh (Phase 4)
+│   └── lakehouse_export_claims_job.py ← CML Job wrapper: scheduled app-claims export (closing the loop)
 ├── run.py       ← Application launcher (serves UI + API)
 ├── .state/      ← cached lockfile hashes + app pid/port (gitignored)
 └── logs/        ← timestamped run/app logs (gitignored)
@@ -38,7 +39,7 @@ bash cml/cli.sh update [--no-pull]  # git pull + reinstall only changed deps + s
 bash cml/cli.sh reset [--yes]       # delete local demo DB/Chroma/storage
 bash cml/cli.sh portcheck [port]    # who's bound to a port + HTTP probe
 bash cml/cli.sh diagnose [port]     # one file with doctor+status+portcheck+logs, for sharing
-bash cml/cli.sh lakehouse <seed|verify|ingest>  # Iceberg/Impala datalakehouse, Phases 1-3 (see below)
+bash cml/cli.sh lakehouse <seed|verify|ingest|export-claims>  # Iceberg/Impala datalakehouse (see below)
 ```
 
 `setup` flags: `--skip-frontend` `--skip-seed` `--reset-db` `--run`
@@ -262,6 +263,38 @@ damage photo (+ a driver's licence, since these demo customers aren't
 KYC-verified), use the synthetic sample documents in
 [`docs/demo-assets/claim-docs/`](../docs/demo-assets/claim-docs/README.md)
 (watermarked, not real photos/IDs) instead of hunting for real files.
+
+## Closing the loop: exporting app claims
+
+Everything above flows lakehouse → app. `bash cml/cli.sh lakehouse ingest`
+pulls gold-table data in, but claims actually **filed through the running
+app** never fed back into the analytics — `fraud_risk_score` was only ever
+computed over the CDE pipeline's synthetic claims history. `export-claims`
+closes that loop the other direction:
+
+```bash
+bash cml/cli.sh lakehouse export-claims           # export decided claims + mark exported
+bash cml/cli.sh lakehouse export-claims --dry-run # preview only, no writes/marking
+```
+
+Pushes claims that finished the AI decision pipeline (have a
+`ClaimDecision`), are linked to a policy, and haven't been exported yet into
+a new Iceberg bronze table (`insurance_lakehouse_bronze.app_claims_raw`) via
+Impala — idempotent and incremental (tracked via `claims.lakehouse_exported_at`).
+Script: `backend/scripts/export_claims_to_lakehouse.py`. Full design and the
+end-to-end data flow: [`cde/README.md`](../cde/README.md#closing-the-loop-exporting-app-claims).
+
+**Creating the scheduled Job** — same walkthrough as the ingest Job above
+(§ Creating the Job), just swap:
+- **Script**: `cml/jobs/lakehouse_export_claims_job.py`
+- **Schedule**: time it to run *before* the CDE claims-analytics pipeline
+  (`generate-claims-bronze` → ... → `curate-risk-signals-gold`), so freshly
+  exported app claims are included in that run's fraud/risk analytics.
+
+After it runs, re-run `transform-claims-silver` → `curate-risk-signals-gold`
+(or the full DAG) in CDE, then `bash cml/cli.sh lakehouse ingest` again to
+pull the refreshed `fraud_risk_score` back into the app for any policy with
+a newly-exported claim.
 
 ## Verifying Phase 1-3 end-to-end (step-by-step)
 

@@ -30,7 +30,7 @@ flowchart TB
     subgraph L5["Cloudera AI Workbench (CDP 7.3.2)"]
         App["CAI Application\n(cml/run.py)"]
         CDE["CDE Spark + Airflow\n(bronze → silver → gold)"]
-        Job["CAI Job\n(scheduled lakehouse ingest)"]
+        Job["CAI Jobs\n(scheduled ingest + export)"]
     end
 
     UI -->|HTTP / SSE| API
@@ -40,14 +40,15 @@ flowchart TB
     Pipeline --> OLTP
     App -.->|hosts| API
     CDE --> Lake
-    Job -->|app-side ingest| Lake
-    Lake -.->|risk data + clauses| OLTP
-    Lake -.->|policy clauses| RAG
+    Job -.->|orchestrates| Lake
+    Lake -->|ingest: risk + clauses| OLTP
+    Lake -.->|ingest: policy clauses| RAG
+    OLTP -->|export: decided claims| Lake
 ```
 
 - **Frontend + Backend** are the always-on core — works standalone on `DB_BACKEND=sqlite`, no CDP needed (Docker/Local/plain CAI Workbench).
 - **AI Layer** powers claim decisions and the policy/copilot chat (Groq or a Cloudera AI Inference endpoint).
-- **Data Layer + CDP row** are optional, additive "datalakehouse" phases — only relevant on a full CDP 7.3.2 workspace with CAI↔CDE/CDW/CDF integration (see [Data Lakehouse](#data-lakehouse-impala--iceberg--cde) below).
+- **Data Layer + CDP row** are optional, additive "datalakehouse" phases — only relevant on a full CDP 7.3.2 workspace with CAI↔CDE/CDW/CDF integration (see [Data Lakehouse](#data-lakehouse-impala--iceberg--cde) below). The `OLTP ⇄ Lake` arrows are a real two-way loop: lakehouse risk analytics flow into the app (`ingest`), and app-filed claims flow back into the same analytics (`export-claims`) — not just a one-way demo.
 
 ## Claim Decision Pipeline
 
@@ -132,10 +133,14 @@ demonstrate that story without touching the live app's database:
    Insights risk card** surfacing the ingested `fraud_risk_score` /
    `claim_risk_band`, plus a CAI **Job** to keep step 3 refreshed on a
    schedule instead of a manual re-run.
+5. **Closing the loop** — claims actually filed through the running app feed
+   back into the same analytics too (a dedicated `app_claims_raw` bronze
+   table, unioned into the pipeline before step 3's fraud/risk scoring), not
+   just the synthetic claims-history population from step 2.
 
 ```bash
-bash cml/cli.sh lakehouse seed|verify|ingest   # Phases 1 & 3, from a CAI Session
-bash cml/cli.sh verify-phase4                  # Phase 4 — insurer risk UI, end-to-end
+bash cml/cli.sh lakehouse seed|verify|ingest|export-claims  # Phases 1, 3 & 5, from a CAI Session
+bash cml/cli.sh verify-phase4                               # Phase 4 — insurer risk UI, end-to-end
 ```
 
 See [`cml/README.md`](cml/README.md) (§ Data lakehouse) for Phases 1, 3 & 4,

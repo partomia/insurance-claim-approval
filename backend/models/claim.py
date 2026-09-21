@@ -97,6 +97,10 @@ class Claim(Base):
     evidence_mismatch = Column(Boolean, default=False, nullable=False)
     evidence_issues = Column(JSON, default=list, nullable=False)
     pipeline_run_id = Column(Integer, default=0, nullable=False)
+    # Set once this decided claim has been pushed to the lakehouse's
+    # app_claims_raw Iceberg bronze table (scripts/export_claims_to_lakehouse.py)
+    # -- closes the OLTP -> lakehouse loop. NULL = not yet exported.
+    lakehouse_exported_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

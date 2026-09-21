@@ -297,8 +297,9 @@ and re-running `deploy_jobs.sh`, no job redefinition needed.
 | **curate** | silver | `insurance_lakehouse.policy_master`, `.policy_clauses` | Adds `risk_band` + `premium_to_coverage_pct`; writes to the **same gold tables Phase 1 created** |
 | **generate (claims)** | — (synthesizes data) | `insurance_lakehouse_bronze.claims_history_raw` | ~4,000 synthetic claims over an ~800-policy historical universe, with seeded outliers (frequent claimants, inflated amounts, high-risk garages) |
 | **validate (claims)** | claims bronze (+ informational read of `policy_master_raw`) | — (pass/fail only) | Null/duplicate/amount/date/enum checks; policy-number overlap with `policy_master` logged as informational, not a hard failure |
-| **transform (claims)** | claims bronze | `insurance_lakehouse_silver.claims_history` | Trim/standardize strings, dedupe by `claim_id` |
+| **transform (claims)** | claims bronze (`claims_history_raw` **+** `app_claims_raw` if present) | `insurance_lakehouse_silver.claims_history` | Trim/standardize strings, dedupe by `claim_id` |
 | **curate (risk signals)** | claims silver | `insurance_lakehouse.policy_risk_signals`, `.garage_risk_signals` | Computes `fraud_risk_score`/`claim_risk_band` per policy and payout-anomaly flags per garage — see below |
+| **export (app, closing the loop)** | app's live SQLite (`claims`, `claim_decisions`, `policies`) | `insurance_lakehouse_bronze.app_claims_raw` | `backend/scripts/export_claims_to_lakehouse.py` — pushes real, decided app claims the other direction; see below |
 
 The gold tables are the exact ones `cml/cli.sh lakehouse verify` already checks and Hue already queries — running this pipeline just replaces the hand-seeded 3 rows with ~60 pipeline-produced rows, no downstream changes needed.
 
@@ -333,13 +334,78 @@ population that a single OLTP row/query could never produce:
   "frequent claimants" (4–8 claims), ~5% of claims have inflated amounts
   (2.5–4x their claim-type peer average), and 3 of 40 garages are
   deliberately overrepresented ("high-risk").
-- **Does not sync back to the app's SQLite OLTP DB yet** — that's a
-  separate, later step (see Roadmap) once this analytics layer is
-  validated on its own.
+- Fraud/risk analytics computed here reach the app's SQLite OLTP DB via
+  `scripts/ingest_lakehouse.py` (Phase 3) — see cml/README.md § Data
+  lakehouse.
 - Last validated run: 792 `policy_risk_signals` rows (`HIGH`=76,
   `MEDIUM`=439, `LOW`=277) and 40 `garage_risk_signals` rows (6 flagged
   high-risk) — a healthy, non-degenerate spread, not everything dumped into
   one bucket.
+
+## Closing the loop: exporting app claims
+
+Everything above flows one direction — lakehouse → app. But claims actually
+*filed through the running app* never fed back into this analytics layer;
+`fraud_risk_score`/`claim_risk_band` were computed exclusively over the
+synthetic `claims_history_raw` population. `backend/scripts/export_claims_to_lakehouse.py`
+closes that loop the other way:
+
+```
+App (SQLite claims + claim_decisions + policies)
+  │  backend/scripts/export_claims_to_lakehouse.py  (batch; Impala INSERT)
+  ▼
+insurance_lakehouse_bronze.app_claims_raw   (new, dedicated bronze table)
+  │  transform_claims_silver.py  (unions with claims_history_raw)
+  ▼
+insurance_lakehouse_silver.claims_history
+  │  curate_risk_signals_gold.py  (UNCHANGED — just sees more rows)
+  ▼
+insurance_lakehouse.policy_risk_signals / .garage_risk_signals
+  │  scripts/ingest_lakehouse.py  (Phase 3, already existing)
+  ▼
+App's PolicyRiskSignal — fraud_risk_score now reflects real claims too
+```
+
+**Why a separate bronze table, not writing into `claims_history_raw`
+directly?** That table gets a full `DROP TABLE` + `CREATE ... AS SELECT` on
+every `generate-claims-bronze` run (regenerating synthetic data) — writing
+real claims into it would destroy them on the very next run.
+`app_claims_raw` is only ever appended to by the export script and is never
+touched by `generate_claims_bronze.py`, so re-running the synthetic
+generator is still always safe.
+
+**What gets exported**: claims that (a) finished the AI decision pipeline
+(a `ClaimDecision` row exists), (b) are linked to a policy, and (c) haven't
+been exported yet. Tracked via a new `claims.lakehouse_exported_at` column
+(NULL = not yet exported) — idempotent and incremental, safe to re-run
+anytime.
+
+```bash
+bash cml/cli.sh lakehouse export-claims           # export + mark exported
+bash cml/cli.sh lakehouse export-claims --dry-run # preview only, no writes
+```
+
+Then run the claims pipeline (`generate-claims-bronze` is untouched/optional
+here — `transform-claims-silver` → `curate-risk-signals-gold` is what
+actually picks up the new rows) and `bash cml/cli.sh lakehouse ingest` to
+pull the refreshed `fraud_risk_score` back into the app.
+
+Schedule it with `cml/jobs/lakehouse_export_claims_job.py` as a CML Job
+(same pattern as `lakehouse_ingest_job.py`, see cml/README.md), timed to run
+*before* the CDE claims-analytics pipeline.
+
+**Known simplification**: `garage_name` isn't captured anywhere in the app
+today (Step 3 of the wizard only uploads a repair-estimate *document*, not
+a structured garage name) — exported rows use a fixed placeholder
+(`"Unspecified — App Claim"`) so they never spuriously trip the
+garage-risk anomaly detector. A real field (DB column + a small wizard
+addition) is a natural fast-follow if that signal needs to be real for app
+claims specifically.
+
+**Batch, not real-time** — matching every other `lakehouse.sh` command. If
+a live/streaming version is ever needed, the same generate → transform →
+curate Spark jobs can be re-run as Spark Structured Streaming instead of
+building a separate mechanism.
 
 ## Config knobs
 
@@ -349,7 +415,9 @@ population that a single OLTP row/query could never produce:
 ## Roadmap
 
 - ~~**Phase 3** — an app-side ingestion script pulling `insurance_lakehouse.policy_master`/`policy_clauses`/`policy_risk_signals` into the app's SQLite + Chroma RAG index~~ — **done**, see `backend/scripts/ingest_lakehouse.py` / `bash cml/cli.sh lakehouse ingest` (documented in `cml/README.md`).
+- ~~**Close the OLTP → lakehouse loop** — claims filed through the app never fed into bronze, so `fraud_risk_score` was only ever computed over synthetic history~~ — **done**, see § Closing the loop above (`backend/scripts/export_claims_to_lakehouse.py` → `app_claims_raw` → unioned into silver → same gold analytics, unchanged).
 - Swap `generate_bronze.py`/`generate_claims_bronze.py`'s synthetic data for a real source extract (S3/JDBC) once one exists — the validate/transform/curate stages don't need to change.
 - Replace the drop+recreate writes with `MERGE INTO` / `INSERT OVERWRITE` to preserve Iceberg snapshot/time-travel history across runs.
+- Feed `fraud_risk_score`/`claim_risk_band` into the live decision engine (`services/decision_engine.py`/`services/fraud_detection.py`) — today it only surfaces on the Book of Business page and the Claim Insights risk card, it doesn't influence a claim's actual approve/reject/review outcome.
 - Add Great Expectations to the validate stages for richer expectation suites, mirroring the reference workshop's Module 05.
 - Enable the schedule (`schedule_interval="@daily"` or similar) once the demo data volume/cadence story is finalized.
