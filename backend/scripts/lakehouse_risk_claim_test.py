@@ -27,6 +27,7 @@ Two subcommands:
 
 Usage (via cml/cli.sh, run from repo root):
     bash cml/cli.sh test-claim find --band HIGH --not-expired
+    bash cml/cli.sh test-claim find --no-signal --not-expired   # non-lakehouse policies (regression check)
     bash cml/cli.sh test-claim submit --policy-number LH-POL-2059
 
 Or directly:
@@ -78,6 +79,30 @@ DEFAULT_OTP = "112233"
 def cmd_find(args: argparse.Namespace) -> None:
     db = SessionLocal()
     try:
+        now = datetime.utcnow()
+
+        if args.no_signal:
+            # Non-lakehouse policies (no PolicyRiskSignal row at all) — for
+            # regression-checking that the new lakehouse_high_risk_policy
+            # code path is a true no-op when policy.risk_signal is None.
+            rows = (
+                db.query(Policy, Customer)
+                .join(Customer, Customer.id == Policy.customer_id)
+                .outerjoin(PolicyRiskSignal, PolicyRiskSignal.policy_id == Policy.id)
+                .filter(PolicyRiskSignal.id.is_(None))
+                .all()
+            )
+            if args.not_expired:
+                rows = [r for r in rows if not _policy_expired(r[0], now)]
+            if not rows:
+                print("No non-lakehouse (no risk-signal) policies found matching the filters.")
+                return
+            print(f"{'policy_number':<14} {'status':<10} {'expired?':<9}  customer_email")
+            for policy, customer in rows[: args.limit]:
+                expired = "yes" if _policy_expired(policy, now) else "no"
+                print(f"{policy.policy_number:<14} {policy.status.value:<10} {expired:<9}  {customer.email}")
+            return
+
         query = (
             db.query(Policy, PolicyRiskSignal, Customer)
             .join(PolicyRiskSignal, PolicyRiskSignal.policy_id == Policy.id)
@@ -86,7 +111,6 @@ def cmd_find(args: argparse.Namespace) -> None:
         if args.band:
             query = query.filter(PolicyRiskSignal.claim_risk_band == args.band.upper())
         rows = query.order_by(PolicyRiskSignal.fraud_risk_score.desc()).all()
-        now = datetime.utcnow()
         if args.not_expired:
             rows = [r for r in rows if not _policy_expired(r[0], now)]
         if not rows:
@@ -255,6 +279,11 @@ def main() -> None:
         ),
     )
     p_find.add_argument("--limit", type=int, default=10)
+    p_find.add_argument(
+        "--no-signal",
+        action="store_true",
+        help="List non-lakehouse policies (no PolicyRiskSignal row) instead — ignores --band",
+    )
     p_find.set_defaults(func=cmd_find)
 
     p_submit = sub.add_parser("submit", help="File + submit a full test claim against a running app instance")

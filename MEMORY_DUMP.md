@@ -528,9 +528,25 @@ all `status=ACTIVE`, previously 0). `submit --policy-number LH-POL-2059`
   for manual review.
 
 **Item 2 is done and fully proven**, root cause (the date-anchoring bug)
-included. Still worth a quick spot-check of a LOW/MEDIUM band and a
-non-lakehouse `POL-MTR-*` policy for no regression, but not blocking —
-the mechanism is unambiguously correct.
+included.
+
+Regression spot-check, LOW band: `submit --policy-number LH-POL-2000`
+(score 30.7) → `status: ANALYSIS_COMPLETE`, `fraud_score: 0.12`,
+`escalation_flags: []`. No `lakehouse_high_risk_policy` flag and no score
+bump — the signal is correctly additive/gated by band, not a blanket
+effect. Confirms no regression on the non-HIGH path.
+
+Added `test-claim find --no-signal` (outer join, lists policies with NO
+`PolicyRiskSignal` row at all — i.e. non-lakehouse `POL-MTR-*` demo
+policies) to make it trivial to also regression-check that
+`policy.risk_signal is None` is handled cleanly by
+`fraud_detection.py`/`escalation_service.py` (no AttributeError, no
+phantom flag). Use: `bash cml/cli.sh test-claim find --no-signal
+--not-expired` then `submit --policy-number <result>`.
+
+**Item 2: fully closed.** OLTP + Lakehouse story now has 2/3 items done.
+Item 3 (Iceberg time travel / MERGE-based gold writes) is next, see
+Roadmap in `cde/README.md`.
 
 **Item 3 — not started yet** (Iceberg time travel / `MERGE`/`INSERT
 OVERWRITE` instead of drop+recreate gold writes), logged in

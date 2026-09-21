@@ -280,12 +280,14 @@ by risk band — pass `--not-expired` to only show policies that pass the
 *real* `policy_expired` check (`expiry_date >= now`, status not
 EXPIRED/LAPSED/CANCELLED) that `decision_engine.py` runs before it ever
 reaches the escalation flags this is meant to test. The `status` column
-alone isn't reliable here: the synthetic population's `expiry_date` is
-generated once (`cde/jobs/generate/generate_bronze.py`, relative to
-2024-01-01) and doesn't move with real time, so a policy can say `ACTIVE`
-and still be expired-by-date against today's real clock — and as real
-time advances, eventually *no* lakehouse policy will pass `--not-expired`
-without regenerating the synthetic data with fresh dates. `submit` does the whole flow
+alone isn't reliable here. `generate_bronze.py`/`lakehouse_seed.py` now
+anchor `expiry_date` relative to the job's *run time* (not a fixed
+2024-01-01), so re-running `generate-bronze` (CDE) or `lakehouse seed`
+(CML) periodically keeps a healthy population of non-expired policies —
+see Gotcha in `cde/README.md`. Pass `--no-signal` instead of `--band` to
+list *non-lakehouse* policies (no `PolicyRiskSignal` row at all) — useful
+for regression-checking that this code path is a true no-op when
+`policy.risk_signal is None`. `submit` does the whole flow
 against a running app instance (sets the customer's password, logs in,
 creates + links + submits a claim using the synthetic evidence docs above,
 polls for the decision) and prints the final status, fraud_score, and
@@ -294,6 +296,13 @@ fired and drove the outcome. Script:
 [`backend/scripts/lakehouse_risk_claim_test.py`](../backend/scripts/lakehouse_risk_claim_test.py)
 (`--help` for all flags). **Testing-only**, same caveat as
 `set_demo_password.py` above.
+
+Verified end-to-end in env1 (2026-09-21): a HIGH-band policy
+(`LH-POL-2059`) landed on `PENDING_REVIEW` with the
+`lakehouse_high_risk_policy` flag and `fraud_score` exactly matching the
+`lakehouse_risk_high` weight (0.40); a LOW-band policy (`LH-POL-2000`)
+resolved on its own merits with no such flag and no score bump — confirming
+the signal is additive and correctly gated by risk band.
 
 ## Closing the loop: exporting app claims
 
