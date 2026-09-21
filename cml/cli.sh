@@ -50,6 +50,16 @@ Commands:
                        (not just present in Impala/the app DB). --check-claims
                        also looks for an existing claim tied to an LH-POL-*
                        policy (needed to see the Claim Insights risk card).
+  test-claim <find|submit> [flags]
+                      Phase 4b: reusable test harness for the lakehouse
+                       risk -> decision pipeline (fraud_detection.py /
+                       escalation_service.py) — replaces hand-typed curl
+                       chains. `find` lists lakehouse policies by risk
+                       band/status (DB-direct, no app needed). `submit`
+                       files + submits a full test claim against a running
+                       app instance and prints the resulting decision/
+                       escalation. See
+                       backend/scripts/lakehouse_risk_claim_test.py --help.
 
 Typical first run:
   bash cml/cli.sh doctor
@@ -77,6 +87,7 @@ case "$cmd" in
   diagnose) exec bash "$SCRIPT_DIR/diagnose.sh" "$@" ;;
   lakehouse) exec bash "$SCRIPT_DIR/lakehouse.sh" "$@" ;;
   verify-phase4) exec bash "$SCRIPT_DIR/verify_phase4.sh" "$@" ;;
+  test-claim) exec bash "$SCRIPT_DIR/test_claim.sh" "$@" ;;
   help|-h|--help) usage ;;
   *) echo "Unknown command: $cmd" >&2; echo; usage; exit 2 ;;
 esac

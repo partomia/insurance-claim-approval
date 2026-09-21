@@ -448,11 +448,32 @@ only being displayed:
   folded into the composite `fraud_risk_score`/band by the gold SQL — would
   double-count). No new `.env`/`config.py` settings — weights are hardcoded
   in `SIGNAL_WEIGHTS`, consistent with every other signal in that file.
-- **Verification pending**: file a fresh claim on `LH-POL-2050` (HIGH band,
-  score 70.5, 17 claims as of this session) in env1 and confirm
-  `PENDING_REVIEW` with the new reasoning surfaced; spot-check a LOW/MEDIUM
-  band lakehouse policy and a non-lakehouse `POL-MTR-*` demo policy for no
-  regression.
+- **Verified in env1** (claim `CLMA88F21DA` on `LH-POL-2050`, filed through
+  the UI): `escalation_flags` included `lakehouse_high_risk_policy` with the
+  exact expected message, `fraud_score` was elevated (0.87). Final status
+  was `REJECTED` rather than `PENDING_REVIEW` — **not a bug**: `LH-POL-2050`
+  has `status: EXPIRED`, and `decision_engine.decide()` checks
+  `policy_expired` *before* it ever reaches the escalation-flags branch
+  (same reason an earlier claim on this policy, pre-fix, was also
+  REJECTED). To see the escalation-driven `PENDING_REVIEW` path, need a
+  HIGH-band policy that is NOT expired.
+- **New reusable test harness** (replacing hand-typed curl chains, same
+  spirit as `verify_phase4.sh`/`set_demo_password.py`):
+  `backend/scripts/lakehouse_risk_claim_test.py` + `cml/test_claim.sh`,
+  wired as `bash cml/cli.sh test-claim <find|submit> [flags]`.
+  - `find --band HIGH --active-only` — DB-direct, lists lakehouse policies
+    by risk band/status, to pick a good candidate (avoiding the
+    `policy_expired` short-circuit above).
+  - `submit --policy-number LH-POL-XXXX` — full HTTP flow against a
+    running app instance: sets the customer's password, logs in, creates +
+    links + submits a claim with the committed synthetic evidence docs,
+    polls for the decision, prints status/fraud_score/escalation
+    flags+messages. One command instead of a 5-step curl chain per test.
+  - **Still to do**: run `test-claim find --band HIGH --active-only` then
+    `test-claim submit --policy-number <result>` in env1 to see the
+    escalation flag actually land on `PENDING_REVIEW`; also spot-check a
+    LOW/MEDIUM band and a non-lakehouse `POL-MTR-*` policy for no
+    regression.
 
 **Item 3 — not started yet** (Iceberg time travel / `MERGE`/`INSERT
 OVERWRITE` instead of drop+recreate gold writes), logged in

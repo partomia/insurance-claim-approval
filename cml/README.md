@@ -16,6 +16,8 @@ cml/
 ├── portcheck.sh ← what's listening on a port (no ss/lsof/fuser needed)
 ├── diagnose.sh  ← bundles doctor+status+portcheck+logs into one shareable file
 ├── lakehouse.sh ← Iceberg/Impala datalakehouse seed/verify/ingest/export-claims
+├── verify_phase4.sh ← insurer risk data served end-to-end check (Phase 4)
+├── test_claim.sh ← lakehouse risk -> decision test harness (Phase 4b)
 ├── jobs/
 │   ├── lakehouse_ingest_job.py        ← CML Job wrapper: scheduled lakehouse ingest refresh (Phase 4)
 │   └── lakehouse_export_claims_job.py ← CML Job wrapper: scheduled app-claims export (closing the loop)
@@ -40,6 +42,8 @@ bash cml/cli.sh reset [--yes]       # delete local demo DB/Chroma/storage
 bash cml/cli.sh portcheck [port]    # who's bound to a port + HTTP probe
 bash cml/cli.sh diagnose [port]     # one file with doctor+status+portcheck+logs, for sharing
 bash cml/cli.sh lakehouse <seed|verify|ingest|export-claims>  # Iceberg/Impala datalakehouse (see below)
+bash cml/cli.sh verify-phase4 [--check-claims]  # insurer risk data served end-to-end (see below)
+bash cml/cli.sh test-claim <find|submit> [flags]  # lakehouse risk -> decision test harness (see below)
 ```
 
 `setup` flags: `--skip-frontend` `--skip-seed` `--reset-db` `--run`
@@ -263,6 +267,26 @@ damage photo (+ a driver's licence, since these demo customers aren't
 KYC-verified), use the synthetic sample documents in
 [`docs/demo-assets/claim-docs/`](../docs/demo-assets/claim-docs/README.md)
 (watermarked, not real photos/IDs) instead of hunting for real files.
+
+**Testing that lakehouse risk actually feeds the decision (Phase 4b)** —
+instead of hand-typing the password-reset + login + draft + evidence +
+submit + poll sequence above every time, use the committed test harness:
+```bash
+bash cml/cli.sh test-claim find --band HIGH --active-only   # pick a policy
+bash cml/cli.sh test-claim submit --policy-number LH-POL-2059
+```
+`find` is DB-direct (no running app needed) and lists lakehouse policies
+by risk band/status — pass `--active-only` to exclude `EXPIRED` policies,
+since `decision_engine.py` checks `policy_expired` before it ever reaches
+the escalation flags this is meant to test. `submit` does the whole flow
+against a running app instance (sets the customer's password, logs in,
+creates + links + submits a claim using the synthetic evidence docs above,
+polls for the decision) and prints the final status, fraud_score, and
+escalation flags/messages — so you can confirm `lakehouse_high_risk_policy`
+fired and drove the outcome. Script:
+[`backend/scripts/lakehouse_risk_claim_test.py`](../backend/scripts/lakehouse_risk_claim_test.py)
+(`--help` for all flags). **Testing-only**, same caveat as
+`set_demo_password.py` above.
 
 ## Closing the loop: exporting app claims
 
