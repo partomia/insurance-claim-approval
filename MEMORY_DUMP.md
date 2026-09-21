@@ -544,9 +544,15 @@ policies) to make it trivial to also regression-check that
 phantom flag). Use: `bash cml/cli.sh test-claim find --no-signal
 --not-expired` then `submit --policy-number <result>`.
 
-**Item 2: fully closed.** OLTP + Lakehouse story now has 2/3 items done.
-Item 3 (Iceberg time travel / MERGE-based gold writes) is next, see
-Roadmap in `cde/README.md`.
+Regression spot-check, no-signal: `submit --policy-number POL-MTR-1001`
+→ `ANALYSIS_COMPLETE`, `fraud_score: 0.12`, `escalation_flags: []` — no
+crash, no phantom flag when `policy.risk_signal is None`.
+
+**Item 2: fully closed and verified in env1**, all 3 cases pass (HIGH →
+`PENDING_REVIEW` + flag + score=0.40 exactly; LOW → no-op; no-signal →
+no-op, no crash). OLTP + Lakehouse story now has 2/3 items done. Item 3
+(Iceberg time travel / MERGE-based gold writes instead of drop+recreate)
+is next, see Roadmap in `cde/README.md`.
 
 **Item 3 — not started yet** (Iceberg time travel / `MERGE`/`INSERT
 OVERWRITE` instead of drop+recreate gold writes), logged in
