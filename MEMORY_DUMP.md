@@ -127,3 +127,45 @@
 - Cookie fix requires **`SameSite=Lax`**, not `Strict` or with `Secure`-only
   assumptions — verify this still works if the deployment domain setup
   changes (e.g. cross-subdomain proxying).
+
+---
+
+## 2026-09-21 — Target environments documented (env 1 vs env 2)
+
+Two separate CAI deployments going forward. Phase 4 is scoped to **env 1
+only** — env 2 must never receive it.
+
+### Env 1
+
+- URL: <https://ml-dbfc64d1-783.go01-dem.ylcu-atmi.cloudera.site/rsingh/insurance-claim-processing>
+- Platform: **CDP 7.3.2**, a full CAI workspace with normal CDE/CDW/CDF
+  integration — the "standard" lakehouse-integrated deployment this project
+  targets by default (Iceberg via CDE, per [`cde/README.md`](cde/README.md)
+  and [`cml/README.md`](cml/README.md#data-lakehouse-impala--iceberg--cde)).
+- **This is where Phase 4 (Insurer Book of Business + Claim Insights risk
+  card, `phase4-insurer-risk-ui` branch) starts / is being rolled out.**
+
+### Env 2
+
+- URL: <https://goes-awc-bench.goes-ai.demos.cloudera-labs.com/rsingh/insurance-claim-datalake-integrated-and-standalone-oltp>
+- Platform: a **new Cloudera product release — "AWC" (AnyWhere Cloud)**.
+  CAI here is **standalone**: no integration with CDE/CDW/CDF at all.
+- This is the **same workspace** referenced in the 2026-09-20/21 entry above
+  (the Istio JWT 401 / cookie-auth fix) — `goes-awc-bench...cloudera-labs.com`.
+- **No TLS certs in this environment** — per the user, this is what forced
+  yesterday's architecture change (the header + cookie belt-and-suspenders
+  auth fix described above).
+- Because there's no CDE/CDW integration, there's **no Iceberg/lakehouse
+  pipeline available** here. `insurance-claim-processing` runs **standalone
+  on OLTP only** (`DB_BACKEND=sqlite`) — no
+  `bash cml/cli.sh lakehouse seed|verify|ingest` in this env.
+- **Phase 4 will NOT be used in this env at all.** It stays on `main`
+  (pre-Phase-4 feature set, OLTP-only).
+
+### Standing rule
+
+- **Env 1** = Phase 4 development/demo target (lakehouse-integrated, CDP 7.3.2).
+- **Env 2** = OLTP-only baseline on the standalone-AWC product release —
+  never gets Phase 4. Keep it tracking `main` (or pin to the
+  `phase3-complete` tag) and do **not** merge `phase4-insurer-risk-ui` into
+  `main` in a way that env 2 would pick up until this constraint changes.
