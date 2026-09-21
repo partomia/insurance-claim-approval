@@ -169,3 +169,40 @@ only** — env 2 must never receive it.
   never gets Phase 4. Keep it tracking `main` (or pin to the
   `phase3-complete` tag) and do **not** merge `phase4-insurer-risk-ui` into
   `main` in a way that env 2 would pick up until this constraint changes.
+
+### Rollback tags for env 1 — ⚠️ naming mistake, read carefully
+
+Two tags exist and are easy to confuse:
+
+- **`env1-pre-phase4-2026-09-21`** (commit `a56416b`, tip of
+  `phase4-insurer-risk-ui`) — despite the name, this **already contains**
+  the Phase 4 feature commit (`dbd66dc feat(phase4): insurer risk UI...`).
+  It was originally (mis-)intended as a rollback point but actually isn't
+  one — it's the **"deploy Phase 4 now"** checkpoint. This is what env 1
+  is currently checked out to (detached HEAD) as of 2026-09-21 09:5x IST,
+  and that's fine/expected for starting Phase 4 work there.
+- **`env1-rollback-baseline-2026-09-21`** (commit `c62197c`, tip of `main`
+  at the time) — this is the **real** pre-Phase-4 baseline; verified via
+  `git merge-base --is-ancestor dbd66dc c62197c` → false (does not contain
+  Phase 4). **Use this one to actually revert env 1** if Phase 4 needs to
+  be rolled back:
+  ```bash
+  git fetch --tags
+  git checkout env1-rollback-baseline-2026-09-21
+  bash cml/cli.sh update
+  # then restart the Application
+  ```
+
+### Note on `cml/cli.sh update` in detached HEAD
+
+Checking out a tag puts you in detached HEAD, so the script's internal
+`git pull --ff-only` step will always fail with "You are not currently on a
+branch" — **this is expected and harmless**, the rest of `update` (dep
+sync, DB schema check, frontend rebuild) still runs correctly. To pick up
+newer commits later while pinned to a tag, re-run `git fetch --tags` +
+`git checkout <tag-or-newer-ref>` rather than `git pull`.
+
+Also saw a one-time warning: `New keys in .env.example not yet in your
+.env: LAKEHOUSE_DATABASE` — harmless, the code defaults to
+`insurance_lakehouse` when unset (matches `.env.example`); only add it to
+`backend/.env` explicitly if env 1 needs a non-default Iceberg schema name.
