@@ -370,6 +370,46 @@ Going forward, `phase4-insurer-risk-ui` is redundant (main has
 everything) — do new work directly on `main` unless a fresh feature
 branch is intentionally started.
 
+### OLTP + Lakehouse storyline enhancements (3 items, tackling one at a time)
+
+User flagged 3 gaps in the OLTP+lakehouse "story" for a demo:
+1. Claims filed in the app never landed in bronze (one-way flow only).
+2. `fraud_risk_score` is a Spark SQL heuristic that never feeds the
+   decision engine — only shown on Book of Business / Claim Insights.
+   Also no CAI Model endpoint exists; "the model" is the LLM via Groq.
+3. No Iceberg time travel / snapshot audit — gold writes are
+   drop+recreate, not `MERGE`/`INSERT OVERWRITE`.
+
+**Item 1 — done** (commit `0281b2e`): `backend/scripts/export_claims_to_lakehouse.py`
+pushes decided, policy-linked, not-yet-exported app claims (tracked via new
+`Claim.lakehouse_exported_at`) into a dedicated Iceberg bronze table
+`insurance_lakehouse_bronze.app_claims_raw` via Impala INSERT — kept
+separate from `claims_history_raw` since that table gets drop+recreated by
+`generate_claims_bronze.py` every run. `transform_claims_silver.py` unions
+the two bronze sources into the same silver `claims_history`; NO changes
+needed in `curate_risk_signals_gold.py` — real claims flow through the same
+fraud/risk analytics automatically. New `bash cml/cli.sh lakehouse
+export-claims` + `cml/jobs/lakehouse_export_claims_job.py` (CML Job,
+symmetric to the ingest Job, same sys.exit()-in-kernel-safe pattern from
+day one). Batch only (user's call — real-time can become a Spark
+Structured Streaming job later if ever needed). `garage_name` uses a fixed
+placeholder (`"Unspecified — App Claim"`) since the app has no structured
+garage field yet (only a repair-estimate *document* upload) — user
+explicitly deferred this as non-critical. Full design: `cde/README.md`
+§ Closing the loop.
+
+**Not yet verified in env1** — needs `git pull`, then:
+```bash
+bash cml/cli.sh lakehouse export-claims --dry-run   # preview first
+bash cml/cli.sh lakehouse export-claims             # then for real
+```
+(needs at least one claim with a decision — e.g. the `LH-POL-2050` claim
+submitted earlier this session). Then re-run the CDE claims pipeline
+(`transform-claims-silver` → `curate-risk-signals-gold`) and
+`bash cml/cli.sh lakehouse ingest` to confirm the loop closes end-to-end.
+
+**Items 2 & 3 — not started yet**, logged in `cde/README.md`'s Roadmap.
+
 ### Reusable Phase 4 testing tooling added this session
 
 - `cml/verify_phase4.sh` (`bash cml/cli.sh verify-phase4 [--check-claims]`)
