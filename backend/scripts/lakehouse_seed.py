@@ -26,7 +26,7 @@ Usage:
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -43,7 +43,21 @@ settings = get_settings()
 # prefixed LH- so they're obviously distinct from the SQLite-seeded demo data
 # if the two ever get merged in Phase 3.
 # --------------------------------------------------------------------------- #
-NOW = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+_ANCHOR = datetime.now(timezone.utc).replace(tzinfo=None)
+NOW = _ANCHOR.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _date(days_from_anchor: int) -> str:
+    """Effective/expiry dates anchored to *this script's run time*, not a
+    fixed calendar date -- the original hardcoded strings below (e.g.
+    "2025-04-01"/"2026-03-31") eventually fall into the past regardless of
+    each row's intended ACTIVE/EXPIRED status, the same bug found and fixed
+    in cde/jobs/generate/generate_bronze.py (see that file's comment for the
+    full story). This is Phase 1's superseded hand-seed path (Phase 2's CDE
+    pipeline replaces these 3 rows the first time it runs), but keeping it
+    correct too in case anyone bootstraps a fresh cluster with this script
+    before Phase 2 exists."""
+    return (_ANCHOR + timedelta(days=days_from_anchor)).strftime("%Y-%m-%d")
 
 POLICIES = [
     {
@@ -58,8 +72,8 @@ POLICIES = [
         "deductible": 500.0,
         "co_pay_pct": 10.0,
         "waiting_period_days": 0,
-        "effective_date": "2025-04-01",
-        "expiry_date": "2026-03-31",
+        "effective_date": _date(-180),
+        "expiry_date": _date(-180 + 365),
         "depreciation_rate": 5.0,
         "covered_vehicle_vin": "MA3ERLF1S00123456",
         "covered_make": "Maruti Suzuki",
@@ -81,8 +95,8 @@ POLICIES = [
         "deductible": 750.0,
         "co_pay_pct": 10.0,
         "waiting_period_days": 0,
-        "effective_date": "2025-08-15",
-        "expiry_date": "2026-08-14",
+        "effective_date": _date(-30),
+        "expiry_date": _date(-30 + 365),
         "depreciation_rate": 10.0,
         "covered_vehicle_vin": "MBJZKF3AXPB654321",
         "covered_make": "Hyundai",
@@ -104,8 +118,8 @@ POLICIES = [
         "deductible": 500.0,
         "co_pay_pct": 15.0,
         "waiting_period_days": 0,
-        "effective_date": "2024-01-10",
-        "expiry_date": "2025-01-09",
+        "effective_date": _date(-400),
+        "expiry_date": _date(-400 + 365),  # -35 days from anchor -- deliberately already expired, matches status=EXPIRED
         "depreciation_rate": 20.0,
         "covered_vehicle_vin": "MA1TA2AH9G0987654",
         "covered_make": "Tata",

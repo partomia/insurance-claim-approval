@@ -111,12 +111,26 @@ def get_spark() -> SparkSession:
     return SparkSession.builder.appName("insurance-generate-bronze").getOrCreate()
 
 
-def generate_policy_rows(n: int, now_iso: str, seed: int = 42):
+def generate_policy_rows(n: int, now_iso: str, anchor: datetime, seed: int = 42):
     rng = random.Random(seed)
     rows = []
     for i in range(n):
         make, model = rng.choice(VEHICLES)
-        effective = datetime(2024, 1, 1) + timedelta(days=rng.randint(0, 640))
+        # Anchored to the job's run time (`anchor`), not a fixed calendar
+        # date -- was previously `datetime(2024, 1, 1) + randint(0, 640)`,
+        # which meant every policy's expiry_date (effective + 365d) had a
+        # hard ceiling of ~2026-10-02 regardless of when this job actually
+        # ran. Once real time passed that ceiling, PolicyValidationService's
+        # policy_expired check (`expiry_date < utcnow()`) started rejecting
+        # every single lakehouse-linked policy outright -- independent of
+        # claim_risk_band/fraud_score/status -- permanently breaking the
+        # "file a claim, see a rich decision" demo path (found via
+        # backend/scripts/lakehouse_risk_claim_test.py). Skewing
+        # effective_date into the recent past relative to `anchor` keeps
+        # expiry_date >= anchor + 65 days for every policy, giving a long,
+        # self-renewing runway -- just re-run this job for a fresh window
+        # whenever it's needed, instead of it silently expiring forever.
+        effective = anchor - timedelta(days=rng.randint(30, 300))
         rows.append((
             f"LH-POL-{2000 + i}",
             f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}",
@@ -154,9 +168,10 @@ def generate_clause_rows(policy_numbers, now_iso: str):
 
 
 def write_bronze(spark: SparkSession, n_policies: int) -> None:
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    anchor = datetime.now(timezone.utc).replace(tzinfo=None)
+    now_iso = anchor.strftime("%Y-%m-%d %H:%M:%S")
 
-    policy_rows = generate_policy_rows(n_policies, now_iso)
+    policy_rows = generate_policy_rows(n_policies, now_iso, anchor)
     policy_df = spark.createDataFrame(policy_rows, schema=POLICY_MASTER_SCHEMA)
 
     clause_rows = generate_clause_rows([r[0] for r in policy_rows], now_iso)

@@ -486,14 +486,38 @@ only being displayed:
     bronze with fresh dates (`bash cml/cli.sh lakehouse seed` or re-running
     `generate-bronze` in CDE). Fixed `find` to check the real condition
     instead of just `status`.
-  - **Still to do**: run `test-claim find --band HIGH --not-expired` in
-    env1 — if it returns candidates, submit against one to confirm
-    `PENDING_REVIEW`; if it returns none (increasingly likely as real time
-    passes 2026-10-02), that's expected per the finding above, not a bug —
-    consider testing the signal via a direct unit-level check of
-    `fraud_detection.py`/`escalation_service.py` instead, or regenerating
-    bronze with fresher dates. Also still need to spot-check a LOW/MEDIUM
-    band and a non-lakehouse `POL-MTR-*` policy for no regression.
+  - Ran `find --band HIGH --not-expired` in env1: **zero results**,
+    confirming the ceiling had already been hit for the HIGH band.
+
+**Root-cause fix (user chose to fix properly, "no need to rush")**:
+`cde/jobs/generate/generate_bronze.py`'s `effective_date` was anchored to a
+hardcoded `datetime(2024, 1, 1)` + `random(0, 640)` days, so every policy's
+`expiry_date` (`effective + 365d`) had a hard ceiling of **~2026-10-02**
+regardless of when the job actually ran — a ticking time bomb that had
+already gone off for the HIGH band and would hit every remaining policy
+within days. Fixed to anchor `effective_date` to the job's own run time
+instead (`anchor - random(30, 300) days`), guaranteeing `expiry_date >=
+anchor + 65 days` for every policy going forward — self-renewing, just
+re-run `generate-bronze` for a fresh window whenever needed. Applied the
+same fix to the superseded Phase 1 hand-seed path
+(`backend/scripts/lakehouse_seed.py`'s 3 hardcoded `LH-POL-100x` rows) for
+consistency, even though Phase 2's CDE pipeline already overwrites those.
+
+**Still to do in env1** — regenerate + re-ingest so the fresh dates take
+effect (the fix is code-only until the pipeline actually re-runs):
+```bash
+git pull
+cde job run --name rsingh-insurance-generate-bronze --wait
+cde job run --name rsingh-insurance-validate-bronze --wait
+cde job run --name rsingh-insurance-transform-silver --wait
+cde job run --name rsingh-insurance-curate-gold --wait
+bash cml/cli.sh lakehouse ingest
+```
+Then re-verify: `bash cml/cli.sh test-claim find --band HIGH --not-expired`
+should return candidates again; `test-claim submit --policy-number
+<one of them>` should land on `PENDING_REVIEW` with the
+`lakehouse_high_risk_policy` message. Also still need to spot-check a
+LOW/MEDIUM band and a non-lakehouse `POL-MTR-*` policy for no regression.
 
 **Item 3 — not started yet** (Iceberg time travel / `MERGE`/`INSERT
 OVERWRITE` instead of drop+recreate gold writes), logged in
