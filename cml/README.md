@@ -179,6 +179,46 @@ bash cml/cli.sh lakehouse ingest --no-rag # DB only, skip Chroma indexing
 Script: `backend/scripts/ingest_lakehouse.py`. Idempotent — safe to re-run
 after every CDE pipeline run to pick up fresh gold-table data.
 
+This closes the loop with a **scheduled refresh** so the data doesn't go
+stale between manual `lakehouse ingest` runs: register
+[`cml/jobs/lakehouse_ingest_job.py`](jobs/lakehouse_ingest_job.py) as a CML
+**Job** (Project → Jobs → New Job → Script: `cml/jobs/lakehouse_ingest_job.py`),
+scheduled to run after the CDE Airflow DAG typically completes (e.g. daily).
+It's a thin wrapper around `scripts/ingest_lakehouse.py` using the same
+robust venv/repo-root resolution as `cml/run.py` — Jobs run independently of
+whether the Application is currently up. Test it manually first:
+```bash
+python cml/jobs/lakehouse_ingest_job.py
+```
+
+**Creating the Job** — go to **Project → Jobs → New Job**:
+
+| Field | Value |
+|---|---|
+| **Name** | Anything descriptive, e.g. `Lakehouse Ingest Refresh` |
+| **Run Job as** | `me` (default), unless you have a dedicated service account |
+| **Script** | `cml/jobs/lakehouse_ingest_job.py` |
+| **Arguments** | Leave empty |
+| **Editor / Kernel** | Doesn't matter — leave defaults. The script execs its own Python (`backend/.venv` or `uv run`), bypassing whatever launched it |
+| **Edition / Version** | Match whatever your working Session/Application already uses — **not** a GPU edition (see below) |
+| **Enable Spark** | Leave **off** — not used |
+| **Schedule** | **Manual** first, to test one run; switch to a recurring schedule (e.g. daily) once confirmed, timed to run after your CDE Airflow DAG typically finishes |
+| **Enable GPU** | **off** — this is a lightweight DB/RAG-index refresh, no LLM/GPU work happens in this path |
+| **Resource Group / vCPU/Memory** | The default (e.g. `2 vCPU / 4 GiB`) is plenty for ~60-policy ingests |
+| **Timeout in Minutes** | `10`–`15` is safe |
+| **Environment Variables** | Leave empty — it reads `backend/.env` the same way `bash cml/cli.sh lakehouse ingest` does |
+| **Job Notifications** | Check at least **Failure**, so a broken scheduled run doesn't go unnoticed |
+
+**Kerberos note**: if `IMPALA_AUTH_MECHANISM=GSSAPI` (the default), an
+unattended scheduled Job can't run an interactive `kinit` — you'd need a
+keytab-based non-interactive setup instead. If you're on
+`IMPALA_AUTH_MECHANISM=LDAP` (`IMPALA_USER`/`IMPALA_PASSWORD` in
+`backend/.env`), this doesn't apply — the Job authenticates the same way
+`lakehouse ingest` already does from a Session terminal, no ticket needed.
+
+Run it once manually after creating it and check the Job's log — output
+should match `bash cml/cli.sh lakehouse ingest` exactly.
+
 ## Verifying Phase 1-3 end-to-end (step-by-step)
 
 Run this checklist after any `git pull` + `bash cml/cli.sh update` — e.g.
