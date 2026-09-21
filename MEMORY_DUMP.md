@@ -398,15 +398,33 @@ garage field yet (only a repair-estimate *document* upload) — user
 explicitly deferred this as non-critical. Full design: `cde/README.md`
 § Closing the loop.
 
-**Not yet verified in env1** — needs `git pull`, then:
-```bash
-bash cml/cli.sh lakehouse export-claims --dry-run   # preview first
-bash cml/cli.sh lakehouse export-claims             # then for real
-```
-(needs at least one claim with a decision — e.g. the `LH-POL-2050` claim
-submitted earlier this session). Then re-run the CDE claims pipeline
-(`transform-claims-silver` → `curate-risk-signals-gold`) and
-`bash cml/cli.sh lakehouse ingest` to confirm the loop closes end-to-end.
+**Item 1 — verified end-to-end in env1.** Ran `lakehouse export-claims`
+(exported the `LH-POL-2050` / `CLM33EE6D22` claim into `app_claims_raw`),
+then `cde job run --name rsingh-insurance-transform-claims-silver --wait`
+→ `cde job run --name rsingh-insurance-curate-risk-signals-gold --wait`
+(both succeeded), then `bash cml/cli.sh lakehouse ingest` in env1. Confirmed
+via `/api/insurer/book-of-business` that `LH-POL-2050`'s risk numbers moved
+by exactly the exported claim: `total_claims_count` 16→17,
+`claims_count_12m` 10→11, `total_claimed_amount` +50,001.0 (exact match),
+`fraud_risk_score` 70.1→70.5, band stayed HIGH. **Full OLTP↔lakehouse loop
+confirmed closed.**
+
+Two bugs found + fixed while verifying:
+- **CDE Repository broke after the Git history rewrite.** `cde repository
+  sync` failed with `non-fast-forward update` (rewritten/force-pushed
+  history can't fast-forward the Repository's cached clone). Fix: deleted
+  all 9 jobs mounting the Repository, deleted the Repository, re-ran
+  `deploy_jobs.sh` + `deploy_dag.sh` to recreate everything from a fresh
+  clone. Documented as Gotcha #6 in `cde/README.md` — only do a history
+  rewrite on this repo if you can also run this CDE-side recovery.
+- **`policy_risk_signals.ingested_at` went stale after the first ingest.**
+  `backend/scripts/ingest_lakehouse.py`'s `upsert_risk_signal()` never
+  updated `ingested_at` on re-ingest — the SQLAlchemy column `default=`
+  only fires on the initial `INSERT`, so the freshness timestamp stayed
+  frozen at Sep 18 (the first Phase 4 ingest) even after re-ingesting
+  fresh gold data days later. Fixed to parse the gold pipeline's own
+  `ingested_at` value from each row (falling back to `utcnow()` if
+  missing/unparseable) and set it every upsert.
 
 **Items 2 & 3 — not started yet**, logged in `cde/README.md`'s Roadmap.
 

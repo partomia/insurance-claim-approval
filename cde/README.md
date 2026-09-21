@@ -262,6 +262,22 @@ variables at the top of each script if you deploy under a different prefix):
    end-to-end). Lesson: only disable a CDE Service if you genuinely intend
    to delete it.
 
+6. **A GitHub history rewrite (e.g. `git filter-repo` + force-push) breaks
+   `cde repository sync`.** Symptom: `Repository <name> syncing failed:
+   unable to pull repository: failed to pull from the remote: non-fast-forward
+   update`. The Repository's cached clone can't fast-forward onto a
+   force-pushed, rewritten history — it needs a fresh clone, not a pull.
+   Fix: delete every Job that mounts the Repository (`cde repository delete`
+   refuses while any Job still references it — the error message lists
+   them), then `cde repository delete --name <repo>`, then re-run
+   `./cde/scripts/deploy_jobs.sh` (recreates the Repository via a fresh
+   clone + recreates all Spark jobs) and `./cde/scripts/deploy_dag.sh`
+   (recreates the Airflow orchestration job). Confirmed live: recovered a
+   9-job pipeline this way after the `Co-authored-by` trailer removal
+   rewrite in this repo's Git history — only do this kind of rewrite if you
+   also have CDE access to run this recovery, or coordinate with whoever
+   does.
+
 ## Connectivity troubleshooting
 
 If `cde resource list` (or any `cde` command) hangs or errors:

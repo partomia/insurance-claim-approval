@@ -176,6 +176,20 @@ def upsert_risk_signal(db, policy: Policy, row: dict) -> None:
     signal.fraud_risk_score = float(row.get("fraud_risk_score") or 0.0)
     signal.claim_risk_band = row.get("claim_risk_band") or "LOW"
     signal.source = row.get("source") or "GOLD_PIPELINE"
+    # `ingested_at` is a freshness indicator — it must be refreshed on every
+    # re-ingest, not just the first INSERT (the SQLAlchemy column `default=`
+    # only fires once). Prefer the gold pipeline's own "as-of" timestamp
+    # (row["ingested_at"], written by curate_risk_signals_gold.py) so the UI
+    # reflects when the *data* was computed; fall back to now if missing/
+    # unparseable so it's never worse than before.
+    gold_ingested_at = row.get("ingested_at")
+    parsed = None
+    if gold_ingested_at:
+        try:
+            parsed = datetime.strptime(str(gold_ingested_at), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            parsed = None
+    signal.ingested_at = parsed or datetime.utcnow()
 
 
 def run(rag: bool = True) -> None:
