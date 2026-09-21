@@ -11,7 +11,6 @@ from config import get_settings
 from models.claim import Claim, ClaimDocument, ClaimStatus, DocumentType
 from models.platform import CustomerProfile
 from services.kyc_service import is_kyc_verified
-from services.kyc_service import is_kyc_verified
 from services.explainability import ExplainabilityService
 from services.orchestrator import ClaimOrchestrator
 from services.policy_context_service import PolicyContextService
@@ -156,10 +155,17 @@ class ClaimService:
         types = {d.doc_type for d in docs}
         profile = db.query(CustomerProfile).filter(CustomerProfile.customer_id == claim.customer_id).first()
         kyc_verified = is_kyc_verified(profile)
-        if not kyc_verified and DocumentType.GOV_ID not in types:
-            errors.append("Government ID is required (Step 3).")
-        if DocumentType.PROOF not in types:
-            errors.append("At least one proof document is required (Step 3).")
+        # NOTE: DocumentType is motor-vehicle-specific (see models/claim.py) —
+        # there is no generic GOV_ID/PROOF member. DRIVER_LICENSE and
+        # DAMAGE_PHOTO are the motor equivalents actually written by
+        # upload_evidence() in routers/claims.py. Using the old generic
+        # names here raised AttributeError on every submit (never matched,
+        # so it never blocked pre-fix either — this bug silently broke all
+        # claim submissions, not just motor-specific ones).
+        if not kyc_verified and DocumentType.DRIVER_LICENSE not in types:
+            errors.append("Driver's licence is required (Step 3), unless KYC is verified.")
+        if DocumentType.DAMAGE_PHOTO not in types:
+            errors.append("At least one damage photo is required (Step 3).")
         return errors
 
     def finalize_submit(self, db: Session, claim: Claim) -> Claim:
