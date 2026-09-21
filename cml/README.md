@@ -16,6 +16,8 @@ cml/
 ├── portcheck.sh ← what's listening on a port (no ss/lsof/fuser needed)
 ├── diagnose.sh  ← bundles doctor+status+portcheck+logs into one shareable file
 ├── lakehouse.sh ← Iceberg/Impala datalakehouse seed/verify/ingest (Phases 1 & 3)
+├── jobs/
+│   └── lakehouse_ingest_job.py ← CML Job wrapper: scheduled lakehouse ingest refresh (Phase 4)
 ├── run.py       ← Application launcher (serves UI + API)
 ├── .state/      ← cached lockfile hashes + app pid/port (gitignored)
 └── logs/        ← timestamped run/app logs (gitignored)
@@ -179,6 +181,13 @@ bash cml/cli.sh lakehouse ingest --no-rag # DB only, skip Chroma indexing
 Script: `backend/scripts/ingest_lakehouse.py`. Idempotent — safe to re-run
 after every CDE pipeline run to pick up fresh gold-table data.
 
+**Phase 4 (available now):** an insurer-facing UI on top of the ingested
+risk data — a **Book of Business** page (browse/filter/sort all lakehouse
+policies by `claim_risk_band`/`fraud_risk_score`) and a **Claim Insights risk
+card** (surfaces the same signal, if present, when reviewing a claim). Both
+read through one shared query path (`backend/services/policy_risk_service.py`)
+so a policy's risk band is always identical in both views.
+
 This closes the loop with a **scheduled refresh** so the data doesn't go
 stale between manual `lakehouse ingest` runs: register
 [`cml/jobs/lakehouse_ingest_job.py`](jobs/lakehouse_ingest_job.py) as a CML
@@ -218,6 +227,41 @@ keytab-based non-interactive setup instead. If you're on
 
 Run it once manually after creating it and check the Job's log — output
 should match `bash cml/cli.sh lakehouse ingest` exactly.
+
+**Verifying Phase 4 end-to-end** (data actually served through insurer
+auth + the API, not just present in Impala or the app DB):
+```bash
+bash cml/cli.sh verify-phase4                 # book-of-business + stats only
+bash cml/cli.sh verify-phase4 --check-claims  # also look for an existing
+                                               # claim tied to an LH-POL-*
+                                               # policy
+```
+Logs in as the demo insurer (`insurer1@claimcopilot.in` / `password123` /
+OTP `112233`, from `backend/scripts/seed.py`) and hits
+`/api/insurer/book-of-business` + `/stats`. Full JSON is mirrored to a
+timestamped file under `cml/logs/` (responses are long).
+
+To see the **Claim Insights risk card** (the other Phase 4 surface — same
+risk signal, shown when reviewing an individual claim), you need a claim
+against an `LH-POL-*` policy. Those lakehouse-ingested customers get a
+placeholder password with no known plaintext, so give one a real password
+first:
+```bash
+cd backend
+uv run python scripts/set_demo_password.py --list-lakehouse-customers
+uv run python scripts/set_demo_password.py --role customer \
+  --email customer50@example.com --password password123
+```
+Then log in as that customer in the UI (OTP `112233`) and submit a claim
+against their `LH-POL-*` policy — the risk card should appear when an
+agent/insurer reviews it. **Testing-only**: this rewrites `hashed_password`
+directly with no auth/confirmation; never run it against a real user DB.
+
+For the claim wizard's Step 3 (Evidence Upload), which requires at least a
+damage photo (+ a driver's licence, since these demo customers aren't
+KYC-verified), use the synthetic sample documents in
+[`docs/demo-assets/claim-docs/`](../docs/demo-assets/claim-docs/README.md)
+(watermarked, not real photos/IDs) instead of hunting for real files.
 
 ## Verifying Phase 1-3 end-to-end (step-by-step)
 

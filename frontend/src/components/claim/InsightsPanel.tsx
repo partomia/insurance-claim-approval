@@ -3,12 +3,25 @@ import { CoverageDonutChart } from "./charts/CoverageDonutChart";
 import { ScoreComparisonBarChart } from "./charts/ScoreComparisonBarChart";
 import { PayoutWaterfallChart } from "./charts/PayoutWaterfallChart";
 import { PolicySummaryCard } from "./PolicySummaryCard";
+import { RiskBandBadge } from "./RiskBandBadge";
+import { Database, AlertTriangle } from "lucide-react";
 
 interface PolicySummary {
   policy_type?: string;
   coverage_limit?: number;
   deductible?: number;
   co_pay_pct?: number;
+}
+
+interface PolicyRiskSignal {
+  total_claims_count: number;
+  claims_count_12m: number;
+  total_claimed_amount: number;
+  avg_claim_amount: number;
+  amount_vs_segment_avg_pct?: number | null;
+  linked_high_risk_garage: boolean;
+  fraud_risk_score: number;
+  claim_risk_band: string;
 }
 
 interface Insights {
@@ -28,6 +41,7 @@ interface Insights {
   escalation_flags?: string[];
   policy_context_summary?: string;
   policy_summary?: PolicySummary;
+  policy_risk_signal?: PolicyRiskSignal | null;
 }
 
 export function InsightsPanel({ insights }: { insights: Insights | null }) {
@@ -49,6 +63,40 @@ export function InsightsPanel({ insights }: { insights: Insights | null }) {
         retrievedPrimaryClause={insights.retrieved_primary_clause}
         clauseMismatch={clauseMismatch}
       />
+
+      {insights.policy_risk_signal && (
+        <div className="p-4 bg-card border rounded-lg shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Database className="h-3.5 w-3.5" />
+              Lakehouse Risk Signal
+            </p>
+            <RiskBandBadge band={insights.policy_risk_signal.claim_risk_band} />
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-muted-foreground text-xs">Fraud risk score</p>
+              <p className="font-semibold">{insights.policy_risk_signal.fraud_risk_score.toFixed(1)} / 100</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs">Claims (12m / total)</p>
+              <p className="font-semibold">
+                {insights.policy_risk_signal.claims_count_12m} / {insights.policy_risk_signal.total_claims_count}
+              </p>
+            </div>
+          </div>
+          {insights.policy_risk_signal.linked_high_risk_garage && (
+            <p className="flex items-center gap-1.5 text-xs font-medium text-warning">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              This policy has claims history at a garage flagged as high-risk
+            </p>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            Computed by the CDE claims-analytics pipeline over this policy's full claims history —
+            independent of the AI fraud score above.
+          </p>
+        </div>
+      )}
 
       {gauges && (
         <div className="p-4 bg-card border rounded-lg shadow-sm">
