@@ -337,8 +337,38 @@ own fix.
 **Fixed**: `cml/jobs/lakehouse_ingest_job.py` now only calls `sys.exit()`
 on actual failure (non-zero return code); on success it just falls off
 the end of the script, never raising `SystemExit` in the kernel context.
-**Not yet re-verified** — re-run the Job in env1 after pulling this fix
-and confirm it now shows **Succeeded** in the Jobs UI.
+**Re-verified in env1 after the fix**: re-ran the Job manually — now
+shows **Succeeded** (runtime ~13min; slower than a warm Session terminal
+run, but that's expected Job-engine cold-start overhead — fresh
+pod/kernel provisioning + Impala/LDAP handshake, not a regression). Safe
+to switch to a recurring schedule.
+
+### Branches merged: `phase4-insurer-risk-ui` → `main`
+
+Phase 4 (Book of Business + Claim Insights risk card) is now fully
+verified in env1 and merged into `main` (one clean, purely-additive
+conflict in `cml/README.md`). Also took the opportunity to strip every
+`Co-authored-by: Cursor` / `Claude` trailer from the entire commit
+history (`git filter-repo` on a scratch mirror clone, then force-pushed
+`main` + `phase4-insurer-risk-ui` + all tags). **This rewrote every
+commit SHA in the repo** — any existing clone (env1, env2, other
+laptops) needs a hard re-sync, not a normal `git pull`:
+```bash
+git fetch origin --tags --force
+git checkout main
+git reset --hard origin/main
+# if you also keep a local phase4-insurer-risk-ui branch:
+git branch -f phase4-insurer-risk-ui origin/phase4-insurer-risk-ui
+```
+env1 hit exactly this — a stale local `phase4-insurer-risk-ui` branch
+left pointing at the pre-rewrite SHA after `git reset --hard origin/main`
+(which only moves the *current* branch, `main`). Fixed with the
+`git branch -f ... origin/...` command above. Verified 0 matches for
+`git log --all --grep="Co-authored-by" -i` afterward.
+
+Going forward, `phase4-insurer-risk-ui` is redundant (main has
+everything) — do new work directly on `main` unless a fresh feature
+branch is intentionally started.
 
 ### Reusable Phase 4 testing tooling added this session
 
