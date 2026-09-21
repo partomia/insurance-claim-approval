@@ -235,3 +235,53 @@ business` → **Book of Business** page.
   surface — shows the same risk signal on an individual claim's review
   page). Needs a claim against an `LH-POL-*` policy to verify; none
   confirmed to exist yet as of this writing.
+
+### Critical pre-existing bug found + fixed: ALL claim submissions were broken
+
+While attempting to submit a test claim in env 1 to exercise the Claim
+Insights risk card, clicking "Submit Motor Claim" silently did nothing —
+claim stayed in `DRAFT` in Motor Claim History, no visible frontend error.
+
+Root cause: `ClaimService.validate_submit_gates()`
+(`backend/services/claim_service.py`) referenced `DocumentType.GOV_ID` and
+`DocumentType.PROOF` — leftover from a pre-motor-refactor generic
+`DocumentType` enum. The current enum (`models/claim.py`) is
+motor-vehicle-specific and has **no `GOV_ID` or `PROOF` member at all** —
+evaluating `DocumentType.GOV_ID` raises `AttributeError` unconditionally.
+This has been true on **`main` as well**, confirmed via
+`git show main:backend/services/claim_service.py` — i.e. every single
+`POST /api/claims/{id}/submit` call has been broken since the motor
+refactor, not something specific to this session/policy.
+
+Fix (commit `2afd0c2` on `phase4-insurer-risk-ui`, cherry-picked to `main`
+as `be334f2`): check the actual motor equivalents that `upload_evidence()`
+(`routers/claims.py`) writes — `DocumentType.DRIVER_LICENSE` (gated on
+non-KYC-verified customers) and `DocumentType.DAMAGE_PHOTO` (always
+required) — matching the frontend's own `Step3EvidenceUpload` validation.
+Also removed a duplicate `is_kyc_verified` import in the same file.
+
+**Not yet re-verified end-to-end after the fix** — env 1 needs `git pull`
++ `bash cml/cli.sh update` + `restart`, then retry submitting a claim
+against `LH-POL-2050` (see synthetic docs in
+`docs/demo-assets/claim-docs/`) to confirm submission now actually
+transitions the claim out of `DRAFT` and the AI processing pipeline
+kicks off.
+
+### Reusable Phase 4 testing tooling added this session
+
+- `cml/verify_phase4.sh` (`bash cml/cli.sh verify-phase4 [--check-claims]`)
+  — logs in as the demo insurer, hits `/api/insurer/book-of-business{,/stats}`,
+  optionally checks for an existing claim tied to an `LH-POL-*` policy.
+- `backend/scripts/set_demo_password.py` — gives a lakehouse-ingested
+  customer/agent/insurer (placeholder unknown password) a known password
+  for test login. `--list-lakehouse-customers` to pick one.
+- `backend/scripts/generate_demo_claim_docs.py` +
+  `docs/demo-assets/claim-docs/` — synthetic (watermarked, not real)
+  damage photos / driver's licence / repair estimate / RC / police report
+  for the claim wizard's Step 3, committed directly so they're usable
+  without regenerating.
+
+All scoped to `phase4-insurer-risk-ui` only (not cherry-picked — they
+reference Phase-4-specific concepts like `LH-POL-*`/book-of-business),
+except the `validate_submit_gates` bugfix above, which is a universal
+bugfix and went to both branches.
