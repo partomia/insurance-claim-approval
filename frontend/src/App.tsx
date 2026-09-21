@@ -56,6 +56,7 @@ function App() {
             <Route path="/policies/connect" element={<ConnectPolicy />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/claim" element={<ClaimWizard />} />
+            <Route path="/claim/:id" element={<ClaimWizard />} />
             <Route path="/analysis/:id" element={<ClaimAnalysis />} />
             <Route path="/track/:id" element={<TrackClaim />} />
             <Route path="/audit/:id" element={<AuditReport />} />

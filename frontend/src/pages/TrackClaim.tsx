@@ -287,8 +287,19 @@ export function TrackClaim() {
         back={{ to: "/history", label: "All motor claims" }}
         eyebrow="Motor claim tracking"
         title={`Claim ${claim.claim_id}`}
-        subtitle={`${processing ? "Review in progress" : "Review complete"} · ${formatINR(claim.claim_amount)} claimed`}
+        subtitle={
+          claim.status.toUpperCase() === "DRAFT"
+            ? "Not yet submitted — continue the wizard to finish and submit."
+            : `${processing ? "Review in progress" : "Review complete"} · ${formatINR(claim.claim_amount)} claimed`
+        }
         status={<ClaimStatusBadge status={claim.status} assignedAgent={claim.assigned_agent} />}
+        actions={
+          claim.status.toUpperCase() === "DRAFT" && id ? (
+            <Link to={`/claim/${id}`}>
+              <Button>Continue draft →</Button>
+            </Link>
+          ) : undefined
+        }
         meta={[
           {
             label: "Pipeline progress",
