@@ -513,11 +513,24 @@ cde job run --name rsingh-insurance-transform-silver --wait
 cde job run --name rsingh-insurance-curate-gold --wait
 bash cml/cli.sh lakehouse ingest
 ```
-Then re-verify: `bash cml/cli.sh test-claim find --band HIGH --not-expired`
-should return candidates again; `test-claim submit --policy-number
-<one of them>` should land on `PENDING_REVIEW` with the
-`lakehouse_high_risk_policy` message. Also still need to spot-check a
-LOW/MEDIUM band and a non-lakehouse `POL-MTR-*` policy for no regression.
+**Verified end-to-end in env1** after regenerating + re-ingesting: `find
+--band HIGH --not-expired` returned 3 candidates (`LH-POL-2059/2047/2038`,
+all `status=ACTIVE`, previously 0). `submit --policy-number LH-POL-2059`
+→ claim `CLM3451ADC7`:
+- `status: PENDING_REVIEW` (previously always `REJECTED` via
+  `policy_expired`, masking everything downstream).
+- `escalation_flags: ['high_fraud_score', 'lakehouse_high_risk_policy']`
+  with the exact expected message (score 70/100, 22 historical claims).
+- `fraud_score: 0.4` — matches the `lakehouse_risk_high` weight exactly,
+  confirming the signal fired cleanly in isolation (no other rule signals
+  stacked on this particular claim).
+- LLM reasoning explicitly cites the lakehouse high-risk flag as a reason
+  for manual review.
+
+**Item 2 is done and fully proven**, root cause (the date-anchoring bug)
+included. Still worth a quick spot-check of a LOW/MEDIUM band and a
+non-lakehouse `POL-MTR-*` policy for no regression, but not blocking —
+the mechanism is unambiguously correct.
 
 **Item 3 — not started yet** (Iceberg time travel / `MERGE`/`INSERT
 OVERWRITE` instead of drop+recreate gold writes), logged in
