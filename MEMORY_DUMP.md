@@ -461,19 +461,39 @@ only being displayed:
   spirit as `verify_phase4.sh`/`set_demo_password.py`):
   `backend/scripts/lakehouse_risk_claim_test.py` + `cml/test_claim.sh`,
   wired as `bash cml/cli.sh test-claim <find|submit> [flags]`.
-  - `find --band HIGH --active-only` — DB-direct, lists lakehouse policies
-    by risk band/status, to pick a good candidate (avoiding the
-    `policy_expired` short-circuit above).
+  - `find --band HIGH --not-expired` — DB-direct, lists lakehouse policies
+    by risk band, filtered by the *real* `policy_expired` condition
+    (mirrors `PolicyValidationService.validate()` exactly: `expiry_date >=
+    now` AND status not EXPIRED/LAPSED/CANCELLED).
   - `submit --policy-number LH-POL-XXXX` — full HTTP flow against a
     running app instance: sets the customer's password, logs in, creates +
     links + submits a claim with the committed synthetic evidence docs,
     polls for the decision, prints status/fraud_score/escalation
     flags+messages. One command instead of a 5-step curl chain per test.
-  - **Still to do**: run `test-claim find --band HIGH --active-only` then
-    `test-claim submit --policy-number <result>` in env1 to see the
-    escalation flag actually land on `PENDING_REVIEW`; also spot-check a
-    LOW/MEDIUM band and a non-lakehouse `POL-MTR-*` policy for no
-    regression.
+  - **Important structural finding, found via this harness**: the
+    `status` column on a lakehouse policy is NOT a reliable signal for
+    "will this claim be rejected as expired" — tried `LH-POL-2047`
+    (`status=ACTIVE`, HIGH band) and it still got REJECTED via
+    `policy_expired`, because `policy_validation.py` checks
+    `policy.expiry_date < datetime.utcnow()` (real wall-clock time), and
+    the synthetic population's `expiry_date` is generated once,
+    non-relative to real time (`effective = 2024-01-01 + up to ~640 days`,
+    `+365 days` term — `cde/jobs/generate/generate_bronze.py`). As real
+    time advances past the generation window (max expiry ~2026-10-02),
+    fewer — eventually zero — lakehouse policies will ever pass
+    `--not-expired`, at which point testing the escalation-flags branch
+    against a *lakehouse* policy becomes impossible without regenerating
+    bronze with fresh dates (`bash cml/cli.sh lakehouse seed` or re-running
+    `generate-bronze` in CDE). Fixed `find` to check the real condition
+    instead of just `status`.
+  - **Still to do**: run `test-claim find --band HIGH --not-expired` in
+    env1 — if it returns candidates, submit against one to confirm
+    `PENDING_REVIEW`; if it returns none (increasingly likely as real time
+    passes 2026-10-02), that's expected per the finding above, not a bug —
+    consider testing the signal via a direct unit-level check of
+    `fraud_detection.py`/`escalation_service.py` instead, or regenerating
+    bronze with fresher dates. Also still need to spot-check a LOW/MEDIUM
+    band and a non-lakehouse `POL-MTR-*` policy for no regression.
 
 **Item 3 — not started yet** (Iceberg time travel / `MERGE`/`INSERT
 OVERWRITE` instead of drop+recreate gold writes), logged in

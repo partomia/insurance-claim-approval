@@ -4,7 +4,7 @@
 # pipeline (see cde/README.md "Feed fraud_risk_score/claim_risk_band into
 # the live decision engine"), instead of hand-typing multi-step curl chains.
 #
-#   bash cml/cli.sh test-claim find --band HIGH --active-only
+#   bash cml/cli.sh test-claim find --band HIGH --not-expired
 #   bash cml/cli.sh test-claim submit --policy-number LH-POL-2059
 #
 # `find` is DB-direct (works even if the app isn't running). `submit` needs

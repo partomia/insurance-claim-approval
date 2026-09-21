@@ -7,8 +7,12 @@ generate_demo_claim_docs.py: an ad-hoc test becomes a committed, reusable tool.
 Two subcommands:
 
   find    — DB-direct (no running app needed). Lists lakehouse-ingested
-            policies (PolicyRiskSignal rows) filtered by risk band / status,
-            so you can pick one to test against.
+            policies (PolicyRiskSignal rows) filtered by risk band, with an
+            --not-expired flag that replicates PolicyValidationService's
+            actual policy_expired check (NOT just the status column — see
+            _policy_expired() below) so you can pick a policy that will
+            actually reach the escalation-flags/fraud-score branches
+            instead of being short-circuited to REJECTED first.
 
   submit  — end-to-end HTTP test against a *running* app instance: sets a
             known password for the policy's customer (reuses the same
@@ -22,12 +26,12 @@ Two subcommands:
             and drove the outcome.
 
 Usage (via cml/cli.sh, run from repo root):
-    bash cml/cli.sh test-claim find --band HIGH --active-only
+    bash cml/cli.sh test-claim find --band HIGH --not-expired
     bash cml/cli.sh test-claim submit --policy-number LH-POL-2059
 
 Or directly:
     cd backend
-    uv run python scripts/lakehouse_risk_claim_test.py find --band HIGH --active-only
+    uv run python scripts/lakehouse_risk_claim_test.py find --band HIGH --not-expired
     uv run python scripts/lakehouse_risk_claim_test.py submit --policy-number LH-POL-2059 \\
         --base-url http://127.0.0.1:8099
 
@@ -38,6 +42,7 @@ set_demo_password.py. Intended for local/CML demo databases only.
 import argparse
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -47,8 +52,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from database import SessionLocal  # noqa: E402
 from dependencies import get_password_hash  # noqa: E402
 from models.customer import Customer  # noqa: E402
-from models.policy import Policy  # noqa: E402
+from models.policy import Policy, PolicyStatus  # noqa: E402
 from models.policy_risk_signal import PolicyRiskSignal  # noqa: E402
+
+
+def _policy_expired(policy: Policy, now: datetime) -> bool:
+    """Mirrors services/policy_validation.py's PolicyValidationService.validate()
+    exactly, so `find --not-expired` only surfaces policies that will actually
+    reach the escalation-flags/fraud-score decision branches instead of being
+    short-circuited to REJECTED by the policy_expired check first. The
+    `status` column alone is NOT sufficient — a synthetic policy can say
+    ACTIVE yet still have expiry_date in the past relative to the real
+    wall-clock "now" the app checks against."""
+    if policy.status == PolicyStatus.EXPIRED or policy.expiry_date < now:
+        return True
+    if policy.status in (PolicyStatus.LAPSED, PolicyStatus.CANCELLED):
+        return True
+    return False
 
 DEMO_DOCS_DIR = Path(__file__).resolve().parent.parent.parent / "docs" / "demo-assets" / "claim-docs"
 DEFAULT_PASSWORD = "password123"
@@ -66,16 +86,26 @@ def cmd_find(args: argparse.Namespace) -> None:
         if args.band:
             query = query.filter(PolicyRiskSignal.claim_risk_band == args.band.upper())
         rows = query.order_by(PolicyRiskSignal.fraud_risk_score.desc()).all()
-        if args.active_only:
-            rows = [r for r in rows if r[0].status.value != "EXPIRED"]
+        now = datetime.utcnow()
+        if args.not_expired:
+            rows = [r for r in rows if not _policy_expired(r[0], now)]
         if not rows:
-            print("No matching policies found. Try without --active-only, or run "
-                  "'bash cml/cli.sh lakehouse ingest' first if the DB has no risk signals yet.")
-            return
-        print(f"{'policy_number':<14} {'status':<10} {'band':<8} {'score':>6} {'claims':>7}  customer_email")
-        for policy, rs, customer in rows[: args.limit]:
             print(
-                f"{policy.policy_number:<14} {policy.status.value:<10} {rs.claim_risk_band:<8} "
+                "No matching policies found. The synthetic lakehouse policy population's "
+                "expiry_date is generated once (2024-01-01 + up to ~640 days, +365 days "
+                "term — see cde/jobs/generate/generate_bronze.py) and does NOT move with "
+                "real time, so as today's date advances, fewer (eventually zero) policies "
+                "remain non-expired-by-date. Try without --not-expired to see the raw list "
+                "(all will be REJECTED via policy_expired regardless of risk band), or "
+                "re-run 'bash cml/cli.sh lakehouse seed'/the CDE generate-bronze job to "
+                "regenerate with fresh dates if you need a genuinely testable policy."
+            )
+            return
+        print(f"{'policy_number':<14} {'status':<10} {'expired?':<9} {'band':<8} {'score':>6} {'claims':>7}  customer_email")
+        for policy, rs, customer in rows[: args.limit]:
+            expired = "yes" if _policy_expired(policy, now) else "no"
+            print(
+                f"{policy.policy_number:<14} {policy.status.value:<10} {expired:<9} {rs.claim_risk_band:<8} "
                 f"{rs.fraud_risk_score:>6.1f} {rs.total_claims_count:>7}  {customer.email}"
             )
     finally:
@@ -213,9 +243,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_find = sub.add_parser("find", help="List lakehouse policies by risk band/status (DB-direct, no app needed)")
+    p_find = sub.add_parser("find", help="List lakehouse policies by risk band/expiry (DB-direct, no app needed)")
     p_find.add_argument("--band", choices=["LOW", "MEDIUM", "HIGH"], help="Filter by claim_risk_band")
-    p_find.add_argument("--active-only", action="store_true", help="Exclude policies with status=EXPIRED")
+    p_find.add_argument(
+        "--not-expired",
+        action="store_true",
+        help=(
+            "Only show policies that pass PolicyValidationService's actual policy_expired "
+            "check (expiry_date >= now, status not EXPIRED/LAPSED/CANCELLED) — the status "
+            "column alone is not reliable, see _policy_expired() docstring"
+        ),
+    )
     p_find.add_argument("--limit", type=int, default=10)
     p_find.set_defaults(func=cmd_find)
 

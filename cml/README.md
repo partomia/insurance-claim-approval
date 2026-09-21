@@ -272,13 +272,20 @@ KYC-verified), use the synthetic sample documents in
 instead of hand-typing the password-reset + login + draft + evidence +
 submit + poll sequence above every time, use the committed test harness:
 ```bash
-bash cml/cli.sh test-claim find --band HIGH --active-only   # pick a policy
+bash cml/cli.sh test-claim find --band HIGH --not-expired   # pick a policy
 bash cml/cli.sh test-claim submit --policy-number LH-POL-2059
 ```
 `find` is DB-direct (no running app needed) and lists lakehouse policies
-by risk band/status — pass `--active-only` to exclude `EXPIRED` policies,
-since `decision_engine.py` checks `policy_expired` before it ever reaches
-the escalation flags this is meant to test. `submit` does the whole flow
+by risk band — pass `--not-expired` to only show policies that pass the
+*real* `policy_expired` check (`expiry_date >= now`, status not
+EXPIRED/LAPSED/CANCELLED) that `decision_engine.py` runs before it ever
+reaches the escalation flags this is meant to test. The `status` column
+alone isn't reliable here: the synthetic population's `expiry_date` is
+generated once (`cde/jobs/generate/generate_bronze.py`, relative to
+2024-01-01) and doesn't move with real time, so a policy can say `ACTIVE`
+and still be expired-by-date against today's real clock — and as real
+time advances, eventually *no* lakehouse policy will pass `--not-expired`
+without regenerating the synthetic data with fresh dates. `submit` does the whole flow
 against a running app instance (sets the customer's password, logs in,
 creates + links + submits a claim using the synthetic evidence docs above,
 polls for the decision) and prints the final status, fraud_score, and
