@@ -200,6 +200,35 @@ whether the Application is currently up. Test it manually first:
 python cml/jobs/lakehouse_ingest_job.py
 ```
 
+**Verifying Phase 4 end-to-end** (data actually served through insurer
+auth + the API, not just present in Impala or the app DB):
+```bash
+bash cml/cli.sh verify-phase4                 # book-of-business + stats only
+bash cml/cli.sh verify-phase4 --check-claims  # also look for an existing
+                                               # claim tied to an LH-POL-*
+                                               # policy
+```
+Logs in as the demo insurer (`insurer1@claimcopilot.in` / `password123` /
+OTP `112233`, from `backend/scripts/seed.py`) and hits
+`/api/insurer/book-of-business` + `/stats`. Full JSON is mirrored to a
+timestamped file under `cml/logs/` (responses are long).
+
+To see the **Claim Insights risk card** (the other Phase 4 surface — same
+risk signal, shown when reviewing an individual claim), you need a claim
+against an `LH-POL-*` policy. Those lakehouse-ingested customers get a
+placeholder password with no known plaintext, so give one a real password
+first:
+```bash
+cd backend
+uv run python scripts/set_demo_password.py --list-lakehouse-customers
+uv run python scripts/set_demo_password.py --role customer \
+  --email customer50@example.com --password password123
+```
+Then log in as that customer in the UI (OTP `112233`) and submit a claim
+against their `LH-POL-*` policy — the risk card should appear when an
+agent/insurer reviews it. **Testing-only**: this rewrites `hashed_password`
+directly with no auth/confirmation; never run it against a real user DB.
+
 ## Verifying Phase 1-3 end-to-end (step-by-step)
 
 Run this checklist after any `git pull` + `bash cml/cli.sh update` — e.g.

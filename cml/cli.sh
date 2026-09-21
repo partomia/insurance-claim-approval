@@ -39,6 +39,13 @@ Commands:
                        pulls the CDE-pipeline-produced gold tables
                        (policy_master, policy_clauses, policy_risk_signals)
                        into the app's live SQLite DB + Chroma RAG index.
+  verify-phase4 [--check-claims]
+                      Phase 4: log in as the demo insurer and hit
+                       /api/insurer/book-of-business{,/stats} on the running
+                       app to confirm risk data is actually served end-to-end
+                       (not just present in Impala/the app DB). --check-claims
+                       also looks for an existing claim tied to an LH-POL-*
+                       policy (needed to see the Claim Insights risk card).
 
 Typical first run:
   bash cml/cli.sh doctor
@@ -65,6 +72,7 @@ case "$cmd" in
   portcheck) exec bash "$SCRIPT_DIR/portcheck.sh" "$@" ;;
   diagnose) exec bash "$SCRIPT_DIR/diagnose.sh" "$@" ;;
   lakehouse) exec bash "$SCRIPT_DIR/lakehouse.sh" "$@" ;;
+  verify-phase4) exec bash "$SCRIPT_DIR/verify_phase4.sh" "$@" ;;
   help|-h|--help) usage ;;
   *) echo "Unknown command: $cmd" >&2; echo; usage; exit 2 ;;
 esac
