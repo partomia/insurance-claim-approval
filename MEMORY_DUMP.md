@@ -310,6 +310,36 @@ API (see above).
   "Continue draft" on `CLM82424700` (the still-orphaned draft with 0
   documents) to confirm it lands on Step 2 as expected.
 
+### Lakehouse ingest CML Job created + one more bug fixed
+
+User created the `Lakehouse Ingest Refresh` Job in env1 (Project → Jobs →
+New Job, Script `cml/jobs/lakehouse_ingest_job.py`, per the new
+`cml/README.md` walkthrough table) and ran it manually. **The ingest
+itself fully succeeded** — 60 policies updated, 240 RAG chunks
+re-indexed, 270 Chroma vectors total, identical to the Session-terminal
+`lakehouse ingest` run — but the Job's log showed `Engine exited with
+status 1` at the end, which would mark the Job **Failed** in the CAI UI
+despite the actual work succeeding.
+
+Root cause: this Job runtime ("Python 3.11 JupyterLab Standard") executes
+the script **inside a persistent IPython kernel**, not a plain
+`python script.py` subprocess — same mechanism documented in
+`cml/run.py`'s `_resolve_root()` for the Application launcher. The script
+called `sys.exit(result.returncode)` unconditionally at the top level;
+inside a kernel, `sys.exit(0)` raises `SystemExit`, which IPython catches
+and prints as an exception (`"An exception has occurred ... SystemExit:
+0"`), and the Job engine then reports it as a failure. `cml/run.py`
+never hits this because it uses `os.execvp` (replaces the process
+image, no `SystemExit` ever raised) — the one-shot ingest Job needs
+`subprocess.run()` to capture a real return code first, so it needed its
+own fix.
+
+**Fixed**: `cml/jobs/lakehouse_ingest_job.py` now only calls `sys.exit()`
+on actual failure (non-zero return code); on success it just falls off
+the end of the script, never raising `SystemExit` in the kernel context.
+**Not yet re-verified** — re-run the Job in env1 after pulling this fix
+and confirm it now shows **Succeeded** in the Jobs UI.
+
 ### Reusable Phase 4 testing tooling added this session
 
 - `cml/verify_phase4.sh` (`bash cml/cli.sh verify-phase4 [--check-claims]`)
