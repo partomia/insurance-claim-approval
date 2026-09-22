@@ -278,6 +278,18 @@ variables at the top of each script if you deploy under a different prefix):
    also have CDE access to run this recovery, or coordinate with whoever
    does.
 
+   **If the GitHub repo has since been made private**, the fresh clone in
+   `deploy_jobs.sh` fails with `create repository failed: ... authentication
+   required: Repository not found` (GitHub returns a generic 404-style
+   error for private repos to unauthenticated clones — confirmed live after
+   flipping this repo private between sessions). Fix: generate a GitHub PAT
+   (classic `repo` scope, or fine-grained `Contents: Read-only` scoped to
+   just this repo) and pass it through: `GIT_CREDENTIAL=ghp_xxx
+   ./cde/scripts/deploy_jobs.sh`. CDE stores the credential against the
+   Repository resource, so subsequent `cde repository sync` /
+   `deploy_dag.sh` calls don't need it again — only re-supply it if you
+   delete+recreate the Repository itself.
+
 7. **`generate_bronze.py`/`generate_claims_bronze.py` now reseed by
    calendar day, not a fixed constant** (Item 3, see § Iceberg time
    travel). This means re-running `generate-bronze`/`generate-claims-bronze`
