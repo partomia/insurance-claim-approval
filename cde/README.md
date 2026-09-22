@@ -311,6 +311,19 @@ variables at the top of each script if you deploy under a different prefix):
    test-claim find --band HIGH --not-expired` after any same-day-crossing
    regeneration rather than assuming yesterday's policy numbers still hold.
 
+8. **This shared vcluster scales its node pool down aggressively (~15 min
+   idle) and scale-up can be slow** — `cde job run --wait` can sit at
+   `starting`/no output for 20-30+ minutes with zero indication of why.
+   Don't assume it's hung or broken: run `cde run describe --id <run-id>`
+   and check `.notices` for a `"type": "waiting-for-scale-up"` entry with
+   a `message` like `"1 executor waiting for nodes to scale up for on
+   average Xm"`. Confirmed live: the first job after a ~25-hour idle gap
+   took ~26 minutes on this notice alone; a *second* job later in the same
+   session hit another scale-up after just a ~16-minute gap between job
+   chains. Once nodes are warm, each job finishes in ~1 minute as normal.
+   Run the full 8-job chain back-to-back (no long pauses between `cde job
+   run` calls) to avoid re-triggering this mid-pipeline.
+
 ## Connectivity troubleshooting
 
 If `cde resource list` (or any `cde` command) hangs or errors:

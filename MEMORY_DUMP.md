@@ -610,11 +610,41 @@ Agreed 3-step plan for Item 3 (Iceberg time travel):
   / `FOR SYSTEM_TIME AS OF` / `FOR SYSTEM_VERSION AS OF` syntax (verified
   against Cloudera's CDP 7.3.2 docs, not assumed), updated Roadmap line,
   added Gotcha #7.
-- **Not yet re-run/verified in env1** — next session should `git pull` +
-  re-run `generate-bronze`/`generate-claims-bronze` → `validate` →
-  `transform` → `curate-gold`/`curate-risk-signals-gold` in CDE, then spot
-  check `DESCRIBE HISTORY insurance_lakehouse.policy_risk_signals` in Hue/
-  Impala shows more than one snapshot after a second run.
+**Verified live in env1 (2026-09-22).** The GitHub repo had flipped to
+private between sessions, breaking the CDE Repository's fresh clone with
+`authentication required: Repository not found` — user made it public
+again (simpler than the `GIT_CREDENTIAL`/`cde credential create --type
+basic` path, which is documented in `cde/README.md` Gotcha #6 for next
+time if it recurs). After `deploy_jobs.sh` + `deploy_dag.sh` recreated
+everything fresh, ran the full 8-job chain (`generate` → `validate` →
+`transform` → `curate` for both policies and claims). Driver logs
+confirm the MERGE path actually fired (not bootstrap CTAS, since these
+Iceberg tables already existed from before the repo was deleted):
+```
+Merged 60 source rows into insurance_lakehouse.policy_master (new snapshot committed)
+Merged 240 source rows into insurance_lakehouse.policy_clauses (new snapshot committed)
+Merged 41 source rows into insurance_lakehouse.garage_risk_signals (new snapshot committed)
+Merged 788 source rows into insurance_lakehouse.policy_risk_signals (new snapshot committed)
+```
+**New gotcha found**: this shared vcluster scales its node pool down
+aggressively (~15 min idle) and scale-up is *slow* today — the very
+first job (`generate-bronze`) took **~26 minutes** waiting on
+`waiting-for-scale-up` (`cde run describe --id <id>` shows this in
+`.notices`), and `generate-claims-bronze` hit a *second* scale-up
+mid-run after a ~16-minute gap between job chains. Once nodes were warm,
+each job ran in ~1 minute as expected. Lesson: run the whole 8-job chain
+back-to-back without long pauses between `cde job run` calls, and don't
+assume a stuck `starting` status means something is broken — check
+`cde run describe --id <id>` for a `waiting-for-scale-up` notice before
+concluding it's a real failure.
+
+**Still not done**: haven't yet confirmed via `DESCRIBE HISTORY
+insurance_lakehouse.policy_risk_signals` in Hue/Impala that the snapshot
+count actually increased (would need Impala credentials this local
+shell doesn't have — that check needs to happen from the CAI session or
+Hue). The job logs' explicit "Merged ... new snapshot committed" message
+is strong evidence, but the actual `DESCRIBE HISTORY` row count is the
+real proof and hasn't been eyeballed yet.
 
 ### Reusable Phase 4 testing tooling added this session
 
