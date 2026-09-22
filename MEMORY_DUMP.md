@@ -638,13 +638,24 @@ assume a stuck `starting` status means something is broken — check
 `cde run describe --id <id>` for a `waiting-for-scale-up` notice before
 concluding it's a real failure.
 
-**Still not done**: haven't yet confirmed via `DESCRIBE HISTORY
-insurance_lakehouse.policy_risk_signals` in Hue/Impala that the snapshot
-count actually increased (would need Impala credentials this local
-shell doesn't have — that check needs to happen from the CAI session or
-Hue). The job logs' explicit "Merged ... new snapshot committed" message
-is strong evidence, but the actual `DESCRIBE HISTORY` row count is the
-real proof and hasn't been eyeballed yet.
+**Fully confirmed via `DESCRIBE HISTORY` in Hue** — 2 real snapshots now
+exist for `policy_risk_signals`, parent-child chain intact (not
+collapsed back to 1 row like the old drop+recreate would do):
+```
+creation_time              snapshot_id            parent_id              is_current_ancestor
+2026-09-21 11:41:02.199    4967580225782225719    NULL                   TRUE
+2026-09-22 13:53:07.023    6300977543968207922    4967580225782225719    TRUE
+```
+Snapshot 1 was written by the *old* drop+recreate code, snapshot 2 by
+the *new* MERGE code — a real, meaningful pair to time-travel between
+(not just a day-boundary reseed) since the underlying generation logic
+itself changed. **Item 3, step 1 is fully done and verified**, both by
+log inspection and now by `DESCRIBE HISTORY` directly. Next: step 2 (a
+`test-claim`-style CLI for history/`FOR SYSTEM_TIME|VERSION AS OF`) and
+step 3 (a deliberate day-over-day diff for the demo) — step 3 may
+already be informally satisfied by this snapshot pair, worth checking a
+`FOR SYSTEM_VERSION AS OF 4967580225782225719` query against current for
+an actual `fraud_risk_score` diff before building more tooling.
 
 ### Reusable Phase 4 testing tooling added this session
 
