@@ -665,8 +665,25 @@ date-seeded MERGE snapshot) rather than a deliberate day-over-day rerun
 — the mechanism for future day-boundary diffs is now proven, not
 theoretical.
 
-Next: step 2 (a `test-claim`-style CLI for `DESCRIBE HISTORY`/`FOR
-SYSTEM_TIME|VERSION AS OF`, to avoid hand-typing Hue SQL every time).
+**Step 2 done**: `backend/scripts/lakehouse_time_travel.py` (new) +
+`bash cml/cli.sh lakehouse history --table <name>` / `lakehouse as-of
+--table <name> (--snapshot <id>|--at '<ts>') [--policy-number
+<pn>|--garage-name <gn>|--where "..."]` — same `test-claim`-style wrapper
+pattern as the Item 2 test harness, avoids hand-typing `DESCRIBE
+HISTORY`/`FOR SYSTEM_TIME|VERSION AS OF` in Hue every time. `as-of`
+prints the AS OF row, the CURRENT row, and a column-level diff between
+them (only meaningful for single-row filters, e.g. one policy_number).
+Wired into `cml/lakehouse.sh`'s existing `<seed|verify|ingest|
+export-claims>` dispatcher. Documented in `cml/README.md` § Iceberg time
+travel / audit and `cde/README.md`'s Roadmap. Not yet re-run against the
+live env1 Impala connection (syntax-checked locally only, `py_compile` +
+`bash -n`) — next session should actually run `history`/`as-of` from a
+CAI session to confirm the impyla queries work as written.
+
+Item 3 status: step 1 done+verified, step 2 done (not yet live-tested),
+step 3 (deliberate day-over-day diff as a repeatable drill) still open —
+though the mechanism is already proven by the one-off diff step 1's
+verification produced.
 
 ### Reusable Phase 4 testing tooling added this session
 

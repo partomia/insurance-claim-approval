@@ -31,7 +31,7 @@ Commands:
   reset [--yes]       Delete local SQLite/Chroma/storage demo state.
   portcheck [port]    Who's listening on a port + HTTP probe (no ss/lsof needed).
   diagnose [port]     Bundle doctor+status+portcheck+logs into one file to share.
-  lakehouse <seed|verify|ingest|export-claims>
+  lakehouse <seed|verify|ingest|export-claims|history|as-of>
                       Phase 1: create/seed (or verify) Iceberg tables
                        (policy_master, policy_clauses) via Impala. Independent
                        of DB_BACKEND — app stays on SQLite; proves out the
@@ -43,6 +43,10 @@ Commands:
                        pushes decided app-filed claims the other way, into
                        the app_claims_raw bronze table, so the CDE claims
                        pipeline's fraud/risk analytics include real claims.
+                       `history`/`as-of` (Iceberg time travel, see
+                       cde/README.md § Iceberg time travel): list snapshots
+                       committed to a gold table, or read one as of a past
+                       snapshot/timestamp diffed against the current row.
   verify-phase4 [--check-claims]
                       Phase 4: log in as the demo insurer and hit
                        /api/insurer/book-of-business{,/stats} on the running

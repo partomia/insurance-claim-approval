@@ -24,6 +24,14 @@
 #   bash cml/cli.sh lakehouse export-claims           # export + mark exported
 #   bash cml/cli.sh lakehouse export-claims --dry-run # preview only
 #
+# Iceberg time travel / audit (see cde/README.md § Iceberg time travel):
+# the gold tables write via MERGE INTO now, so every pipeline run commits
+# a real snapshot -- these list/query that snapshot history via Impala.
+#
+#   bash cml/cli.sh lakehouse history --table policy_risk_signals
+#   bash cml/cli.sh lakehouse as-of --table policy_risk_signals \
+#       --policy-number LH-POL-2059 --snapshot <id-from-history>
+#
 set -euo pipefail
 # shellcheck source=cml/lib.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -31,8 +39,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 mode="${1:-seed}"
 shift || true
 case "$mode" in
-  seed|verify|ingest|export-claims) ;;
-  *) err "Usage: cml/cli.sh lakehouse <seed|verify|ingest|export-claims> [--no-rag|--dry-run]"; exit 2 ;;
+  seed|verify|ingest|export-claims|history|as-of) ;;
+  *) err "Usage: cml/cli.sh lakehouse <seed|verify|ingest|export-claims|history|as-of> [flags]"; exit 2 ;;
 esac
 
 [[ -f "$BACKEND/.env" ]] || { err "backend/.env missing — run 'bash cml/cli.sh setup' first"; exit 1; }
@@ -59,6 +67,8 @@ if [[ "$mode" == "ingest" ]]; then
   uv run python scripts/ingest_lakehouse.py "$@"
 elif [[ "$mode" == "export-claims" ]]; then
   uv run python scripts/export_claims_to_lakehouse.py "$@"
+elif [[ "$mode" == "history" || "$mode" == "as-of" ]]; then
+  uv run python scripts/lakehouse_time_travel.py "$mode" "$@"
 else
   uv run python scripts/lakehouse_seed.py "$mode"
 fi

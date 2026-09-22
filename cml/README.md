@@ -41,7 +41,7 @@ bash cml/cli.sh update [--no-pull]  # git pull + reinstall only changed deps + s
 bash cml/cli.sh reset [--yes]       # delete local demo DB/Chroma/storage
 bash cml/cli.sh portcheck [port]    # who's bound to a port + HTTP probe
 bash cml/cli.sh diagnose [port]     # one file with doctor+status+portcheck+logs, for sharing
-bash cml/cli.sh lakehouse <seed|verify|ingest|export-claims>  # Iceberg/Impala datalakehouse (see below)
+bash cml/cli.sh lakehouse <seed|verify|ingest|export-claims|history|as-of>  # Iceberg/Impala datalakehouse (see below)
 bash cml/cli.sh verify-phase4 [--check-claims]  # insurer risk data served end-to-end (see below)
 bash cml/cli.sh test-claim <find|submit> [flags]  # lakehouse risk -> decision test harness (see below)
 ```
@@ -335,6 +335,39 @@ After it runs, re-run `transform-claims-silver` → `curate-risk-signals-gold`
 (or the full DAG) in CDE, then `bash cml/cli.sh lakehouse ingest` again to
 pull the refreshed `fraud_risk_score` back into the app for any policy with
 a newly-exported claim.
+
+## Iceberg time travel / audit (Item 3)
+
+The gold tables (`policy_master`, `policy_clauses`, `policy_risk_signals`,
+`garage_risk_signals`) now write via `MERGE INTO` instead of drop+recreate
+(see [`cde/README.md`](../cde/README.md#iceberg-time-travel-item-3)), so
+every CDE pipeline run commits a real Iceberg snapshot instead of
+destroying prior history. `history`/`as-of` are `test-claim`-style
+wrappers around the raw `DESCRIBE HISTORY`/`FOR SYSTEM_TIME|VERSION AS OF`
+Impala SQL, so you don't have to hand-type it in Hue:
+
+```bash
+bash cml/cli.sh lakehouse history --table policy_risk_signals
+#   creation_time              snapshot_id            parent_id  is_current_ancestor
+#   2026-09-21 11:41:02.199    4967580225782225719    NULL       TRUE
+#   2026-09-22 13:53:07.023    6300977543968207922    ...        TRUE
+
+bash cml/cli.sh lakehouse as-of --table policy_risk_signals \
+  --policy-number LH-POL-2059 --snapshot 4967580225782225719
+# prints the AS OF row, the CURRENT row, and a column-level diff between them
+```
+
+`as-of` also accepts `--at '<UTC timestamp>'` instead of `--snapshot`, and
+`--garage-name` instead of `--policy-number` for `garage_risk_signals`, or
+a raw `--where "..."` fragment for anything else. Script:
+[`backend/scripts/lakehouse_time_travel.py`](../backend/scripts/lakehouse_time_travel.py)
+(`--help` for all flags).
+
+Verified end-to-end in env1 (2026-09-22): `LH-POL-2059` was `HIGH`-band
+(score 69.6, 22 claims) at the prior snapshot and `MEDIUM`-band (score
+36.4, 4 claims) at the current one — both states real, queryable, and
+provable via time travel, not just "trust today's number." This is the
+actual audit/regulatory pitch for a bank.
 
 ## Verifying Phase 1-3 end-to-end (step-by-step)
 
