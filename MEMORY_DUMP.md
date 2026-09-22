@@ -650,12 +650,23 @@ Snapshot 1 was written by the *old* drop+recreate code, snapshot 2 by
 the *new* MERGE code — a real, meaningful pair to time-travel between
 (not just a day-boundary reseed) since the underlying generation logic
 itself changed. **Item 3, step 1 is fully done and verified**, both by
-log inspection and now by `DESCRIBE HISTORY` directly. Next: step 2 (a
-`test-claim`-style CLI for history/`FOR SYSTEM_TIME|VERSION AS OF`) and
-step 3 (a deliberate day-over-day diff for the demo) — step 3 may
-already be informally satisfied by this snapshot pair, worth checking a
-`FOR SYSTEM_VERSION AS OF 4967580225782225719` query against current for
-an actual `fraud_risk_score` diff before building more tooling.
+log inspection and now by `DESCRIBE HISTORY` directly.
+
+**Ran the `FOR SYSTEM_VERSION AS OF` comparison — real, dramatic diff:**
+`LH-POL-2059` at snapshot 1 (yesterday): `fraud_risk_score=69.6`,
+`claim_risk_band=HIGH`, `total_claims_count=22`. At current (today):
+`fraud_risk_score=36.4`, `claim_risk_band=MEDIUM`, `total_claims_count=4`.
+Both states are real, queryable, provable via time travel — this is
+*exactly* the audit/regulatory pitch for a bank (prove what the system
+said and when, not just today's number). This doubles as proof that
+step 3 (a demo-worthy diff) works, even though this particular diff came
+from the code change itself (old fixed-seed CTAS snapshot vs. new
+date-seeded MERGE snapshot) rather than a deliberate day-over-day rerun
+— the mechanism for future day-boundary diffs is now proven, not
+theoretical.
+
+Next: step 2 (a `test-claim`-style CLI for `DESCRIBE HISTORY`/`FOR
+SYSTEM_TIME|VERSION AS OF`, to avoid hand-typing Hue SQL every time).
 
 ### Reusable Phase 4 testing tooling added this session
 
