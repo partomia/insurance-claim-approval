@@ -179,9 +179,9 @@ def generate_claim_rows(n_target: int, now: datetime, seed: int = None):
     return rows
 
 
-def write_bronze(spark: SparkSession, n_claims: int) -> None:
+def write_bronze(spark: SparkSession, n_claims: int, seed: int = None) -> None:
     now = datetime.now(timezone.utc)
-    rows = generate_claim_rows(n_claims, now)
+    rows = generate_claim_rows(n_claims, now, seed=seed)
     df = spark.createDataFrame(rows, schema=CLAIMS_SCHEMA)
 
     spark.sql(f"CREATE DATABASE IF NOT EXISTS {BRONZE_DB}")
@@ -202,13 +202,25 @@ def _is_unset(val: str) -> bool:
     return not val or (val.startswith("{{") and val.endswith("}}"))
 
 
+def _parse_seed_arg(val: str) -> int:
+    """Accepts either a raw int seed or a YYYY-MM-DD date string -- see the
+    matching helper in generate_bronze.py for why (Item 3 step 3 demo drill,
+    cde/scripts/time_travel_drill.sh)."""
+    if len(val) == 10 and val[4] == "-" and val[7] == "-":
+        return int(datetime.strptime(val, "%Y-%m-%d").strftime("%Y%m%d"))
+    return int(val)
+
+
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else None
     n_claims = int(arg) if arg and not _is_unset(arg) else DEFAULT_N_CLAIMS
 
+    seed_arg = sys.argv[2] if len(sys.argv) > 2 else None
+    seed = _parse_seed_arg(seed_arg) if seed_arg and not _is_unset(seed_arg) else None
+
     spark = get_spark()
     try:
         logger.info("Generating %d synthetic claims into bronze...", n_claims)
-        write_bronze(spark, n_claims)
+        write_bronze(spark, n_claims, seed=seed)
     finally:
         spark.stop()

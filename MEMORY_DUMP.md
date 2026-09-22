@@ -688,12 +688,26 @@ and an automatic column-level diff — 9 columns changed
 `ingested_at`), exactly matching the numbers pulled by hand in Hue
 earlier. This is genuinely demo-ready.
 
-Item 3 status: step 1 done+verified, step 2 done+verified (worked first
-try). Step 3 (deliberate day-over-day diff as a repeatable drill) is the
-only thing left, and it's optional at this point — the mechanism is
-already proven end-to-end by the real diff step 1/2's verification
-produced, and every future day-boundary regeneration will keep growing
-the snapshot chain naturally.
+**Step 3 done**: `generate_bronze.py`/`generate_claims_bronze.py` now
+accept an optional 2nd CLI arg — a raw seed int, or a `YYYY-MM-DD` date
+string converted via the same `int(date.strftime('%Y%m%d'))` formula
+they default to (`_parse_seed_arg()`, duplicated in both files matching
+the existing per-file-helper convention). Passing an earlier date
+reproduces exactly what that job would have generated had it run that
+day — attribute values only, `effective_date`/`expiry_date`/etc. still
+anchor to the real run time so nothing looks artificially expired. New
+`cde/scripts/time_travel_drill.sh` runs the full 8-job chain twice
+(earlier date, then today) so a demo always has two meaningfully
+different snapshots to show, on demand, instead of waiting for a real
+day boundary. Documented in `cde/README.md` § Iceberg time travel and
+`cml/README.md`.
+
+**Item 3 (Iceberg time travel) is now fully done — all 3 steps
+complete and step 1/2 verified live.** The OLTP + Lakehouse enhancement
+story (all 3 original gaps) is closed:
+1. App claims → bronze (`export-claims`) — done.
+2. Lakehouse risk signals → live decision engine (`lakehouse_high_risk_policy`) — done, verified.
+3. Iceberg time travel (MERGE writes + history/as-of CLI + on-demand drill) — done, steps 1/2 verified live; step 3 not yet dry-run end-to-end (new code, syntax-checked only).
 
 ### Reusable Phase 4 testing tooling added this session
 

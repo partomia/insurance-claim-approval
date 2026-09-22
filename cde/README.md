@@ -451,17 +451,28 @@ as-of --table policy_risk_signals --policy-number LH-POL-2059 --snapshot
 between them. Script: `backend/scripts/lakehouse_time_travel.py`,
 documented in `cml/README.md` § Iceberg time travel / audit.
 
-**Getting a meaningful diff to actually show, going forward:** a single
-re-run against unchanged upstream data won't look interesting even with
-MERGE wired up — `generate_bronze.py`/`generate_claims_bronze.py` now
-reseed by calendar day (see Roadmap below) specifically so that
-re-running `generate-claims-bronze` → `curate-risk-signals-gold` a day
-(or more) apart produces a *real* `fraud_risk_score`/`claim_risk_band`
-shift for at least some policies going forward, the same way the diff
-above showed up this time. Item 3 step 3 (deliberately regenerating a day
-apart, for a repeatable demo rather than a one-off) is still worth doing
-as a documented drill, but the mechanism itself is now proven, not
-theoretical.
+**Getting a meaningful diff to actually show, on demand (Item 3 step 3 —
+done):** waiting for a real calendar day boundary to cross isn't
+practical to rehearse a demo with. `generate_bronze.py`/
+`generate_claims_bronze.py` accept an optional 2nd CLI arg — a raw seed
+int, or a `YYYY-MM-DD` date string that gets converted to the same
+`int(date.strftime('%Y%m%d'))` seed formula they default to. Passing an
+*earlier* date reproduces exactly what that job would have generated had
+it actually run that day (attribute values only — `effective_date`/
+`expiry_date`/`incident_date`/etc. still anchor to the real run time, so
+nothing looks artificially expired). `cde/scripts/time_travel_drill.sh`
+runs the full 8-job chain twice — once seeded as an earlier date, once
+seeded normally as today — so you always get two meaningfully different
+gold snapshots to time-travel between, on demand:
+
+```bash
+./cde/scripts/time_travel_drill.sh              # earlier date defaults to 7 days ago
+./cde/scripts/time_travel_drill.sh 2026-09-10   # or pick a specific date
+```
+
+This is on top of (not instead of) the naturally-occurring day-boundary
+reseeding, which will also keep producing real diffs over time as the
+pipeline runs on its normal schedule.
 
 ## Closing the loop: exporting app claims
 
@@ -538,7 +549,7 @@ building a separate mechanism.
 - ~~**Phase 3** — an app-side ingestion script pulling `insurance_lakehouse.policy_master`/`policy_clauses`/`policy_risk_signals` into the app's SQLite + Chroma RAG index~~ — **done**, see `backend/scripts/ingest_lakehouse.py` / `bash cml/cli.sh lakehouse ingest` (documented in `cml/README.md`).
 - ~~**Close the OLTP → lakehouse loop** — claims filed through the app never fed into bronze, so `fraud_risk_score` was only ever computed over synthetic history~~ — **done**, see § Closing the loop above (`backend/scripts/export_claims_to_lakehouse.py` → `app_claims_raw` → unioned into silver → same gold analytics, unchanged).
 - Swap `generate_bronze.py`/`generate_claims_bronze.py`'s synthetic data for a real source extract (S3/JDBC) once one exists — the validate/transform/curate stages don't need to change.
-- ~~**Replace the drop+recreate gold writes with `MERGE INTO` to preserve Iceberg snapshot/time-travel history across runs**~~ — **done** (Item 3, step 1 of 3): `curate_gold.py`/`curate_risk_signals_gold.py` bootstrap via CTAS only on the very first run, then `MERGE INTO` every run after (`WHEN NOT MATCHED BY SOURCE THEN DELETE` for parity with the old full-replace semantics). Also switched `generate_bronze.py`/`generate_claims_bronze.py` from a fixed seed (42/7) to a **date-based seed** (`int(now.strftime("%Y%m%d"))`) — otherwise the synthetic population is byte-identical every run and MERGE would have nothing real to commit, making time travel boring (every snapshot would look the same). Reruns *within* the same day stay idempotent; crossing a day boundary evolves the population. Step 2 (a `test-claim`-style CLI to browse `DESCRIBE HISTORY` / `FOR SYSTEM_TIME|VERSION AS OF`) is **done** — see `backend/scripts/lakehouse_time_travel.py` / `bash cml/cli.sh lakehouse history|as-of`, documented in `cml/README.md`. Verified live in env1 with a real diff (`LH-POL-2059`: HIGH/69.6/22-claims → MEDIUM/36.4/4-claims across two snapshots) — see § Iceberg time travel below. Step 3 (deliberately regenerating a day apart as a repeatable demo drill, rather than relying on the one-off diff from this code change) is still open.
+- ~~**Replace the drop+recreate gold writes with `MERGE INTO` to preserve Iceberg snapshot/time-travel history across runs**~~ — **done** (Item 3, step 1 of 3): `curate_gold.py`/`curate_risk_signals_gold.py` bootstrap via CTAS only on the very first run, then `MERGE INTO` every run after (`WHEN NOT MATCHED BY SOURCE THEN DELETE` for parity with the old full-replace semantics). Also switched `generate_bronze.py`/`generate_claims_bronze.py` from a fixed seed (42/7) to a **date-based seed** (`int(now.strftime("%Y%m%d"))`) — otherwise the synthetic population is byte-identical every run and MERGE would have nothing real to commit, making time travel boring (every snapshot would look the same). Reruns *within* the same day stay idempotent; crossing a day boundary evolves the population. Step 2 (a `test-claim`-style CLI to browse `DESCRIBE HISTORY` / `FOR SYSTEM_TIME|VERSION AS OF`) is **done** — see `backend/scripts/lakehouse_time_travel.py` / `bash cml/cli.sh lakehouse history|as-of`, documented in `cml/README.md`. Verified live in env1 with a real diff (`LH-POL-2059`: HIGH/69.6/22-claims → MEDIUM/36.4/4-claims across two snapshots) — see § Iceberg time travel below. Step 3 (a repeatable, on-demand demo drill instead of waiting for a real day boundary) is also **done** — see `cde/scripts/time_travel_drill.sh`, which passes an explicit `YYYY-MM-DD` seed override through the generate jobs' new optional 2nd arg. **All 3 steps of Item 3 are now complete.**
 - ~~**Feed `fraud_risk_score`/`claim_risk_band` into the live decision engine** — it only surfaced on the Book of Business page and the Claim Insights risk card, never influencing a claim's actual approve/reject/review outcome~~ — **done**: `services/fraud_detection.py` adds it as a `SIGNAL_WEIGHTS` rule (HIGH band meets the review threshold on its own, MEDIUM is a soft signal), and `services/escalation_service.py` raises an explicit `lakehouse_high_risk_policy` flag for HIGH band, which `decision_engine.py`'s existing generic escalation-flag check routes straight to `PENDING_REVIEW` — no `decision_engine.py` changes needed. Only applies to lakehouse-ingested policies (`policy.risk_signal` is `None` otherwise); zero frontend changes since escalation messages already render everywhere.
 - Add Great Expectations to the validate stages for richer expectation suites, mirroring the reference workshop's Module 05.
 - Enable the schedule (`schedule_interval="@daily"` or similar) once the demo data volume/cadence story is finalized.

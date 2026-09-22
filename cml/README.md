@@ -363,6 +363,17 @@ a raw `--where "..."` fragment for anything else. Script:
 [`backend/scripts/lakehouse_time_travel.py`](../backend/scripts/lakehouse_time_travel.py)
 (`--help` for all flags).
 
+**Manufacturing a fresh diff on demand** (rather than waiting for a real
+day boundary), for rehearsing this demo: `cde/scripts/time_travel_drill.sh`
+runs the full CDE generate → validate → transform → curate chain twice —
+once seeded as an earlier date, once as today — so `history`/`as-of`
+always have two meaningfully different snapshots to show. Run from your
+local machine (needs the CDE CLI, not the CAI session):
+```bash
+./cde/scripts/time_travel_drill.sh              # earlier date defaults to 7 days ago
+./cde/scripts/time_travel_drill.sh 2026-09-10   # or pick a specific date
+```
+
 Verified end-to-end in env1 (2026-09-22), worked first try: `LH-POL-2059`
 was `HIGH`-band (score 69.6, 22 claims) at the prior snapshot and
 `MEDIUM`-band (score 36.4, 4 claims) at the current one — both states

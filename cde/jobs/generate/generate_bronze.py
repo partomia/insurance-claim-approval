@@ -178,11 +178,11 @@ def generate_clause_rows(policy_numbers, now_iso: str):
     return rows
 
 
-def write_bronze(spark: SparkSession, n_policies: int) -> None:
+def write_bronze(spark: SparkSession, n_policies: int, seed: int = None) -> None:
     anchor = datetime.now(timezone.utc).replace(tzinfo=None)
     now_iso = anchor.strftime("%Y-%m-%d %H:%M:%S")
 
-    policy_rows = generate_policy_rows(n_policies, now_iso, anchor)
+    policy_rows = generate_policy_rows(n_policies, now_iso, anchor, seed=seed)
     policy_df = spark.createDataFrame(policy_rows, schema=POLICY_MASTER_SCHEMA)
 
     clause_rows = generate_clause_rows([r[0] for r in policy_rows], now_iso)
@@ -216,13 +216,30 @@ def _is_unset(val: str) -> bool:
     return not val or (val.startswith("{{") and val.endswith("}}"))
 
 
+def _parse_seed_arg(val: str) -> int:
+    """Accepts either a raw int seed or a YYYY-MM-DD date string (converted
+    via the same int(date.strftime('%Y%m%d')) formula generate_policy_rows
+    defaults to). Lets a demo deliberately force *any* day's population on
+    demand -- e.g. `--arg 60 --arg 2026-09-15` reproduces exactly what
+    generate_policy_rows would have produced if it had *actually* run on
+    2026-09-15 -- instead of waiting for a real day boundary to cross to
+    get a second, different snapshot for Item 3's time-travel demo (see
+    cde/scripts/time_travel_drill.sh)."""
+    if len(val) == 10 and val[4] == "-" and val[7] == "-":
+        return int(datetime.strptime(val, "%Y-%m-%d").strftime("%Y%m%d"))
+    return int(val)
+
+
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else None
     n_policies = int(arg) if arg and not _is_unset(arg) else DEFAULT_N_POLICIES
 
+    seed_arg = sys.argv[2] if len(sys.argv) > 2 else None
+    seed = _parse_seed_arg(seed_arg) if seed_arg and not _is_unset(seed_arg) else None
+
     spark = get_spark()
     try:
         logger.info("Generating %d synthetic policies into bronze...", n_policies)
-        write_bronze(spark, n_policies)
+        write_bronze(spark, n_policies, seed=seed)
     finally:
         spark.stop()
