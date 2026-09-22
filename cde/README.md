@@ -324,6 +324,23 @@ variables at the top of each script if you deploy under a different prefix):
    Run the full 8-job chain back-to-back (no long pauses between `cde job
    run` calls) to avoid re-triggering this mid-pipeline.
 
+9. **`time_travel_drill.sh`'s Pass 2 (today, no seed override) can look
+   like a no-op if the pipeline already ran once today.** Confirmed live:
+   running the drill in the afternoon, after the normal pipeline had
+   already run that morning, produced 2 new snapshots as expected, but
+   diffing the *afternoon* one against the *morning* one showed only
+   `ingested_at` changed — because both were seeded as the same calendar
+   day (`int(date.strftime('%Y%m%d'))` is identical for both), so
+   `generate_bronze.py`/`generate_claims_bronze.py` regenerated
+   byte-identical rows and the `MERGE INTO` had nothing else to commit.
+   This is expected (same design as Gotcha #7 — same-day reruns are
+   deliberately idempotent), not a bug. **The diff you actually want is
+   Pass 1's snapshot (seeded as the explicit earlier date) vs. CURRENT or
+   vs. Pass 2** — never two same-day "today" snapshots against each other.
+   The script now prints wall-clock timestamps around each pass so you can
+   line them up against `creation_time` in `lakehouse history`'s output
+   and pick the right `snapshot_id`.
+
 ## Connectivity troubleshooting
 
 If `cde resource list` (or any `cde` command) hangs or errors:
@@ -442,6 +459,18 @@ time, prove what the system said and when. This diff showed up on the
 very first MERGE after the code change (old fixed-seed data →
 `curate-gold` bootstrap snapshot vs. new date-seeded data → first real
 MERGE), which doubles as proof of concept for Item 3 step 3 below.
+
+**Also verified live: the "same-day snapshot" pitfall (Gotcha #9).**
+Running `time_travel_drill.sh` produced 4 total snapshots for
+`policy_risk_signals`, but diffing the pre-drill snapshot
+(`6300977543968207922`, committed 2026-09-22 13:53, seeded as that day)
+against CURRENT (the drill's Pass 2, also seeded as that same day) showed
+**only `ingested_at` changed** for `LH-POL-2000` — expected, not a bug,
+since both runs shared the same date-based seed. The real diff was one
+hop earlier: Pass 1's snapshot (`2408034314406756364`, committed 20:01,
+seeded as the explicit earlier date passed to the drill) vs. either of
+the same-day ones. Moral: always diff across *different* seed-dates, not
+across two runs from the same calendar day.
 
 A `test-claim`-style CLI wrapper does exactly this for you (Item 3, step
 2 — **done**): `bash cml/cli.sh lakehouse history --table

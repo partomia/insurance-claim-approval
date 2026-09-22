@@ -228,6 +228,18 @@ policy's risk on date X, and can you prove it?"
    pipeline passes (budget 15-30+ min depending on vcluster scale-up —
    run this well before the demo, not live during it).
 
+   **Pick the right snapshot pair, or the diff will look empty.** The
+   drill's Pass 2 always reseeds as *today* — if the pipeline already ran
+   once today before you ran the drill, Pass 2 reproduces byte-identical
+   data to that earlier same-day run, so diffing them shows only
+   `ingested_at` changed (confirmed live — not a bug, see
+   [`cde/README.md`](../cde/README.md#gotchas-we-actually-hit) Gotcha #9).
+   The script prints wall-clock timestamps around each pass specifically so
+   you can match them against `creation_time` in `history`'s output and
+   pick **Pass 1's snapshot** (seeded as the explicit earlier date) to
+   diff against CURRENT — that pairing is guaranteed to differ, since it
+   spans two different seed-dates.
+
 ---
 
 ## Wrap-up talking points

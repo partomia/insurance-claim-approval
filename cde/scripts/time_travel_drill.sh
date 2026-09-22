@@ -22,6 +22,17 @@
 #
 # Requires: CDE CLI configured (~/.cde/config.yaml), jobs already deployed
 # (./cde/scripts/deploy_jobs.sh), python-env resource status "ready".
+#
+# IMPORTANT gotcha: Pass 2 always reseeds as *today* -- if this drill (or
+# the normal scheduled pipeline) has already run once today before you run
+# this script, Pass 2 reproduces byte-identical data to that earlier
+# same-day run (same seed = same RNG draws), so a MERGE INTO between them
+# is a no-op except for `ingested_at`. The diff you actually want is
+# Pass 1's snapshot (seeded as $EARLIER, guaranteed different) vs. CURRENT
+# or vs. Pass 2 -- NOT two same-day "today" snapshots against each other.
+# This script prints wall-clock timestamps around each pass so you can
+# match them against `creation_time` in `lakehouse history`'s output and
+# pick the right snapshot_id.
 set -euo pipefail
 
 EARLIER="${1:-$(python3 -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=7)).isoformat())")}"
@@ -57,20 +68,37 @@ run_chain() {
   cde job run --name rsingh-insurance-curate-risk-signals-gold --wait
 }
 
+echo "Wall-clock BEFORE pass 1: $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
 echo "=================================================================="
 echo " Pass 1/2 -- simulating ${EARLIER}"
 echo "=================================================================="
 run_chain 60 "$EARLIER" 4000
+PASS1_DONE="$(date -u '+%Y-%m-%d %H:%M:%S')"
+echo "Wall-clock AFTER pass 1 / BEFORE pass 2: ${PASS1_DONE} UTC  <-- the"
+echo "gold-table snapshot committed just before this line is the one you"
+echo "want for the demo diff (seeded as ${EARLIER}, guaranteed different)."
 
 echo ""
 echo "=================================================================="
 echo " Pass 2/2 -- today (no seed override)"
 echo "=================================================================="
 run_chain 60 "" 4000
+echo "Wall-clock AFTER pass 2: $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
 
 echo ""
-echo "Done. Two meaningfully different gold snapshots now exist. Try (from"
-echo "a CAI session, after 'git pull'):"
+echo "=================================================================="
+echo "Done."
+echo ""
+echo "IMPORTANT: pick the RIGHT snapshot pair for the demo diff. Run:"
 echo "  bash cml/cli.sh lakehouse history --table policy_risk_signals"
+echo "and find the row whose creation_time is closest to (just before)"
+echo "${PASS1_DONE} UTC above -- that snapshot was seeded as ${EARLIER} and"
+echo "is guaranteed to differ from CURRENT. Then:"
 echo "  bash cml/cli.sh lakehouse as-of --table policy_risk_signals \\"
-echo "    --policy-number LH-POL-2000 --snapshot <id-from-history-above>"
+echo "    --policy-number <LH-POL-XXXX> --snapshot <that-snapshot-id>"
+echo ""
+echo "Do NOT diff two 'today'-seeded snapshots against each other (e.g. the"
+echo "one right after pass 1's timestamp vs. the very last one from pass 2)"
+echo "-- if the pipeline already ran once today before this drill, pass 2's"
+echo "snapshot reproduces byte-identical data (same seed), so the only"
+echo "column that differs is ingested_at."
