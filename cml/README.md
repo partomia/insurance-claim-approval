@@ -385,6 +385,11 @@ number." `as-of`'s automatic diff caught all 9 changed columns
 `ingested_at`) with zero manual comparison needed. This is the actual
 audit/regulatory pitch for a bank.
 
+**Ready to actually run this as a demo, top to bottom?** See
+[`docs/steps-to-demo-execution.md`](../docs/steps-to-demo-execution.md) for
+a click/command runbook covering all 4 beats above in order (assumes
+everything is already up and the pipeline has run at least once).
+
 ## Verifying Phase 1-3 end-to-end (step-by-step)
 
 Run this checklist after any `git pull` + `bash cml/cli.sh update` — e.g.

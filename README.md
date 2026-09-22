@@ -154,6 +154,10 @@ and [`cde/README.md`](cde/README.md) for the CDE Spark/Airflow pipeline
 > can't run any of this; just skip the whole Data Lakehouse section and run
 > the core app with `DB_BACKEND=sqlite` (the default) for an OLTP-only demo.
 
+**Ready to actually demo this?** See
+[`docs/steps-to-demo-execution.md`](docs/steps-to-demo-execution.md) for a
+step-by-step runbook (assumes everything above is already up and running).
+
 ## API Endpoints
 
 | Method | Path | Description |

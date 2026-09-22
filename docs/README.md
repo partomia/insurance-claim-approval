@@ -13,6 +13,7 @@ pipeline, SQLAlchemy on SQLite (dev) or Postgres (prod).
 | [`assistant-memory.md`](./assistant-memory.md) | STM/LTM memory layer (deep dive) |
 | [`frontend.md`](./frontend.md) | Frontend routes and components |
 | [`env-reference.md`](./env-reference.md) | All environment variables, defaults, and when to change them |
+| [`steps-to-demo-execution.md`](./steps-to-demo-execution.md) | Click/command runbook for demoing the OLTP + Lakehouse story end-to-end (resources assumed already running) |
 | [`diagrams/`](./diagrams/) | Mermaid + PNG diagrams for architecture, data flow, portals, agent pipeline |
 
 ## Quick start
