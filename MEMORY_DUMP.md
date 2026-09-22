@@ -558,6 +558,64 @@ is next, see Roadmap in `cde/README.md`.
 OVERWRITE` instead of drop+recreate gold writes), logged in
 `cde/README.md`'s Roadmap.
 
+## 2026-09-22 — Item 3, step 1: gold writes switched to MERGE INTO
+
+Agreed 3-step plan for Item 3 (Iceberg time travel):
+1. Switch the 4 gold-table writes from drop+recreate to `MERGE INTO` so
+   runs commit real snapshots instead of destroying history. **Done this
+   session.**
+2. A `test-claim`-style CLI to browse `DESCRIBE HISTORY` / run `FOR
+   SYSTEM_TIME|VERSION AS OF` queries and diff against the current row.
+   Not started.
+3. Deliberately produce a day-over-day diff (re-run generate → curate a
+   day apart) so there's something demo-worthy to time-travel to. Not
+   started.
+
+**Step 1 implementation:**
+- `cde/jobs/curate/curate_gold.py` (`policy_master` key=`policy_number`,
+  `policy_clauses` key=`policy_number,section_ref`) and
+  `cde/jobs/curate/curate_risk_signals_gold.py` (`policy_risk_signals`
+  key=`policy_number`, `garage_risk_signals` key=`garage_name`): added a
+  `_bootstrap_or_merge()` helper (duplicated in both files — CDE jobs are
+  deployed as single standalone `--application-file`s, no shared
+  `--py-files` module today, matching the existing pattern of small
+  per-file duplicated helpers like `_is_unset`). First run (table doesn't
+  exist): CTAS, same as before. Every run after: `MERGE INTO ... WHEN
+  MATCHED UPDATE SET * WHEN NOT MATCHED INSERT * WHEN NOT MATCHED BY
+  SOURCE DELETE` — the `DELETE` clause keeps parity with the old
+  full-replace semantics for keys that drop out of a run. Confirmed CDP
+  7.3.2 supports this Spark-side (`WHEN NOT MATCHED BY SOURCE` needs Spark
+  3.5+/Iceberg-on-CDE ≥1.5.2, both satisfied) and Impala-side (for the
+  step-2 CLI's read queries) via Cloudera docs before writing any code.
+- **User's catch, addressed**: `generate_bronze.py` (seed=42) and
+  `generate_claims_bronze.py` (seed=7) used **fixed** seeds, so every
+  regeneration produced byte-identical policy/claims attributes (only
+  dates shifted with the anchor). Under the new MERGE strategy that would
+  mean every run after the first commits an essentially-empty snapshot —
+  no real diff, so nothing to time-travel *to*. Fixed: both now default to
+  `seed = int(now.strftime("%Y%m%d"))` (calendar-day-based) instead of a
+  constant — reruns *within* the same day stay idempotent (stable
+  mid-demo), but the first run after a day boundary evolves the synthetic
+  population for real (premiums, claim severities, garage assignments,
+  and therefore `fraud_risk_score`/`claim_risk_band` downstream). Explicit
+  `seed=` param still available for anyone who wants old deterministic
+  behavior.
+- Trade-off flagged in `cde/README.md` Gotcha #7: a day-boundary
+  regeneration can shift a specific policy's risk band (e.g. a known
+  HIGH-band demo policy might not stay HIGH forever) — re-check with
+  `test-claim find --band HIGH --not-expired` after any such regen rather
+  than assuming yesterday's policy numbers still hold.
+- Docs: `cde/README.md` — updated § Data flow's drop+recreate note, added
+  new § Iceberg time travel (Item 3) section with the `DESCRIBE HISTORY`
+  / `FOR SYSTEM_TIME AS OF` / `FOR SYSTEM_VERSION AS OF` syntax (verified
+  against Cloudera's CDP 7.3.2 docs, not assumed), updated Roadmap line,
+  added Gotcha #7.
+- **Not yet re-run/verified in env1** — next session should `git pull` +
+  re-run `generate-bronze`/`generate-claims-bronze` → `validate` →
+  `transform` → `curate-gold`/`curate-risk-signals-gold` in CDE, then spot
+  check `DESCRIBE HISTORY insurance_lakehouse.policy_risk_signals` in Hue/
+  Impala shows more than one snapshot after a second run.
+
 ### Reusable Phase 4 testing tooling added this session
 
 - `cml/verify_phase4.sh` (`bash cml/cli.sh verify-phase4 [--check-claims]`)

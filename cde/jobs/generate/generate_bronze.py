@@ -111,7 +111,18 @@ def get_spark() -> SparkSession:
     return SparkSession.builder.appName("insurance-generate-bronze").getOrCreate()
 
 
-def generate_policy_rows(n: int, now_iso: str, anchor: datetime, seed: int = 42):
+def generate_policy_rows(n: int, now_iso: str, anchor: datetime, seed: int = None):
+    # Seed by calendar day (not a fixed constant) so re-running this job
+    # produces a genuinely different synthetic population run-over-run --
+    # needed for the gold layer's MERGE INTO (curate_gold.py) to have real
+    # row-level changes to commit as a new Iceberg snapshot instead of
+    # re-writing byte-identical values every time (which would make Item 3's
+    # time-travel demo boring -- every snapshot would look the same). Pinned
+    # to the day (not fully random per call) so re-runs *within* the same
+    # day stay idempotent/stable mid-demo; only crossing a day boundary (or
+    # passing an explicit seed) changes the population.
+    if seed is None:
+        seed = int(anchor.strftime("%Y%m%d"))
     rng = random.Random(seed)
     rows = []
     for i in range(n):

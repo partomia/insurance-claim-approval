@@ -278,6 +278,18 @@ variables at the top of each script if you deploy under a different prefix):
    also have CDE access to run this recovery, or coordinate with whoever
    does.
 
+7. **`generate_bronze.py`/`generate_claims_bronze.py` now reseed by
+   calendar day, not a fixed constant** (Item 3, see § Iceberg time
+   travel). This means re-running `generate-bronze`/`generate-claims-bronze`
+   *later the same day* is still idempotent (same seed all day), but the
+   *first* run after midnight UTC produces a genuinely different synthetic
+   population than the day before — including `status`/`claim_risk_band`
+   for individual policies, which can shift a policy you were using for a
+   demo (e.g. a known HIGH-band policy) to a different band. If a demo
+   depends on a specific policy/band, re-check with `bash cml/cli.sh
+   test-claim find --band HIGH --not-expired` after any same-day-crossing
+   regeneration rather than assuming yesterday's policy numbers still hold.
+
 ## Connectivity troubleshooting
 
 If `cde resource list` (or any `cde` command) hangs or errors:
@@ -319,7 +331,7 @@ and re-running `deploy_jobs.sh`, no job redefinition needed.
 
 The gold tables are the exact ones `cml/cli.sh lakehouse verify` already checks and Hue already queries — running this pipeline just replaces the hand-seeded 3 rows with ~60 pipeline-produced rows, no downstream changes needed.
 
-All tables are `STORED AS ICEBERG` (`format-version=2`), written via `CREATE TABLE ... USING iceberg AS SELECT` (full drop+recreate each run — simplest for a demo pipeline; a production version would use `MERGE`/`INSERT OVERWRITE` to preserve Iceberg snapshot history instead).
+All tables are `STORED AS ICEBERG` (`format-version=2`). **Bronze** tables (`generate*.py`) are still full drop+recreate every run — they're synthetic mock data with no audit story of their own. **Gold** tables (`curate_gold.py`, `curate_risk_signals_gold.py`) bootstrap via `CREATE TABLE ... AS SELECT` only on the very first run; every run after that uses `MERGE INTO` (`WHEN MATCHED UPDATE`, `WHEN NOT MATCHED INSERT`, `WHEN NOT MATCHED BY SOURCE DELETE`) instead, so each run commits a new Iceberg snapshot recording exactly what changed instead of destroying prior history — see § Iceberg time travel below.
 
 ## Claims-analytics design (Phase 2b)
 
@@ -357,6 +369,43 @@ population that a single OLTP row/query could never produce:
   `MEDIUM`=439, `LOW`=277) and 40 `garage_risk_signals` rows (6 flagged
   high-risk) — a healthy, non-degenerate spread, not everything dumped into
   one bucket.
+
+## Iceberg time travel (Item 3)
+
+The gold tables now write via `MERGE INTO` (see § Data flow above), so
+every pipeline run commits a real Iceberg snapshot instead of destroying
+prior history via drop+recreate. This is the actual point-in-time
+audit/regulatory story a bank cares about — CDP 7.3.2's Impala supports it
+natively, no extra tooling needed:
+
+```sql
+-- List every snapshot committed to a gold table (Impala, via Hue or Impyla):
+DESCRIBE HISTORY insurance_lakehouse.policy_risk_signals;
+
+-- Read the table as it looked at a past point in time or specific snapshot:
+SELECT * FROM insurance_lakehouse.policy_risk_signals
+  FOR SYSTEM_TIME AS OF '2026-09-20 10:00:00'
+  WHERE policy_number = 'LH-POL-2059';
+
+SELECT * FROM insurance_lakehouse.policy_risk_signals
+  FOR SYSTEM_VERSION AS OF 3088747670581784990
+  WHERE policy_number = 'LH-POL-2059';
+```
+
+A `test-claim`-style CLI wrapper (`bash cml/cli.sh lakehouse history` /
+`lakehouse as-of`) that runs these for you and diffs the result against the
+current row is next (Item 3, step 2) — not built yet.
+
+**Getting a meaningful diff to actually show:** a single re-run against
+unchanged upstream data won't look interesting even with MERGE wired up —
+`generate_bronze.py`/`generate_claims_bronze.py` now reseed by calendar day
+(see Roadmap below) specifically so that re-running `generate-claims-bronze`
+→ `curate-risk-signals-gold` a day (or more) apart produces a *real*
+`fraud_risk_score`/`claim_risk_band` shift for at least some policies —
+that's the "audit trail" moment: `DESCRIBE HISTORY` shows two snapshots,
+and `FOR SYSTEM_TIME AS OF` on each proves what the score actually was on
+each date. This step (deliberately running the generate stage a day apart
+to produce a demo-worthy diff) is Item 3, step 3 — not done yet.
 
 ## Closing the loop: exporting app claims
 
@@ -433,7 +482,7 @@ building a separate mechanism.
 - ~~**Phase 3** — an app-side ingestion script pulling `insurance_lakehouse.policy_master`/`policy_clauses`/`policy_risk_signals` into the app's SQLite + Chroma RAG index~~ — **done**, see `backend/scripts/ingest_lakehouse.py` / `bash cml/cli.sh lakehouse ingest` (documented in `cml/README.md`).
 - ~~**Close the OLTP → lakehouse loop** — claims filed through the app never fed into bronze, so `fraud_risk_score` was only ever computed over synthetic history~~ — **done**, see § Closing the loop above (`backend/scripts/export_claims_to_lakehouse.py` → `app_claims_raw` → unioned into silver → same gold analytics, unchanged).
 - Swap `generate_bronze.py`/`generate_claims_bronze.py`'s synthetic data for a real source extract (S3/JDBC) once one exists — the validate/transform/curate stages don't need to change.
-- Replace the drop+recreate writes with `MERGE INTO` / `INSERT OVERWRITE` to preserve Iceberg snapshot/time-travel history across runs.
+- ~~**Replace the drop+recreate gold writes with `MERGE INTO` to preserve Iceberg snapshot/time-travel history across runs**~~ — **done** (Item 3, step 1 of 3): `curate_gold.py`/`curate_risk_signals_gold.py` bootstrap via CTAS only on the very first run, then `MERGE INTO` every run after (`WHEN NOT MATCHED BY SOURCE THEN DELETE` for parity with the old full-replace semantics). Also switched `generate_bronze.py`/`generate_claims_bronze.py` from a fixed seed (42/7) to a **date-based seed** (`int(now.strftime("%Y%m%d"))`) — otherwise the synthetic population is byte-identical every run and MERGE would have nothing real to commit, making time travel boring (every snapshot would look the same). Reruns *within* the same day stay idempotent; crossing a day boundary evolves the population. Steps 2 (a `test-claim`-style CLI to browse `DESCRIBE HISTORY` / `FOR SYSTEM_TIME|VERSION AS OF`) and 3 (deliberately generating a day-over-day diff for the demo) are next — see § Iceberg time travel below.
 - ~~**Feed `fraud_risk_score`/`claim_risk_band` into the live decision engine** — it only surfaced on the Book of Business page and the Claim Insights risk card, never influencing a claim's actual approve/reject/review outcome~~ — **done**: `services/fraud_detection.py` adds it as a `SIGNAL_WEIGHTS` rule (HIGH band meets the review threshold on its own, MEDIUM is a soft signal), and `services/escalation_service.py` raises an explicit `lakehouse_high_risk_policy` flag for HIGH band, which `decision_engine.py`'s existing generic escalation-flag check routes straight to `PENDING_REVIEW` — no `decision_engine.py` changes needed. Only applies to lakehouse-ingested policies (`policy.risk_signal` is `None` otherwise); zero frontend changes since escalation messages already render everywhere.
 - Add Great Expectations to the validate stages for richer expectation suites, mirroring the reference workshop's Module 05.
 - Enable the schedule (`schedule_interval="@daily"` or similar) once the demo data volume/cadence story is finalized.

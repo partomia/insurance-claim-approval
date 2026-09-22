@@ -118,7 +118,15 @@ def _claims_count_for_policy(rng: random.Random, is_frequent: bool) -> int:
     return rng.choices([0, 1, 2, 3], weights=[30, 40, 20, 10], k=1)[0]
 
 
-def generate_claim_rows(n_target: int, now: datetime, seed: int = 7):
+def generate_claim_rows(n_target: int, now: datetime, seed: int = None):
+    # Seed by calendar day, not a fixed constant -- see the matching comment
+    # in generate_bronze.py's generate_policy_rows(). This history is what
+    # curate_risk_signals_gold.py aggregates into policy_risk_signals
+    # (fraud_risk_score/claim_risk_band); if it never changed run-over-run,
+    # the gold MERGE INTO (Item 3) would have nothing real to commit as a
+    # new snapshot -- every "point in time" would look identical.
+    if seed is None:
+        seed = int(now.strftime("%Y%m%d"))
     rng = random.Random(seed)
     policy_numbers = [f"LH-POL-{2000 + i}" for i in range(CLAIMS_POLICY_UNIVERSE_SIZE)]
     frequent_set = set(rng.sample(policy_numbers, int(CLAIMS_POLICY_UNIVERSE_SIZE * FREQUENT_CLAIMANT_PCT)))

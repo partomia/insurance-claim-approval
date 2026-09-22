@@ -8,6 +8,10 @@ becomes the real source of that data going forward. Downstream consumers
 same database, same table names, same core columns, just pipeline-produced
 instead of hand-seeded, and with two additive enrichment columns.
 
+Writes via MERGE INTO (not drop+recreate) once the table exists, so every
+run commits a new Iceberg snapshot instead of destroying prior history --
+see cde/README.md § Iceberg time travel/audit. First run bootstraps via CTAS.
+
 Reads:
   insurance_lakehouse_silver.policy_master
   insurance_lakehouse_silver.policy_clauses
@@ -34,6 +38,36 @@ GOLD_DB = "insurance_lakehouse"  # same schema Phase 1 (lakehouse_seed.py) used
 
 def get_spark() -> SparkSession:
     return SparkSession.builder.appName("insurance-curate-gold").getOrCreate()
+
+
+def _bootstrap_or_merge(spark: SparkSession, target: str, tmp_view: str, key_cols: list, row_count: int) -> None:
+    """First run: CTAS to create the Iceberg table. Every run after that:
+    MERGE INTO instead of DROP TABLE + CTAS, so each run commits a new
+    Iceberg snapshot recording exactly what changed instead of destroying
+    all prior snapshot history every time (see cde/README.md Roadmap --
+    Item 3, Iceberg time travel/audit). WHEN NOT MATCHED BY SOURCE THEN
+    DELETE keeps parity with the old drop+recreate behavior for rows that
+    disappeared from this run's source (e.g. a policy_number no longer
+    produced by generate_bronze.py)."""
+    if spark.catalog.tableExists(target):
+        on_clause = " AND ".join(f"t.{c} = s.{c}" for c in key_cols)
+        spark.sql(f"""
+            MERGE INTO {target} t
+            USING {tmp_view} s
+            ON {on_clause}
+            WHEN MATCHED THEN UPDATE SET *
+            WHEN NOT MATCHED THEN INSERT *
+            WHEN NOT MATCHED BY SOURCE THEN DELETE
+        """)
+        logger.info("Merged %d source rows into %s (new snapshot committed)", row_count, target)
+    else:
+        spark.sql(f"""
+            CREATE TABLE {target}
+            USING iceberg
+            TBLPROPERTIES ('format-version'='2')
+            AS SELECT * FROM {tmp_view}
+        """)
+        logger.info("Bootstrapped %s with %d rows (first run)", target, row_count)
 
 
 def curate_policies(df, now_iso: str):
@@ -68,24 +102,16 @@ def run(spark: SparkSession) -> None:
     spark.sql(f"CREATE DATABASE IF NOT EXISTS {GOLD_DB}")
 
     policies_gold.createOrReplaceTempView("tmp_policy_master_gold")
-    spark.sql(f"DROP TABLE IF EXISTS {GOLD_DB}.policy_master")
-    spark.sql(f"""
-        CREATE TABLE {GOLD_DB}.policy_master
-        USING iceberg
-        TBLPROPERTIES ('format-version'='2')
-        AS SELECT * FROM tmp_policy_master_gold
-    """)
-    logger.info("Wrote %d rows to %s.policy_master", policies_gold.count(), GOLD_DB)
+    _bootstrap_or_merge(
+        spark, f"{GOLD_DB}.policy_master", "tmp_policy_master_gold",
+        key_cols=["policy_number"], row_count=policies_gold.count(),
+    )
 
     clauses_gold.createOrReplaceTempView("tmp_policy_clauses_gold")
-    spark.sql(f"DROP TABLE IF EXISTS {GOLD_DB}.policy_clauses")
-    spark.sql(f"""
-        CREATE TABLE {GOLD_DB}.policy_clauses
-        USING iceberg
-        TBLPROPERTIES ('format-version'='2')
-        AS SELECT * FROM tmp_policy_clauses_gold
-    """)
-    logger.info("Wrote %d rows to %s.policy_clauses", clauses_gold.count(), GOLD_DB)
+    _bootstrap_or_merge(
+        spark, f"{GOLD_DB}.policy_clauses", "tmp_policy_clauses_gold",
+        key_cols=["policy_number", "section_ref"], row_count=clauses_gold.count(),
+    )
 
     logger.info("Gold curation complete. Risk band distribution:")
     policies_gold.groupBy("risk_band").count().show()

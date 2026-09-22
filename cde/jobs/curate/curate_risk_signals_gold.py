@@ -15,8 +15,10 @@ Design notes:
     OLTP database yet. That's a separate, later step once this analytics
     layer is validated (see cde/README.md roadmap) -- restricting/filtering
     to just the policies the live app cares about belongs there, not here.
-  - Tables are dropped/recreated each run (like the rest of this pipeline);
-    a production version would use incremental Iceberg MERGE instead.
+  - Writes via MERGE INTO (not drop+recreate) once the tables exist, so
+    each run commits a new Iceberg snapshot recording exactly what changed
+    -- see cde/README.md § Iceberg time travel/audit. First run bootstraps
+    via CTAS.
 
 Reads:
   insurance_lakehouse_silver.claims_history
@@ -54,6 +56,35 @@ GARAGE_VOLUME_MULTIPLE_THRESHOLD = 2.5
 
 def get_spark() -> SparkSession:
     return SparkSession.builder.appName("insurance-curate-risk-signals-gold").getOrCreate()
+
+
+def _bootstrap_or_merge(spark: SparkSession, target: str, tmp_view: str, key_cols: list, row_count: int) -> None:
+    """First run: CTAS to create the Iceberg table. Every run after that:
+    MERGE INTO instead of DROP TABLE + CTAS, so each run commits a new
+    Iceberg snapshot recording exactly what changed instead of destroying
+    all prior snapshot history every time (see cde/README.md Roadmap --
+    Item 3, Iceberg time travel/audit). WHEN NOT MATCHED BY SOURCE THEN
+    DELETE keeps parity with the old drop+recreate behavior for keys that
+    disappeared from this run's source population."""
+    if spark.catalog.tableExists(target):
+        on_clause = " AND ".join(f"t.{c} = s.{c}" for c in key_cols)
+        spark.sql(f"""
+            MERGE INTO {target} t
+            USING {tmp_view} s
+            ON {on_clause}
+            WHEN MATCHED THEN UPDATE SET *
+            WHEN NOT MATCHED THEN INSERT *
+            WHEN NOT MATCHED BY SOURCE THEN DELETE
+        """)
+        logger.info("Merged %d source rows into %s (new snapshot committed)", row_count, target)
+    else:
+        spark.sql(f"""
+            CREATE TABLE {target}
+            USING iceberg
+            TBLPROPERTIES ('format-version'='2')
+            AS SELECT * FROM {tmp_view}
+        """)
+        logger.info("Bootstrapped %s with %d rows (first run)", target, row_count)
 
 
 def compute_garage_risk_signals(claims):
@@ -155,25 +186,17 @@ def run(spark: SparkSession) -> None:
 
     garage_out = garage_signals.withColumn("source", F.lit("GOLD_PIPELINE")).withColumn("ingested_at", F.lit(now_iso))
     garage_out.createOrReplaceTempView("tmp_garage_risk_signals")
-    spark.sql(f"DROP TABLE IF EXISTS {GOLD_DB}.garage_risk_signals")
-    spark.sql(f"""
-        CREATE TABLE {GOLD_DB}.garage_risk_signals
-        USING iceberg
-        TBLPROPERTIES ('format-version'='2')
-        AS SELECT * FROM tmp_garage_risk_signals
-    """)
-    logger.info("Wrote %d rows to %s.garage_risk_signals", garage_out.count(), GOLD_DB)
+    _bootstrap_or_merge(
+        spark, f"{GOLD_DB}.garage_risk_signals", "tmp_garage_risk_signals",
+        key_cols=["garage_name"], row_count=garage_out.count(),
+    )
 
     policy_out = policy_signals.withColumn("source", F.lit("GOLD_PIPELINE")).withColumn("ingested_at", F.lit(now_iso))
     policy_out.createOrReplaceTempView("tmp_policy_risk_signals")
-    spark.sql(f"DROP TABLE IF EXISTS {GOLD_DB}.policy_risk_signals")
-    spark.sql(f"""
-        CREATE TABLE {GOLD_DB}.policy_risk_signals
-        USING iceberg
-        TBLPROPERTIES ('format-version'='2')
-        AS SELECT * FROM tmp_policy_risk_signals
-    """)
-    logger.info("Wrote %d rows to %s.policy_risk_signals", policy_out.count(), GOLD_DB)
+    _bootstrap_or_merge(
+        spark, f"{GOLD_DB}.policy_risk_signals", "tmp_policy_risk_signals",
+        key_cols=["policy_number"], row_count=policy_out.count(),
+    )
 
     logger.info("Risk band distribution:")
     policy_out.groupBy("claim_risk_band").count().orderBy("claim_risk_band").show()
