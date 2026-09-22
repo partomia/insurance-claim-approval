@@ -675,15 +675,25 @@ prints the AS OF row, the CURRENT row, and a column-level diff between
 them (only meaningful for single-row filters, e.g. one policy_number).
 Wired into `cml/lakehouse.sh`'s existing `<seed|verify|ingest|
 export-claims>` dispatcher. Documented in `cml/README.md` § Iceberg time
-travel / audit and `cde/README.md`'s Roadmap. Not yet re-run against the
-live env1 Impala connection (syntax-checked locally only, `py_compile` +
-`bash -n`) — next session should actually run `history`/`as-of` from a
-CAI session to confirm the impyla queries work as written.
+travel / audit and `cde/README.md`'s Roadmap.
 
-Item 3 status: step 1 done+verified, step 2 done (not yet live-tested),
-step 3 (deliberate day-over-day diff as a repeatable drill) still open —
-though the mechanism is already proven by the one-off diff step 1's
-verification produced.
+**Verified live in env1, worked first try, no fixes needed.** `history
+--table policy_risk_signals` printed the 2-snapshot chain cleanly.
+`as-of --table policy_risk_signals --policy-number LH-POL-2059
+--snapshot 4967580225782225719` printed the AS OF row, the CURRENT row,
+and an automatic column-level diff — 9 columns changed
+(`total_claims_count`, `claims_count_12m`, `total_claimed_amount`,
+`avg_claim_amount`, `amount_vs_segment_avg_pct`,
+`claim_frequency_percentile`, `fraud_risk_score`, `claim_risk_band`,
+`ingested_at`), exactly matching the numbers pulled by hand in Hue
+earlier. This is genuinely demo-ready.
+
+Item 3 status: step 1 done+verified, step 2 done+verified (worked first
+try). Step 3 (deliberate day-over-day diff as a repeatable drill) is the
+only thing left, and it's optional at this point — the mechanism is
+already proven end-to-end by the real diff step 1/2's verification
+produced, and every future day-boundary regeneration will keep growing
+the snapshot chain naturally.
 
 ### Reusable Phase 4 testing tooling added this session
 

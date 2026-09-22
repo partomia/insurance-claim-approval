@@ -363,11 +363,16 @@ a raw `--where "..."` fragment for anything else. Script:
 [`backend/scripts/lakehouse_time_travel.py`](../backend/scripts/lakehouse_time_travel.py)
 (`--help` for all flags).
 
-Verified end-to-end in env1 (2026-09-22): `LH-POL-2059` was `HIGH`-band
-(score 69.6, 22 claims) at the prior snapshot and `MEDIUM`-band (score
-36.4, 4 claims) at the current one — both states real, queryable, and
-provable via time travel, not just "trust today's number." This is the
-actual audit/regulatory pitch for a bank.
+Verified end-to-end in env1 (2026-09-22), worked first try: `LH-POL-2059`
+was `HIGH`-band (score 69.6, 22 claims) at the prior snapshot and
+`MEDIUM`-band (score 36.4, 4 claims) at the current one — both states
+real, queryable, and provable via time travel, not just "trust today's
+number." `as-of`'s automatic diff caught all 9 changed columns
+(`total_claims_count`, `claims_count_12m`, `total_claimed_amount`,
+`avg_claim_amount`, `amount_vs_segment_avg_pct`,
+`claim_frequency_percentile`, `fraud_risk_score`, `claim_risk_band`,
+`ingested_at`) with zero manual comparison needed. This is the actual
+audit/regulatory pitch for a bank.
 
 ## Verifying Phase 1-3 end-to-end (step-by-step)
 
