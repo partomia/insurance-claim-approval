@@ -20,9 +20,12 @@
 #   # Public repo:
 #   ./cde/scripts/deploy_jobs.sh
 #
-#   # Private repo (GitHub Personal Access Token with repo:read scope),
-#   # only used if the repository doesn't already exist:
-#   GIT_CREDENTIAL=ghp_xxx ./cde/scripts/deploy_jobs.sh
+#   # Private repo, only used if the repository doesn't already exist.
+#   # NOTE: --credential takes the NAME of a stored CDE credential object,
+#   # not the raw token -- store it first (interactive password prompt,
+#   # paste your GitHub PAT there):
+#   #   cde credential create --name my-github-pat --type basic --username <github-user>
+#   GIT_CREDENTIAL=my-github-pat ./cde/scripts/deploy_jobs.sh
 
 set -euo pipefail
 

@@ -284,11 +284,20 @@ variables at the top of each script if you deploy under a different prefix):
    error for private repos to unauthenticated clones — confirmed live after
    flipping this repo private between sessions). Fix: generate a GitHub PAT
    (classic `repo` scope, or fine-grained `Contents: Read-only` scoped to
-   just this repo) and pass it through: `GIT_CREDENTIAL=ghp_xxx
-   ./cde/scripts/deploy_jobs.sh`. CDE stores the credential against the
-   Repository resource, so subsequent `cde repository sync` /
-   `deploy_dag.sh` calls don't need it again — only re-supply it if you
-   delete+recreate the Repository itself.
+   just this repo), **then store it as a named CDE credential first** —
+   `cde repository create --credential` takes the *name* of a stored CDE
+   credential object, not the raw token (confirmed live: passing the raw
+   `ghp_...` token directly fails with `could not get credential ghp_...
+   from storage: credential not found`, because CDE tries to look it up by
+   that name):
+   ```bash
+   cde credential create --name my-github-pat --type basic --username <github-user>
+   # prompts interactively for the password — paste the PAT there
+   GIT_CREDENTIAL=my-github-pat ./cde/scripts/deploy_jobs.sh
+   ```
+   CDE stores the credential against the Repository resource, so
+   subsequent `cde repository sync` / `deploy_dag.sh` calls don't need it
+   again — only re-supply it if you delete+recreate the Repository itself.
 
 7. **`generate_bronze.py`/`generate_claims_bronze.py` now reseed by
    calendar day, not a fixed constant** (Item 3, see § Iceberg time
