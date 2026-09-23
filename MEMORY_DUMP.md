@@ -6,6 +6,92 @@
 
 ---
 
+## 2026-09-23 — Session handoff: OLTP + Lakehouse story fully closed, demo runbook added
+
+**Status: nothing in flight, nothing blocking. `main` is clean and fully
+pushed.** All work described below is committed and on `origin/main`
+(latest: `01a3149`). Safe to just `git pull` and pick up new work — no
+half-finished branches, no uncommitted local changes (except an untracked,
+unrelated `docs/diagrams/png/diagram.png` sitting in the working tree —
+harmless, ignore it or `git add` it if you actually want it tracked).
+
+### The 3-item "OLTP + Lakehouse" story (from the 2026-09-21 kickoff) is 100% done
+
+1. **App claims → bronze** (`export-claims`) — done, pre-existing before
+   this final push.
+2. **Lakehouse risk signals → live decision engine** — done + verified
+   live. `fraud_detection.py`/`escalation_service.py` now read
+   `policy.risk_signal.claim_risk_band`; a HIGH-band policy lands on
+   `PENDING_REVIEW` with a `lakehouse_high_risk_policy` flag, LOW-band and
+   no-signal policies are unaffected (regression-checked). Test harness:
+   `bash cml/cli.sh test-claim find|submit` →
+   `backend/scripts/lakehouse_risk_claim_test.py`.
+3. **Iceberg time travel** — done, all 3 steps:
+   - Step 1: `curate_gold.py`/`curate_risk_signals_gold.py` write via
+     `MERGE INTO` (not drop+recreate) once the target table exists;
+     `generate_bronze.py`/`generate_claims_bronze.py` reseed by calendar
+     day so re-runs produce real diffs. Verified live via `DESCRIBE
+     HISTORY`.
+   - Step 2: `bash cml/cli.sh lakehouse history|as-of` →
+     `backend/scripts/lakehouse_time_travel.py`. Verified live, worked
+     first try.
+   - Step 3: `cde/scripts/time_travel_drill.sh` — on-demand drill that
+     manufactures a fresh cross-day diff without waiting for a real day
+     boundary (`generate_bronze.py`/`generate_claims_bronze.py` now take
+     an optional 2nd arg: raw seed int or `YYYY-MM-DD`). **Hit and fixed a
+     real gotcha while verifying this live**: the drill's Pass 2 always
+     reseeds as *today*, so if the pipeline already ran once that day
+     before the drill, Pass 2 reproduces byte-identical data to that
+     earlier same-day run — diffing them shows only `ingested_at`
+     changed. Documented as **Gotcha #9** in `cde/README.md`; the script
+     now prints wall-clock timestamps around each pass so you can pick
+     the *right* snapshot pair (Pass 1's earlier-date snapshot vs.
+     CURRENT, not two same-day snapshots against each other).
+
+### New this session: `docs/steps-to-demo-execution.md`
+
+A click/command runbook for actually running this as a live demo, assuming
+everything is already up (app running, CDE pipeline already run at least
+once, lakehouse already ingested). 4 beats in order: lakehouse risk → UI,
+risk score → live decision (HIGH vs LOW vs no-signal contrast), app claims
+→ lakehouse export, Iceberg time travel/audit. Includes a cheat-sheet of
+every command up front. Linked from `README.md`, `cml/README.md`,
+`docs/README.md`.
+
+### Live env1 state as of this session (for reference, will drift)
+
+`insurance_lakehouse.policy_risk_signals` has **4 snapshots**:
+```
+4967580225782225719  2026-09-21 11:41  (original fixed-seed bootstrap)
+6300977543968207922  2026-09-22 13:53  (first date-reseed, seeded as 2026-09-22)
+2408034314406756364  2026-09-22 20:01  (drill Pass 1, seeded as an earlier date)
+8440103732027381823  2026-09-22 20:12  (drill Pass 2, seeded as 2026-09-22 again)
+```
+If demoing time travel before more snapshots accumulate, diff
+`2408034314406756364` (Pass 1, different seed-date) against CURRENT — that
+pairing is guaranteed to show real changes. Don't diff `6300977543968207922`
+vs CURRENT (both same seed-date — only `ingested_at` differs, confirmed
+live).
+
+### To resume next session
+
+Nothing is pending from this story. Possible next directions (not started,
+no commitments made):
+- Anything from `cml/README.md`'s "Ideas not yet automated" section
+  (programmatic Application provisioning via `cmlapi`, Alembic migrations,
+  CI smoke test in GitHub Actions).
+- If the user wants a *real* trained fraud model instead of the Spark SQL
+  heuristic (mentioned as a possible future ask in the original 2026-09-21
+  kickoff message, item 2, but explicitly deferred — "the model" is
+  currently just the LLM via Groq) — not started, would need a CAI Model
+  endpoint, which doesn't exist yet in this repo.
+- Otherwise: just re-verify the demo runbook still works end-to-end
+  (`docs/steps-to-demo-execution.md`) before presenting it live, especially
+  Beat 4's snapshot-pair guidance if new snapshots have accumulated since
+  the table above was captured.
+
+---
+
 ## 2026-09-20/21 — CAI deployment hardening: auth (Istio) + port auto-detection
 
 ### What we built / fixed
