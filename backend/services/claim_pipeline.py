@@ -131,16 +131,13 @@ def _run_customer_profile(claim_id: int) -> dict[str, Any]:
         if not claim:
             return {"error": "claim not found"}
         data = _customer_profile_data(db, claim)
-        trust = data["customer_trust"]
-        trust_note = (
-            f", trust tier {trust['tier']} ({trust['score']}/100)" if trust.get("score") is not None else ""
-        )
+        # The progress stream is shown to the customer; the trust score is insurer-only.
         progress_service.publish(
             claim_id,
             "customer_profile",
             "completed",
-            f"Account review complete — risk score {data['customer_risk_score']:.0%}{trust_note}",
-            data,
+            f"Account review complete — risk score {data['customer_risk_score']:.0%}",
+            {k: v for k, v in data.items() if k != "customer_trust"},
         )
         return data
     finally:
@@ -310,6 +307,7 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
         customer_trust = merged.get("customer_trust") or {}
         trust_tier = customer_trust.get("tier", TIER_UNSCORED)
         claim.customer_trust_json = customer_trust or None
+        amount_limit = settings.human_review_amount_threshold * amount_multiplier_for_tier(trust_tier)
         db.commit()
 
         decision = DecisionEngine().decide(
@@ -325,13 +323,10 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
                 fraud_threshold=settings.fraud_escalate_threshold,
                 fraud_review_threshold=settings.fraud_review_threshold,
                 evidence_review_threshold=settings.evidence_review_threshold,
-                human_review_amount_threshold=(
-                    settings.human_review_amount_threshold * amount_multiplier_for_tier(trust_tier)
-                ),
+                human_review_amount_threshold=amount_limit,
                 confidence_review_threshold=settings.confidence_review_threshold,
                 escalation_flags=escalation.flags,
                 escalation_messages=escalation.messages,
-                trust_tier=trust_tier,
             )
         )
 
@@ -384,8 +379,6 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
                 "confidence_score": confidence,
                 "payable_amount": payable_amount,
                 "customer_risk_score": exp_input.customer_risk_score,
-                "customer_trust_tier": trust_tier,
-                "customer_trust_score": customer_trust.get("score"),
                 "policy_context": claim.policy_context_json or {},
                 "escalation_flags": escalation.flags,
             },
@@ -414,6 +407,11 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
             reason = decision.reasoning
             if escalation.messages:
                 reason = "; ".join(escalation.messages)
+            if customer_trust.get("score") is not None:
+                reason += (
+                    f" [Customer trust: {trust_tier} {customer_trust['score']}/100 — "
+                    f"auto-approval limit {amount_limit:,.0f}]"
+                )
             db.add(
                 HumanReview(
                     claim_id=claim.id,
@@ -434,8 +432,6 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
             "human_review_required": decision.human_review_required,
             "escalation_flags": escalation.flags,
             "escalation_messages": escalation.messages,
-            "customer_trust_tier": trust_tier,
-            "customer_trust_score": customer_trust.get("score"),
         }
 
         explainability.log_audit(db, claim_id, "DECISION_GENERATED", result)

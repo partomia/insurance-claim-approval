@@ -100,7 +100,6 @@ def _decide(amount: float, tier: str) -> DecisionInput:
     return DecisionInput(
         claim_amount=amount,
         human_review_amount_threshold=base * amount_multiplier_for_tier(tier),
-        trust_tier=tier,
     )
 
 
@@ -116,7 +115,7 @@ def test_watch_tier_lowers_limit_but_never_rejects():
     base = get_settings().human_review_amount_threshold
     result = DecisionEngine().decide(_decide(base * 0.8, TIER_WATCH))
     assert result.status == ClaimStatus.PENDING_REVIEW
-    assert "WATCH customer trust tier" in result.reasoning
+    assert "trust" not in result.reasoning.lower()
 
     small = DecisionEngine().decide(_decide(base * 0.1, TIER_WATCH))
     assert small.status == ClaimStatus.ANALYSIS_COMPLETE

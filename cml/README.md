@@ -431,11 +431,14 @@ Where the data comes from:
 
 Where it shows up:
 - **Claim decision:** `customer_profile` pipeline step. The value used is
-  frozen on `claims.customer_trust_json` for audit, and the tier is named in
-  the decision reasoning when it changed the amount limit.
+  frozen on `claims.customer_trust_json` for audit. When a claim goes to
+  human review, the `human_reviews.reason` record ends with
+  `[Customer trust: TIER NN/100 — auto-approval limit N]`.
 - **Insurer and expert claim review:** a "Customer Trust Score" card in Claim
   Insights showing the score, tier, credit, driving record and top reasons.
-  It's not shown on the customer's own Track Claim page.
+- **Never shown to the customer.** The customer-facing decision reasoning
+  (including the LLM explanation), live progress feed, insights API and
+  audit-report API contain no trust tier or score.
 - **Book of Business:** a "Customer trust" column (hover for reasons), a
   trust-tier filter, trust sort, and a Watch-tier stat card.
 

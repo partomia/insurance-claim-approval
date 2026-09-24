@@ -854,7 +854,11 @@ old behaviour.
    STANDARD 60-81 (×1), WATCH < 60 (×0.5). Knobs: `TRUST_*` in config.
 4. **Decision wiring** — `finalize_claim` scales
    `HUMAN_REVIEW_AMOUNT_THRESHOLD` by tier, freezes the trust snapshot on
-   `claims.customer_trust_json`, tier in LLM reasoning context. Two soft
+   `claims.customer_trust_json`, tier appended to the `human_reviews.reason`
+   record (not currently displayed in any UI). **Customer-facing surfaces never show the tier**
+   (decision/LLM reasoning, progress stream, customer insights + audit
+   APIs are stripped — follow-up commit after the user asked what else
+   needed changing). Two soft
    fraud signals: `financial_stress` 0.15, `cross_insurer_claims` 0.20
    (stacked 0.35 < 0.40 review threshold; excluded from the LLM fraud
    prompt).

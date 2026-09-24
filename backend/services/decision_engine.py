@@ -21,9 +21,6 @@ class DecisionInput:
     confidence_review_threshold: float = 0.60
     escalation_flags: list[str] = field(default_factory=list)
     escalation_messages: list[str] = field(default_factory=list)
-    # Customer Trust Score tier. The caller has already scaled
-    # human_review_amount_threshold by it; this is only used for wording.
-    trust_tier: str = "UNSCORED"
 
 
 @dataclass
@@ -90,15 +87,9 @@ class DecisionEngine:
                 human_review_required=True,
             )
         if inputs.claim_amount > inputs.human_review_amount_threshold:
-            tier_note = (
-                f" for the {inputs.trust_tier} customer trust tier "
-                f"({inputs.human_review_amount_threshold:,.0f})"
-                if inputs.trust_tier in ("PREFERRED", "WATCH")
-                else ""
-            )
             return DecisionResult(
                 status=ClaimStatus.PENDING_REVIEW,
-                reasoning=f"Claim amount ({inputs.claim_amount:,.0f}) exceeds auto-approval threshold{tier_note}.",
+                reasoning=f"Claim amount ({inputs.claim_amount:,.0f}) exceeds auto-approval threshold.",
                 human_review_required=True,
             )
         if inputs.confidence_score < inputs.confidence_review_threshold:

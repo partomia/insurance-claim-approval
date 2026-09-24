@@ -191,8 +191,9 @@ claim is paid.
    bash cml/cli.sh test-claim find --trust-tier WATCH --not-expired
    bash cml/cli.sh test-claim submit --policy-number <LH-POL-XXXX> --claim-amount 300000
    ```
-   Expect `status: PENDING_REVIEW` with "exceeds auto-approval threshold
-   for the WATCH customer trust tier (2,50,000)". A small claim (default
+   Expect `status: PENDING_REVIEW` with "exceeds auto-approval threshold"
+   (customer-facing text stays tier-neutral — the insurer sees the tier and
+   its effect on the Claim Insights trust card, step 4). A small claim (default
    `--claim-amount 45000`) from the same customer still auto-approves.
    WATCH customers with stacked stress signals (credit < 600 + a loan
    default, ≥ 3 claims at other insurers) also show `financial_stress` /
