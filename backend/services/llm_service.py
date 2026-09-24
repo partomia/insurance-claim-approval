@@ -298,6 +298,7 @@ Fraud score: {context.get('fraud_score', 'N/A')}
 Confidence score: {context.get('confidence_score', 'N/A')}
 Payable amount: {context.get('payable_amount', 0)}
 Customer risk: {context.get('customer_risk_score', 'N/A')}
+Customer trust tier: {context.get('customer_trust_tier', 'N/A')} (score {context.get('customer_trust_score', 'N/A')}; affects only the auto-approval amount limit, never coverage)
 Escalation flags: {context.get('escalation_flags', [])}""",
         )
         return result

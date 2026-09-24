@@ -68,6 +68,13 @@ class Settings(BaseSettings):
     human_review_amount_threshold: float = 500_000.0
     confidence_review_threshold: float = 0.60
 
+    # Customer Trust Score (services/customer_trust_service.py). The tier only
+    # scales the auto-approval amount limit above — it never rejects a claim.
+    trust_preferred_min_score: int = 82
+    trust_standard_min_score: int = 60
+    trust_preferred_amount_multiplier: float = 1.5
+    trust_watch_amount_multiplier: float = 0.5
+
     max_upload_size_mb: int = 25
     agent_invite_code: str = "CLOUDERA2026"
     root_path: str = ""

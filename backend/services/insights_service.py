@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from models.claim import Claim
 from services.progress_service import progress_service
 from services.analysis_service import analysis_to_dict
+from services.customer_trust_service import customer_trust_service
 from services.policy_risk_service import policy_risk_service
 
 
@@ -83,6 +84,16 @@ class InsightsService:
         # numbers are always consistent between the two views.
         policy_risk_signal = policy_risk_service.get_for_policy(db, policy.id) if policy else None
 
+        # Prefer the trust score the decision actually used (audit value);
+        # fall back to a live computation for undecided / pre-feature claims.
+        if claim.customer_trust_json:
+            customer_trust = {**claim.customer_trust_json, "at_decision": True}
+        else:
+            customer_trust = {
+                **customer_trust_service.for_customer_id(db, claim.customer_id, policy).to_dict(),
+                "at_decision": False,
+            }
+
         return {
             "claim_id": claim.claim_number,
             "status": claim.status.value,
@@ -116,4 +127,5 @@ class InsightsService:
                 for e in timeline
             ],
             "policy_risk_signal": policy_risk_signal,
+            "customer_trust": customer_trust,
         }

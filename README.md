@@ -137,6 +137,13 @@ demonstrate that story without touching the live app's database:
    back into the same analytics too (a dedicated `app_claims_raw` bronze
    table, unioned into the pipeline before step 3's fraud/risk scoring), not
    just the synthetic claims-history population from step 2.
+6. **Customer Trust Score** — a parallel customer-profile chain
+   (`customer_profile_signals`: credit score/band, driving record, tenure,
+   claims at other insurers) feeds an explainable 0-100 score with reason
+   codes. Its tier (PREFERRED / STANDARD / WATCH) scales the auto-approval
+   amount limit (×1.5 / ×1 / ×0.5) — it changes how fast a claim is paid,
+   never whether a valid claim is paid. See
+   [`cml/README.md`](cml/README.md) (§ Customer Trust Score).
 
 ```bash
 bash cml/cli.sh lakehouse seed|verify|ingest|export-claims  # Phases 1, 3 & 5, from a CAI Session

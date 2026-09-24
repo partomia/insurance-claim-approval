@@ -390,6 +390,62 @@ audit/regulatory pitch for a bank.
 a click/command runbook covering all 4 beats above in order (assumes
 everything is already up and the pipeline has run at least once).
 
+## Customer Trust Score
+
+A 0–100 score, tier, and plain-English reason codes per customer, computed by
+[`backend/services/customer_trust_service.py`](../backend/services/customer_trust_service.py)
+from `CustomerProfileSignal`. That table holds the credit score, loan
+defaults, years licensed, traffic violations, drunk-driving history, claims
+at other insurers, tenure, policies held and recent address change. The
+score also uses KYC status and the policy's No-Claim Bonus.
+
+| Tier | Score | Effect on the claim decision |
+|------|-------|------------------------------|
+| PREFERRED | ≥ 82 | Auto-approval amount limit × 1.5 (`TRUST_PREFERRED_AMOUNT_MULTIPLIER`) |
+| STANDARD | 60–81 | Unchanged (`HUMAN_REVIEW_AMOUNT_THRESHOLD`, default ₹5,00,000) |
+| WATCH | < 60 | Auto-approval amount limit × 0.5 (`TRUST_WATCH_AMOUNT_MULTIPLIER`) |
+| UNSCORED | no profile row | Unchanged — exactly the pre-trust-score behaviour |
+
+Thresholds are calibrated against the synthetic 800-customer population:
+roughly 35% PREFERRED, 55% STANDARD, 9% WATCH (4–5 WATCH customers among the
+60 `LH-POL-*` owners on any given day).
+
+**Design rule: the tier changes how fast a claim moves, never whether a
+covered claim is paid.** Nothing in the trust score can produce `REJECTED`. On
+top of the tier, two profile patterns become **soft** fraud signals in
+`fraud_detection.py`: `financial_stress` (0.15: credit < 600 and a recent
+loan default) and `cross_insurer_claims` (0.20: 3+ claims at other insurers
+in 3 years). Even stacked (0.35), they stay below the 0.40 review threshold,
+so they only matter alongside a real claim-level signal. They are also kept
+out of the LLM fraud prompt, because the LLM can only raise the fraud score.
+`driver_age` is stored but deliberately not scored, and no protected
+attributes exist in the data.
+
+Where the data comes from:
+- **Lakehouse customers** (`customer{N}@example.com`, the `LH-POL-*` owners):
+  CDE gold table `customer_profile_signals`, pulled in by `bash cml/cli.sh
+  lakehouse ingest`. See [`cde/README.md`](../cde/README.md#customer-profile-signals-customer-trust-score).
+- **Demo customer** (`test@example.com`): seeded by `scripts/seed.py`
+  (credit 781, clean record, so PREFERRED). OLTP-only deployments (env2) get a
+  working trust score this way too.
+
+Where it shows up:
+- **Claim decision:** `customer_profile` pipeline step. The value used is
+  frozen on `claims.customer_trust_json` for audit, and the tier is named in
+  the decision reasoning when it changed the amount limit.
+- **Insurer and expert claim review:** a "Customer Trust Score" card in Claim
+  Insights showing the score, tier, credit, driving record and top reasons.
+  It's not shown on the customer's own Track Claim page.
+- **Book of Business:** a "Customer trust" column (hover for reasons), a
+  trust-tier filter, trust sort, and a Watch-tier stat card.
+
+Time travel works for this table too:
+```bash
+bash cml/cli.sh lakehouse history --table customer_profile_signals
+bash cml/cli.sh lakehouse as-of --table customer_profile_signals \
+  --customer-email customer7@example.com --snapshot <id>
+```
+
 ## Verifying Phase 1-3 end-to-end (step-by-step)
 
 Run this checklist after any `git pull` + `bash cml/cli.sh update` — e.g.

@@ -7,6 +7,10 @@ Job execution order:
     -> generate-claims-bronze -> validate-claims-bronze -> transform-claims-silver
     -> curate-risk-signals-gold
 
+  In parallel (independent):
+  generate-customer-profile-bronze -> transform-customer-profile-silver
+    -> curate-customer-profile-gold
+
 The claims/risk-signals half runs after curate-gold because
 curate_risk_signals_gold.py's analytics (fraud score, peer benchmarks) are
 the actual "datalakehouse speciality" payoff of this pipeline -- computed
@@ -109,5 +113,25 @@ with DAG(
         wait=True,
     )
 
+    generate_customer_profile = CDEJobRunOperator(
+        task_id="generate_customer_profile_bronze",
+        job_name="rsingh-insurance-generate-customer-profile-bronze",
+        wait=True,
+    )
+
+    transform_customer_profile = CDEJobRunOperator(
+        task_id="transform_customer_profile_silver",
+        job_name="rsingh-insurance-transform-customer-profile-silver",
+        wait=True,
+    )
+
+    curate_customer_profile = CDEJobRunOperator(
+        task_id="curate_customer_profile_gold",
+        job_name="rsingh-insurance-curate-customer-profile-gold",
+        wait=True,
+    )
+
     generate >> validate >> transform >> curate
     curate >> generate_claims >> validate_claims >> transform_claims >> curate_risk_signals
+    # Independent of the policy/claims chain — runs in parallel with it.
+    generate_customer_profile >> transform_customer_profile >> curate_customer_profile

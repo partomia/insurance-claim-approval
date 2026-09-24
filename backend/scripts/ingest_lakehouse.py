@@ -1,6 +1,6 @@
 """Phase 3 of the Cloudera datalakehouse story: pull the CDE-pipeline-produced
 Iceberg gold tables (insurance_lakehouse.{policy_master,policy_clauses,
-policy_risk_signals}) via Impala into the app's live SQLite database + Chroma
+policy_risk_signals,customer_profile_signals}) via Impala into the app's live SQLite database + Chroma
 RAG index — so the running app's policy data actually originates from the
 lakehouse pipeline (cde/README.md), not just provable via `lakehouse verify`.
 
@@ -39,6 +39,7 @@ from db_init import ensure_schema  # noqa: E402
 from dependencies import get_password_hash  # noqa: E402
 import models  # noqa: E402,F401
 from models.customer import Customer  # noqa: E402
+from models.customer_profile_signal import CustomerProfileSignal  # noqa: E402
 from models.platform import InsuranceProvider  # noqa: E402
 from models.policy import Policy, PolicyDocument, PolicyDocumentSource, PolicyStatus  # noqa: E402
 from models.policy_risk_signal import PolicyRiskSignal  # noqa: E402
@@ -192,8 +193,46 @@ def upsert_risk_signal(db, policy: Policy, row: dict) -> None:
     signal.ingested_at = parsed or datetime.utcnow()
 
 
+def _opt_int(value) -> int | None:
+    return int(value) if value is not None else None
+
+
+def _opt_float(value) -> float | None:
+    return float(value) if value is not None else None
+
+
+def upsert_customer_profile_signal(db, customer: Customer, row: dict) -> None:
+    signal = db.query(CustomerProfileSignal).filter(CustomerProfileSignal.customer_id == customer.id).first()
+    if not signal:
+        signal = CustomerProfileSignal(customer_id=customer.id)
+        db.add(signal)
+        db.flush()
+    signal.credit_score = _opt_int(row.get("credit_score"))
+    signal.credit_score_percentile = _opt_float(row.get("credit_score_percentile"))
+    signal.credit_band = row.get("credit_band")
+    signal.loan_defaults_12m = int(row.get("loan_defaults_12m") or 0)
+    signal.active_vehicle_loan = bool(row.get("active_vehicle_loan"))
+    signal.driver_age = _opt_int(row.get("driver_age"))
+    signal.years_licensed = _opt_int(row.get("years_licensed"))
+    signal.traffic_violations_3y = int(row.get("traffic_violations_3y") or 0)
+    signal.dui_history = bool(row.get("dui_history"))
+    signal.driving_record_band = row.get("driving_record_band")
+    signal.address_changed_90d = bool(row.get("address_changed_90d"))
+    signal.years_with_insurer = float(row.get("years_with_insurer") or 0.0)
+    signal.policies_held = int(row.get("policies_held") or 1)
+    signal.other_insurer_claims_3y = int(row.get("other_insurer_claims_3y") or 0)
+    signal.source = row.get("source") or "GOLD_PIPELINE"
+    parsed = None
+    if row.get("ingested_at"):
+        try:
+            parsed = datetime.strptime(str(row["ingested_at"]), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            parsed = None
+    signal.ingested_at = parsed or datetime.utcnow()
+
+
 def run(rag: bool = True) -> None:
-    ensure_schema()  # make sure policy_risk_signals (new table) exists
+    ensure_schema()  # make sure policy_risk_signals / customer_profile_signals exist
 
     print(f"Connecting to Impala @ {settings.impala_host} (auth={settings.impala_auth_mechanism}) ...")
     conn = _impala_connect(database="default")
@@ -218,6 +257,18 @@ def run(rag: bool = True) -> None:
                 f"skipping risk-signal ingest (run the CDE claims-analytics "
                 f"pipeline first, see cde/README.md)"
             )
+
+        profile_rows: list[dict] = []
+        try:
+            print(f"\n==> Reading {db_name()}.customer_profile_signals ...")
+            profile_rows = fetch_rows(cursor, "customer_profile_signals")
+            print(f"    {len(profile_rows)} rows")
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"    [warn] customer_profile_signals not available yet ({exc}) — "
+                f"skipping customer profile ingest (run the CDE customer-profile "
+                f"jobs first, see cde/README.md)"
+            )
     finally:
         cursor.close()
         conn.close()
@@ -234,6 +285,7 @@ def run(rag: bool = True) -> None:
 
     db = SessionLocal()
     new_policies = updated_policies = new_documents = risk_signals_ingested = rag_chunks_indexed = 0
+    profile_signals_ingested = 0
     try:
         for row in policy_rows:
             provider = upsert_provider(db, row.get("provider_name"))
@@ -261,6 +313,15 @@ def run(rag: bool = True) -> None:
                 upsert_risk_signal(db, policy, risk_row)
                 risk_signals_ingested += 1
 
+        # Only customers that already exist in the app get a profile row; the
+        # rest of the ~800-customer population exists for gold percentiles.
+        for profile_row in profile_rows:
+            email = (profile_row.get("customer_email") or "").strip().lower()
+            customer = db.query(Customer).filter(Customer.email == email).first() if email else None
+            if customer:
+                upsert_customer_profile_signal(db, customer, profile_row)
+                profile_signals_ingested += 1
+
         db.commit()
     finally:
         db.close()
@@ -272,6 +333,10 @@ def run(rag: bool = True) -> None:
     )
     print(f"    Documents:     {new_documents} new policy clauses")
     print(f"    Risk signals:  {risk_signals_ingested} policies matched in policy_risk_signals")
+    print(
+        f"    Customer profiles: {profile_signals_ingested} app customers matched in "
+        f"customer_profile_signals ({len(profile_rows)} in lakehouse)"
+    )
     if rag:
         print(f"    RAG:           {rag_chunks_indexed} chunks indexed into Chroma")
         print(f"    Chroma total:  {rag_service.count()} vectors")

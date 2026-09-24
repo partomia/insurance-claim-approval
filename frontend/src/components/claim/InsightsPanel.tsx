@@ -4,6 +4,7 @@ import { ScoreComparisonBarChart } from "./charts/ScoreComparisonBarChart";
 import { PayoutWaterfallChart } from "./charts/PayoutWaterfallChart";
 import { PolicySummaryCard } from "./PolicySummaryCard";
 import { RiskBandBadge } from "./RiskBandBadge";
+import { CustomerTrustCard, type CustomerTrust } from "./CustomerTrustCard";
 import { Database, AlertTriangle } from "lucide-react";
 
 interface PolicySummary {
@@ -42,9 +43,16 @@ interface Insights {
   policy_context_summary?: string;
   policy_summary?: PolicySummary;
   policy_risk_signal?: PolicyRiskSignal | null;
+  customer_trust?: CustomerTrust | null;
 }
 
-export function InsightsPanel({ insights }: { insights: Insights | null }) {
+export function InsightsPanel({
+  insights,
+  showCustomerTrust = false,
+}: {
+  insights: Insights | null;
+  showCustomerTrust?: boolean;
+}) {
   if (!insights) {
     return <div className="text-sm text-muted-foreground p-2">Loading insights...</div>;
   }
@@ -97,6 +105,8 @@ export function InsightsPanel({ insights }: { insights: Insights | null }) {
           </p>
         </div>
       )}
+
+      {showCustomerTrust && insights.customer_trust && <CustomerTrustCard trust={insights.customer_trust} />}
 
       {gauges && (
         <div className="p-4 bg-card border rounded-lg shadow-sm">

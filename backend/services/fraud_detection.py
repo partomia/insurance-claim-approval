@@ -7,6 +7,7 @@ from config import get_settings
 from models.audit import FraudAssessment
 from models.claim import Claim, ClaimStatus
 from models.customer import Customer
+from services.customer_trust_service import fraud_signals as profile_fraud_signals
 from services.evidence_analysis import EvidenceAnalysisResult
 
 settings = get_settings()
@@ -17,6 +18,10 @@ class FraudDetectionResult:
     fraud_score: float
     signals: list[str] = field(default_factory=list)
     blacklist_hit: bool = False
+    # Subset of `signals` that came from customer profile data. Kept out of
+    # the LLM fraud prompt: the LLM can only raise the score, and it must not
+    # turn a soft profile signal into a review on its own.
+    profile_signals: list[str] = field(default_factory=list)
 
 
 class FraudDetectionService:
@@ -54,6 +59,11 @@ class FraudDetectionService:
         # (policy.risk_signal is None for demo POL-MTR-* policies).
         "lakehouse_risk_high": 0.40,
         "lakehouse_risk_medium": 0.15,
+        # Customer profile (services/customer_trust_service.fraud_signals) —
+        # both "soft": even stacked together (0.35) they stay below the review
+        # threshold, so profile data alone can never route a claim to review.
+        "financial_stress": 0.15,
+        "cross_insurer_claims": 0.20,
     }
 
     def detect(
@@ -69,6 +79,12 @@ class FraudDetectionService:
         if customer and customer.blacklist_flag:
             score += self.SIGNAL_WEIGHTS["blacklist"]
             signals.append("Customer on blacklist/watchlist")
+
+        profile_signals: list[str] = []
+        for weight_key, message in profile_fraud_signals(customer.profile_signal if customer else None):
+            score += self.SIGNAL_WEIGHTS[weight_key]
+            signals.append(message)
+            profile_signals.append(message)
 
         duplicate_claims = (
             db.query(Claim)
@@ -186,6 +202,7 @@ class FraudDetectionService:
             fraud_score=fraud_score,
             signals=signals,
             blacklist_hit=bool(customer and customer.blacklist_flag),
+            profile_signals=profile_signals,
         )
 
     def persist(self, db: Session, claim_id: int, result: FraudDetectionResult) -> FraudAssessment:

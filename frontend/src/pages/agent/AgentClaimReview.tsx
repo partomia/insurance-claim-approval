@@ -224,7 +224,7 @@ export function AgentClaimReview() {
         </div>
 
         <div className="space-y-4">
-          <InsightsPanel insights={insights} />
+          <InsightsPanel insights={insights} showCustomerTrust />
 
           {claim.customer_id && (
             <Card>

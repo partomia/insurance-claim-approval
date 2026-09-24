@@ -9,6 +9,7 @@ from database import SessionLocal
 from models.audit import HumanReview, HumanReviewStatus, AuditLog
 from models.claim import Claim, ClaimStatus
 from services.customer_profile import CustomerProfileService
+from services.customer_trust_service import TIER_UNSCORED, amount_multiplier_for_tier, customer_trust_service
 from services.decision_engine import DecisionEngine, DecisionInput
 from services.evidence_analysis import EvidenceAnalysisService
 from services.explainability import ExplainabilityInput, ExplainabilityService
@@ -111,6 +112,17 @@ def _run_rag_retrieval(claim_id: int) -> dict[str, Any]:
         db.close()
 
 
+def _customer_profile_data(db, claim: Claim) -> dict[str, Any]:
+    result = CustomerProfileService().analyze(db, claim)
+    trust = customer_trust_service.for_customer_id(db, claim.customer_id, claim.policy)
+    return {
+        "customer_risk_score": result.customer_risk_score,
+        "prior_claims_count": result.prior_claims_count,
+        "signals": result.signals,
+        "customer_trust": trust.to_dict(),
+    }
+
+
 def _run_customer_profile(claim_id: int) -> dict[str, Any]:
     progress_service.publish(claim_id, "customer_profile", "running", "Reviewing your account details...")
     db = SessionLocal()
@@ -118,17 +130,16 @@ def _run_customer_profile(claim_id: int) -> dict[str, Any]:
         claim = _get_claim(db, claim_id)
         if not claim:
             return {"error": "claim not found"}
-        result = CustomerProfileService().analyze(db, claim)
-        data = {
-            "customer_risk_score": result.customer_risk_score,
-            "prior_claims_count": result.prior_claims_count,
-            "signals": result.signals,
-        }
+        data = _customer_profile_data(db, claim)
+        trust = data["customer_trust"]
+        trust_note = (
+            f", trust tier {trust['tier']} ({trust['score']}/100)" if trust.get("score") is not None else ""
+        )
         progress_service.publish(
             claim_id,
             "customer_profile",
             "completed",
-            f"Account review complete — risk score {result.customer_risk_score:.0%}",
+            f"Account review complete — risk score {data['customer_risk_score']:.0%}{trust_note}",
             data,
         )
         return data
@@ -211,7 +222,7 @@ def _run_fraud_detection(claim_id: int, evidence_data: dict) -> dict[str, Any]:
         llm_fraud = llm_service.analyze_fraud_risk(
             claim.incident_description,
             claim.claim_amount,
-            rule_result.signals,
+            [s for s in rule_result.signals if s not in rule_result.profile_signals],
             evidence_summary,
         )
         # Rules-dominant combiner: the deterministic rule engine is authoritative.
@@ -296,6 +307,9 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
         claim.escalation_messages = escalation.messages
         claim.evidence_mismatch = bool(merged.get("evidence_mismatch", False))
         claim.evidence_issues = merged.get("evidence_issues", [])
+        customer_trust = merged.get("customer_trust") or {}
+        trust_tier = customer_trust.get("tier", TIER_UNSCORED)
+        claim.customer_trust_json = customer_trust or None
         db.commit()
 
         decision = DecisionEngine().decide(
@@ -311,10 +325,13 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
                 fraud_threshold=settings.fraud_escalate_threshold,
                 fraud_review_threshold=settings.fraud_review_threshold,
                 evidence_review_threshold=settings.evidence_review_threshold,
-                human_review_amount_threshold=settings.human_review_amount_threshold,
+                human_review_amount_threshold=(
+                    settings.human_review_amount_threshold * amount_multiplier_for_tier(trust_tier)
+                ),
                 confidence_review_threshold=settings.confidence_review_threshold,
                 escalation_flags=escalation.flags,
                 escalation_messages=escalation.messages,
+                trust_tier=trust_tier,
             )
         )
 
@@ -367,6 +384,8 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
                 "confidence_score": confidence,
                 "payable_amount": payable_amount,
                 "customer_risk_score": exp_input.customer_risk_score,
+                "customer_trust_tier": trust_tier,
+                "customer_trust_score": customer_trust.get("score"),
                 "policy_context": claim.policy_context_json or {},
                 "escalation_flags": escalation.flags,
             },
@@ -415,6 +434,8 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
             "human_review_required": decision.human_review_required,
             "escalation_flags": escalation.flags,
             "escalation_messages": escalation.messages,
+            "customer_trust_tier": trust_tier,
+            "customer_trust_score": customer_trust.get("score"),
         }
 
         explainability.log_audit(db, claim_id, "DECISION_GENERATED", result)
@@ -463,11 +484,15 @@ def _load_cached_early_steps(claim_id: int) -> dict[str, dict[str, Any]]:
                 "violations", "policy_match_score",
             }
             rag_keys = {"retrieved_clauses", "clause_clarity_score", "llm_coverage"}
-            customer_keys = {"customer_risk_score", "prior_claims_count", "signals"}
+            customer_keys = {"customer_risk_score", "prior_claims_count", "signals", "customer_trust"}
             policy = {k: p[k] for k in policy_keys if k in p}
             rag = {k: p[k] for k in rag_keys if k in p}
             customer = {k: p[k] for k in customer_keys if k in p}
             if policy and rag and customer:
+                # Audit rows written before the trust score existed lack
+                # customer_trust — refresh just the (cheap, no-LLM) customer step.
+                if "customer_trust" not in customer:
+                    customer = _run_customer_profile_silent(claim_id)
                 return {"policy": policy, "rag": rag, "customer": customer}
     finally:
         db.close()
@@ -536,12 +561,7 @@ def _run_customer_profile_silent(claim_id: int) -> dict[str, Any]:
         claim = _get_claim(db, claim_id)
         if not claim:
             return {"error": "claim not found"}
-        result = CustomerProfileService().analyze(db, claim)
-        return {
-            "customer_risk_score": result.customer_risk_score,
-            "prior_claims_count": result.prior_claims_count,
-            "signals": result.signals,
-        }
+        return _customer_profile_data(db, claim)
     finally:
         db.close()
 

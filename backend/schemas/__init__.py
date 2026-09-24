@@ -123,6 +123,27 @@ class PolicyRiskSignalSummary(BaseModel):
     ingested_at: datetime
 
 
+class CustomerTrustReason(BaseModel):
+    code: str
+    label: str
+    impact: str
+
+
+class CustomerTrustSummary(BaseModel):
+    score: Optional[int] = None
+    tier: str
+    reasons: list[CustomerTrustReason] = []
+    components: dict[str, float] = {}
+    credit_score: Optional[int] = None
+    credit_band: Optional[str] = None
+    driving_record_band: Optional[str] = None
+    source: Optional[str] = None
+    as_of: Optional[datetime] = None
+    # True when read from Claim.customer_trust_json (the value the decision
+    # actually used), False when computed live from current profile data.
+    at_decision: bool = False
+
+
 class BookOfBusinessPolicyItem(BaseModel):
     policy_id: int
     policy_number: str
@@ -136,6 +157,7 @@ class BookOfBusinessPolicyItem(BaseModel):
     covered_make: Optional[str] = None
     covered_model: Optional[str] = None
     risk: Optional[PolicyRiskSignalSummary] = None
+    trust: Optional[CustomerTrustSummary] = None
 
 
 class BookOfBusinessStatsResponse(BaseModel):
@@ -145,6 +167,10 @@ class BookOfBusinessStatsResponse(BaseModel):
     high_count: int
     high_risk_garage_linked_count: int
     avg_fraud_risk_score: float
+    trust_preferred_count: int = 0
+    trust_standard_count: int = 0
+    trust_watch_count: int = 0
+    trust_unscored_count: int = 0
 
 
 class InsurerDecisionSubmit(BaseModel):
@@ -560,6 +586,7 @@ class InsightsResponse(BaseModel):
     # risk signal (i.e. it's an LH-POL-* policy from ingest_lakehouse.py).
     # Most claims won't have one — that's expected, not an error.
     policy_risk_signal: Optional[PolicyRiskSignalSummary] = None
+    customer_trust: Optional[CustomerTrustSummary] = None
 
 
 class KYCStatusResponse(BaseModel):

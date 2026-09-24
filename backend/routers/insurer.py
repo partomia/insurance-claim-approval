@@ -37,7 +37,10 @@ def insurer_book_of_business(
     risk_band: str | None = Query(None, description="Filter to LOW, MEDIUM, or HIGH"),
     min_score: float | None = Query(None, ge=0, le=100),
     high_risk_garage_only: bool = Query(False),
-    sort: str = Query("score_desc", description="score_desc | score_asc | claims_desc"),
+    trust_tier: str | None = Query(None, description="Filter to PREFERRED, STANDARD, WATCH, or UNSCORED"),
+    sort: str = Query(
+        "score_desc", description="score_desc | score_asc | claims_desc | trust_asc | trust_desc"
+    ),
     _insurer: InsurerUser = Depends(get_current_insurer),
     db: Session = Depends(get_db),
 ):
@@ -52,6 +55,7 @@ def insurer_book_of_business(
         risk_band=risk_band,
         min_score=min_score,
         high_risk_garage_only=high_risk_garage_only,
+        trust_tier=trust_tier,
         sort=sort,
     )
 

@@ -9,7 +9,7 @@ someone setting the environment up.
   reachable.
 - CDE jobs are deployed and the pipeline has run at least once (gold tables
   populated — `insurance_lakehouse.{policy_master,policy_clauses,
-  policy_risk_signals,garage_risk_signals}`).
+  policy_risk_signals,garage_risk_signals,customer_profile_signals}`).
 - `bash cml/cli.sh lakehouse ingest` has been run at least once (lakehouse
   data is in the app's SQLite DB + Chroma).
 
@@ -33,6 +33,14 @@ bash cml/cli.sh test-claim find --band HIGH --not-expired
 bash cml/cli.sh test-claim submit --policy-number <LH-POL-XXXX>
 bash cml/cli.sh test-claim find --band LOW --not-expired
 bash cml/cli.sh test-claim submit --policy-number <LH-POL-XXXX>
+
+# Beat 2b — Customer Trust Score moves the auto-approval limit (never rejects)
+bash cml/cli.sh test-claim find --trust-tier PREFERRED --not-expired
+bash cml/cli.sh test-claim submit --policy-number <PREFERRED, cover >= 10L> --claim-amount 600000
+bash cml/cli.sh test-claim find --trust-tier STANDARD --not-expired
+bash cml/cli.sh test-claim submit --policy-number <STANDARD, cover >= 10L> --claim-amount 600000
+bash cml/cli.sh test-claim find --trust-tier WATCH --not-expired
+bash cml/cli.sh test-claim submit --policy-number <WATCH, cover >= 5L> --claim-amount 300000
 
 # Beat 3 — app claims flow back into the lakehouse
 bash cml/cli.sh lakehouse export-claims --dry-run
@@ -140,6 +148,64 @@ flip a claim's outcome to `PENDING_REVIEW`.
    bash cml/cli.sh test-claim find --no-signal --not-expired
    bash cml/cli.sh test-claim submit --policy-number POL-MTR-1001
    ```
+
+---
+
+## Beat 2b — Customer Trust Score moves the auto-approval limit
+
+**Story point:** customer profile data (credit score, driving record,
+tenure, claims at other insurers) built by the CDE pipeline
+(`customer_profile_signals`) gives every customer a 0-100 **Customer Trust
+Score** with plain-English reason codes. The tier changes *how fast* a
+claim is paid — the auto-approval amount limit — never *whether* a valid
+claim is paid.
+
+| Tier | Auto-approval limit (default ₹5L base) |
+|------|----------------------------------------|
+| PREFERRED (≥ 82) | ₹7,50,000 |
+| STANDARD (60-81) | ₹5,00,000 |
+| WATCH (< 60) | ₹2,50,000 |
+| UNSCORED (no profile) | ₹5,00,000 — unchanged behaviour |
+
+1. In the insurer UI, open **Book of Business** — point out the new
+   **Customer trust** column (hover for reason codes), the tier filter,
+   and the **Watch-tier customers** stat card.
+2. Same ₹6L claim, two customers, two outcomes. Pick policies from `find`
+   whose `coverage` is ≥ ₹10L (so ₹6L stays clear of the total-loss /
+   near-limit rules) and, ideally, whose band isn't `HIGH` (so the Beat 2
+   fraud signal doesn't muddy the contrast):
+   ```bash
+   bash cml/cli.sh test-claim find --trust-tier PREFERRED --not-expired
+   bash cml/cli.sh test-claim submit --policy-number <LH-POL-XXXX> --claim-amount 600000
+   ```
+   Expect `status: ANALYSIS_COMPLETE` and a `customer_trust: PREFERRED (NN/100)`
+   line with its top reasons.
+   ```bash
+   bash cml/cli.sh test-claim find --trust-tier STANDARD --not-expired
+   bash cml/cli.sh test-claim submit --policy-number <LH-POL-XXXX> --claim-amount 600000
+   ```
+   Expect `status: PENDING_REVIEW` — "exceeds auto-approval threshold".
+3. A WATCH customer is routed to a human at a lower amount — but **not
+   rejected**:
+   ```bash
+   bash cml/cli.sh test-claim find --trust-tier WATCH --not-expired
+   bash cml/cli.sh test-claim submit --policy-number <LH-POL-XXXX> --claim-amount 300000
+   ```
+   Expect `status: PENDING_REVIEW` with "exceeds auto-approval threshold
+   for the WATCH customer trust tier (2,50,000)". A small claim (default
+   `--claim-amount 45000`) from the same customer still auto-approves.
+   WATCH customers with stacked stress signals (credit < 600 + a loan
+   default, ≥ 3 claims at other insurers) also show `financial_stress` /
+   `cross_insurer_claims` soft fraud signals — deliberately weighted so
+   that even both together (0.35) stay below the 0.40 review threshold.
+4. Open any of those claims as the insurer — the **Claim Insights**
+   panel now has a **Customer Trust Score** card showing the score, tier,
+   credit band, driving-record band and reason codes, frozen at decision
+   time.
+
+Talking point: no protected attributes are scored (driver age is stored
+but deliberately ignored), and a customer with no profile row behaves
+exactly as before the feature existed.
 
 ---
 
@@ -252,7 +318,9 @@ Lakehouse" story is a real closed loop, not a one-way demo:
 2. **Lakehouse → Decision**: that same risk signal isn't cosmetic — it
    feeds `fraud_detection.py`/`escalation_service.py` and can flip a
    claim to `PENDING_REVIEW`, gated correctly by risk band (proven via the
-   HIGH vs. LOW vs. no-signal contrast in Beat 2).
+   HIGH vs. LOW vs. no-signal contrast in Beat 2). The Customer Trust
+   Score (Beat 2b) shows the same pattern for customer profile data —
+   tiered auto-approval limits with explainable reason codes.
 3. **App → Lakehouse**: claims filed through the live app flow back into
    the same analytics (`export-claims`), so the risk model keeps learning
    from real usage, not just synthetic history.
