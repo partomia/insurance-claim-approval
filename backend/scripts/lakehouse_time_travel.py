@@ -44,7 +44,9 @@ from database import _impala_connect  # noqa: E402
 
 settings = get_settings()
 
-GOLD_TABLES = ["policy_master", "policy_clauses", "policy_risk_signals", "garage_risk_signals"]
+GOLD_TABLES = [
+    "policy_master", "policy_clauses", "policy_risk_signals", "garage_risk_signals", "customer_profile_signals",
+]
 
 
 def db_name() -> str:
@@ -91,6 +93,8 @@ def _where_clause(args: argparse.Namespace) -> str:
         return f" WHERE policy_number = '{args.policy_number}'"
     if args.garage_name:
         return f" WHERE garage_name = '{args.garage_name}'"
+    if args.customer_email:
+        return f" WHERE customer_email = '{args.customer_email}'"
     return ""
 
 
@@ -152,7 +156,10 @@ def main() -> None:
     p_asof.add_argument("--at", help="UTC timestamp, e.g. '2026-09-21 12:00:00'")
     p_asof.add_argument("--policy-number", help="Convenience filter: policy_number = '...' (policy_* tables)")
     p_asof.add_argument("--garage-name", help="Convenience filter: garage_name = '...' (garage_risk_signals)")
-    p_asof.add_argument("--where", help="Raw SQL WHERE fragment, overrides --policy-number/--garage-name")
+    p_asof.add_argument(
+        "--customer-email", help="Convenience filter: customer_email = '...' (customer_profile_signals)"
+    )
+    p_asof.add_argument("--where", help="Raw SQL WHERE fragment, overrides the convenience filters")
     p_asof.set_defaults(func=cmd_as_of)
 
     args = parser.parse_args()

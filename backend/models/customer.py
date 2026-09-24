@@ -21,6 +21,9 @@ class Customer(Base):
     claims = relationship("Claim", back_populates="customer")
     auth_sessions = relationship("AuthSession", back_populates="customer", cascade="all, delete-orphan")
     profile = relationship("CustomerProfile", back_populates="customer", uselist=False, cascade="all, delete-orphan")
+    profile_signal = relationship(
+        "CustomerProfileSignal", back_populates="customer", uselist=False, cascade="all, delete-orphan"
+    )
     assistant_messages = relationship(
         "CustomerChatMessage", back_populates="customer", cascade="all, delete-orphan"
     )

@@ -66,6 +66,13 @@ run_chain() {
   cde job run --name rsingh-insurance-transform-claims-silver --wait
   echo "==> curate-risk-signals-gold"
   cde job run --name rsingh-insurance-curate-risk-signals-gold --wait
+
+  echo "==> generate-customer-profile-bronze (seed: ${seed_arg:-today})"
+  cde job run --name rsingh-insurance-generate-customer-profile-bronze --arg 800 --arg "$seed_arg" --wait
+  echo "==> transform-customer-profile-silver"
+  cde job run --name rsingh-insurance-transform-customer-profile-silver --wait
+  echo "==> curate-customer-profile-gold"
+  cde job run --name rsingh-insurance-curate-customer-profile-gold --wait
 }
 
 echo "Wall-clock BEFORE pass 1: $(date -u '+%Y-%m-%d %H:%M:%S') UTC"

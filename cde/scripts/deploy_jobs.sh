@@ -86,6 +86,12 @@ create_or_update_job "rsingh-insurance-validate-claims-bronze"   "cde/jobs/valid
 create_or_update_job "rsingh-insurance-transform-claims-silver"  "cde/jobs/transform/transform_claims_silver.py"
 create_or_update_job "rsingh-insurance-curate-risk-signals-gold" "cde/jobs/curate/curate_risk_signals_gold.py"
 
+# Customer profile / bureau signals (independent branch in the DAG) — feeds
+# the app's Customer Trust Score.
+create_or_update_job "rsingh-insurance-generate-customer-profile-bronze" "cde/jobs/generate/generate_customer_profile_bronze.py"
+create_or_update_job "rsingh-insurance-transform-customer-profile-silver" "cde/jobs/transform/transform_customer_profile_silver.py"
+create_or_update_job "rsingh-insurance-curate-customer-profile-gold"     "cde/jobs/curate/curate_customer_profile_gold.py"
+
 echo ""
 echo "All CDE jobs deployed from repository '${REPO_NAME}' (${REPO_BRANCH})."
 echo "Try one directly:"

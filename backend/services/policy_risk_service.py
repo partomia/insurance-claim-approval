@@ -18,6 +18,13 @@ from sqlalchemy.orm import Session, joinedload
 
 from models.policy import Policy
 from models.policy_risk_signal import PolicyRiskSignal
+from services.customer_trust_service import (
+    TIER_PREFERRED,
+    TIER_STANDARD,
+    TIER_UNSCORED,
+    TIER_WATCH,
+    customer_trust_service,
+)
 
 
 def risk_signal_to_dict(rs: PolicyRiskSignal) -> dict[str, Any]:
@@ -52,8 +59,9 @@ class PolicyRiskService:
             )
         )
 
-    def policy_to_item(self, policy: Policy) -> dict[str, Any]:
+    def policy_to_item(self, db: Session, policy: Policy) -> dict[str, Any]:
         rs = policy.risk_signal
+        trust = customer_trust_service.for_customer(db, policy.customer, policy) if policy.customer else None
         return {
             "policy_id": policy.id,
             "policy_number": policy.policy_number,
@@ -67,6 +75,7 @@ class PolicyRiskService:
             "covered_make": policy.covered_make,
             "covered_model": policy.covered_model,
             "risk": risk_signal_to_dict(rs) if rs else None,
+            "trust": trust.to_dict() if trust else None,
         }
 
     def list_policies(
@@ -76,6 +85,7 @@ class PolicyRiskService:
         risk_band: Optional[str] = None,
         min_score: Optional[float] = None,
         high_risk_garage_only: bool = False,
+        trust_tier: Optional[str] = None,
         sort: str = "score_desc",
     ) -> list[dict[str, Any]]:
         query = self._base_query(db)
@@ -94,9 +104,25 @@ class PolicyRiskService:
         else:
             query = query.order_by(PolicyRiskSignal.fraud_risk_score.desc())
 
-        return [self.policy_to_item(p) for p in query.all()]
+        items = [self.policy_to_item(db, p) for p in query.all()]
+
+        # Trust is computed app-side (not a column), so filter/sort in Python.
+        if trust_tier:
+            items = [i for i in items if i["trust"] and i["trust"]["tier"] == trust_tier.upper()]
+        if sort in ("trust_asc", "trust_desc"):
+            # Unscored customers always sink to the bottom, either direction.
+            scored = [i for i in items if i["trust"] and i["trust"]["score"] is not None]
+            unscored = [i for i in items if not (i["trust"] and i["trust"]["score"] is not None)]
+            scored.sort(key=lambda i: i["trust"]["score"], reverse=(sort == "trust_desc"))
+            items = scored + unscored
+        return items
 
     def get_stats(self, db: Session) -> dict[str, Any]:
+        tier_counts = {TIER_PREFERRED: 0, TIER_STANDARD: 0, TIER_WATCH: 0, TIER_UNSCORED: 0}
+        for policy in self._base_query(db).all():
+            if policy.customer:
+                tier_counts[customer_trust_service.for_customer(db, policy.customer, policy).tier] += 1
+
         rows = db.query(PolicyRiskSignal).all()
         total = len(rows)
         low = sum(1 for r in rows if r.claim_risk_band == "LOW")
@@ -111,6 +137,10 @@ class PolicyRiskService:
             "high_count": high,
             "high_risk_garage_linked_count": garage_linked,
             "avg_fraud_risk_score": avg_score,
+            "trust_preferred_count": tier_counts[TIER_PREFERRED],
+            "trust_standard_count": tier_counts[TIER_STANDARD],
+            "trust_watch_count": tier_counts[TIER_WATCH],
+            "trust_unscored_count": tier_counts[TIER_UNSCORED],
         }
 
 

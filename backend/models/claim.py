@@ -101,6 +101,10 @@ class Claim(Base):
     # app_claims_raw Iceberg bronze table (scripts/export_claims_to_lakehouse.py)
     # -- closes the OLTP -> lakehouse loop. NULL = not yet exported.
     lakehouse_exported_at = Column(DateTime, nullable=True)
+    # Customer Trust Score as it stood when this claim was decided
+    # (CustomerTrustService result dict). NULL = decided before the trust
+    # score existed.
+    customer_trust_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

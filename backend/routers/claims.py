@@ -462,6 +462,8 @@ def get_claim_insights(
 ):
     _get_owned_claim(db, claim_id, customer.id)
     data = insights_service.build(db, claim_id)
+    # Customer Trust Score is insurer/agent-only.
+    data["customer_trust"] = None
     return schemas.InsightsResponse(**data)
 
 
@@ -867,6 +869,16 @@ def get_claim_audit(
         fraud_assessment=report.get("fraud_assessment"),
         evidence_results=report.get("evidence_results", []),
         retrieved_clauses=report.get("retrieved_clauses", []),
-        audit_trail=report.get("audit_trail", []),
+        audit_trail=[
+            {
+                **event,
+                "payload": (
+                    {k: v for k, v in event["payload"].items() if k != "customer_trust"}
+                    if isinstance(event.get("payload"), dict)
+                    else event.get("payload")
+                ),
+            }
+            for event in report.get("audit_trail", [])
+        ],
         generated_at=datetime.utcnow(),
     )

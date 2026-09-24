@@ -5,9 +5,11 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RiskBandBadge } from "@/components/claim/RiskBandBadge";
+import { TrustTierBadge } from "@/components/claim/TrustTierBadge";
+import type { CustomerTrust } from "@/components/claim/CustomerTrustCard";
 import { insurerApiJson } from "@/lib/insurerApi";
 import { formatINR } from "@/lib/currency";
-import { AlertTriangle, Database, ShieldAlert, TrendingUp } from "lucide-react";
+import { AlertTriangle, Database, ShieldAlert, ShieldCheck, TrendingUp } from "lucide-react";
 
 interface PolicyRiskSignal {
   total_claims_count: number;
@@ -36,6 +38,7 @@ interface BookOfBusinessPolicy {
   covered_make?: string | null;
   covered_model?: string | null;
   risk?: PolicyRiskSignal | null;
+  trust?: CustomerTrust | null;
 }
 
 interface BookOfBusinessStats {
@@ -45,19 +48,27 @@ interface BookOfBusinessStats {
   high_count: number;
   high_risk_garage_linked_count: number;
   avg_fraud_risk_score: number;
+  trust_preferred_count?: number;
+  trust_standard_count?: number;
+  trust_watch_count?: number;
+  trust_unscored_count?: number;
 }
 
 const RISK_BAND_OPTIONS = ["", "LOW", "MEDIUM", "HIGH"];
+const TRUST_TIER_OPTIONS = ["", "PREFERRED", "STANDARD", "WATCH", "UNSCORED"];
 const SORT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "score_desc", label: "Fraud score (high → low)" },
   { value: "score_asc", label: "Fraud score (low → high)" },
   { value: "claims_desc", label: "Total claims (most first)" },
+  { value: "trust_asc", label: "Trust score (low → high)" },
+  { value: "trust_desc", label: "Trust score (high → low)" },
 ];
 
 export function InsurerBookOfBusiness() {
   const [stats, setStats] = useState<BookOfBusinessStats | null>(null);
   const [policies, setPolicies] = useState<BookOfBusinessPolicy[]>([]);
   const [riskBand, setRiskBand] = useState("");
+  const [trustTier, setTrustTier] = useState("");
   const [highRiskGarageOnly, setHighRiskGarageOnly] = useState(false);
   const [sort, setSort] = useState("score_desc");
   const [loading, setLoading] = useState(true);
@@ -75,6 +86,7 @@ export function InsurerBookOfBusiness() {
       try {
         const params = new URLSearchParams({ sort });
         if (riskBand) params.set("risk_band", riskBand);
+        if (trustTier) params.set("trust_tier", trustTier);
         if (highRiskGarageOnly) params.set("high_risk_garage_only", "true");
         const data = await insurerApiJson<BookOfBusinessPolicy[]>(
           `/api/insurer/book-of-business?${params.toString()}`
@@ -89,7 +101,7 @@ export function InsurerBookOfBusiness() {
       }
     };
     load();
-  }, [riskBand, highRiskGarageOnly, sort]);
+  }, [riskBand, trustTier, highRiskGarageOnly, sort]);
 
   const cards = stats
     ? [
@@ -119,6 +131,15 @@ export function InsurerBookOfBusiness() {
           icon: <TrendingUp className="h-5 w-5" />,
           hint: "Across all ingested policies (0–100)",
         },
+        {
+          label: "Watch-tier customers",
+          value: stats.trust_watch_count ?? 0,
+          icon: <ShieldCheck className="h-5 w-5" />,
+          hint: `${stats.trust_preferred_count ?? 0} preferred · ${stats.trust_standard_count ?? 0} standard · ${
+            stats.trust_unscored_count ?? 0
+          } unscored`,
+          tone: (stats.trust_watch_count ?? 0) > 0 ? ("warning" as const) : ("default" as const),
+        },
       ]
     : [];
 
@@ -130,7 +151,7 @@ export function InsurerBookOfBusiness() {
       />
 
       {stats && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {cards.map((c) => (
             <StatCard key={c.label} label={c.label} value={c.value} hint={c.hint} icon={c.icon} tone={c.tone} />
           ))}
@@ -156,6 +177,18 @@ export function InsurerBookOfBusiness() {
                 {RISK_BAND_OPTIONS.map((b) => (
                   <option key={b || "all"} value={b}>
                     {b ? `${b.charAt(0)}${b.slice(1).toLowerCase()} risk` : "All risk bands"}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                className="w-full sm:w-44"
+                value={trustTier}
+                onChange={(e) => setTrustTier(e.target.value)}
+                aria-label="Filter by customer trust tier"
+              >
+                {TRUST_TIER_OPTIONS.map((t) => (
+                  <option key={t || "all"} value={t}>
+                    {t ? `${t.charAt(0)}${t.slice(1).toLowerCase()} trust` : "All trust tiers"}
                   </option>
                 ))}
               </Select>
@@ -209,6 +242,7 @@ export function InsurerBookOfBusiness() {
                     <th className="py-2 pr-3 font-medium">Risk band</th>
                     <th className="py-2 pr-3 font-medium">Fraud score</th>
                     <th className="py-2 pr-3 font-medium">Claims (12m / total)</th>
+                    <th className="py-2 pr-3 font-medium">Customer trust</th>
                     <th className="py-2 font-medium">Flagged garage</th>
                   </tr>
                 </thead>
@@ -235,6 +269,19 @@ export function InsurerBookOfBusiness() {
                       </td>
                       <td className="py-3 pr-3 text-muted-foreground">
                         {p.risk ? `${p.risk.claims_count_12m} / ${p.risk.total_claims_count}` : "—"}
+                      </td>
+                      <td className="py-3 pr-3">
+                        {p.trust ? (
+                          <div
+                            className="flex items-center gap-2"
+                            title={(p.trust.reasons ?? []).map((r) => r.label).join("\n")}
+                          >
+                            <TrustTierBadge tier={p.trust.tier} />
+                            {p.trust.score != null && <span className="font-medium">{p.trust.score}</span>}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="py-3">
                         {p.risk?.linked_high_risk_garage ? (

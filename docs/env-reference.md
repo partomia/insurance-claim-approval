@@ -45,6 +45,10 @@ All settings live in `backend/config.py` (`Settings`). Values are read from
 | `EARLY_CLAIM_DAYS` | `14` | Claims filed within N days flagged |
 | `HUMAN_REVIEW_AMOUNT_THRESHOLD` | `500000` | Claims over this → review |
 | `CONFIDENCE_REVIEW_THRESHOLD` | `0.60` | Below this → review |
+| `TRUST_PREFERRED_MIN_SCORE` | `82` | Customer Trust Score ≥ this → PREFERRED tier |
+| `TRUST_STANDARD_MIN_SCORE` | `60` | ≥ this → STANDARD; below → WATCH (no profile data → UNSCORED) |
+| `TRUST_PREFERRED_AMOUNT_MULTIPLIER` | `1.5` | PREFERRED: `HUMAN_REVIEW_AMOUNT_THRESHOLD` × this |
+| `TRUST_WATCH_AMOUNT_MULTIPLIER` | `0.5` | WATCH: `HUMAN_REVIEW_AMOUNT_THRESHOLD` × this |
 | `MAX_UPLOAD_SIZE_MB` | `25` | |
 
 ## Storage

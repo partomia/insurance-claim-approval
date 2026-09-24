@@ -17,6 +17,7 @@ from dependencies import get_password_hash
 import models  # noqa: F401
 from models.claim import Claim, ClaimStatus
 from models.customer import Customer
+from models.customer_profile_signal import CustomerProfileSignal
 from models.policy import (
     Policy,
     PolicyDocument,
@@ -178,6 +179,32 @@ def seed_db(reset: bool = False) -> None:
             profile.kyc_mobile_verified = False
             profile.kyc_status = KYCStatus.PENDING
             profile.kyc_verified_at = None
+            db.commit()
+
+        # Bureau/driving-record inputs for the Customer Trust Score, so the
+        # demo customer is scored on OLTP-only deployments too (lakehouse
+        # customers get theirs from ingest_lakehouse.py instead).
+        if not db.query(CustomerProfileSignal).filter(CustomerProfileSignal.customer_id == customer.id).first():
+            db.add(
+                CustomerProfileSignal(
+                    customer_id=customer.id,
+                    credit_score=781,
+                    credit_score_percentile=0.82,
+                    credit_band="EXCELLENT",
+                    loan_defaults_12m=0,
+                    active_vehicle_loan=True,
+                    driver_age=34,
+                    years_licensed=12,
+                    traffic_violations_3y=0,
+                    dui_history=False,
+                    driving_record_band="CLEAN",
+                    address_changed_90d=False,
+                    years_with_insurer=4.0,
+                    policies_held=3,
+                    other_insurer_claims_3y=0,
+                    source="DEMO_SEED",
+                )
+            )
             db.commit()
 
         now = datetime.utcnow()

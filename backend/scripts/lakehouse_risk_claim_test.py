@@ -52,9 +52,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from database import SessionLocal  # noqa: E402
 from dependencies import get_password_hash  # noqa: E402
+import models  # noqa: E402,F401
+from models.claim import Claim  # noqa: E402
 from models.customer import Customer  # noqa: E402
 from models.policy import Policy, PolicyStatus  # noqa: E402
 from models.policy_risk_signal import PolicyRiskSignal  # noqa: E402
+from services.customer_trust_service import customer_trust_service  # noqa: E402
 
 
 def _policy_expired(policy: Policy, now: datetime) -> bool:
@@ -113,6 +116,11 @@ def cmd_find(args: argparse.Namespace) -> None:
         rows = query.order_by(PolicyRiskSignal.fraud_risk_score.desc()).all()
         if args.not_expired:
             rows = [r for r in rows if not _policy_expired(r[0], now)]
+        trust_by_policy = {
+            policy.id: customer_trust_service.for_customer(db, customer, policy) for policy, _, customer in rows
+        }
+        if args.trust_tier:
+            rows = [r for r in rows if trust_by_policy[r[0].id].tier == args.trust_tier]
         if not rows:
             print(
                 "No matching policies found. The synthetic lakehouse policy population's "
@@ -125,12 +133,18 @@ def cmd_find(args: argparse.Namespace) -> None:
                 "regenerate with fresh dates if you need a genuinely testable policy."
             )
             return
-        print(f"{'policy_number':<14} {'status':<10} {'expired?':<9} {'band':<8} {'score':>6} {'claims':>7}  customer_email")
+        print(
+            f"{'policy_number':<14} {'status':<10} {'expired?':<9} {'band':<8} {'score':>6} {'claims':>7} "
+            f"{'trust':<10} {'t.score':>7} {'coverage':>10}  customer_email"
+        )
         for policy, rs, customer in rows[: args.limit]:
             expired = "yes" if _policy_expired(policy, now) else "no"
+            trust = trust_by_policy[policy.id]
+            trust_score = "-" if trust.score is None else str(trust.score)
             print(
                 f"{policy.policy_number:<14} {policy.status.value:<10} {expired:<9} {rs.claim_risk_band:<8} "
-                f"{rs.fraud_risk_score:>6.1f} {rs.total_claims_count:>7}  {customer.email}"
+                f"{rs.fraud_risk_score:>6.1f} {rs.total_claims_count:>7} {trust.tier:<10} {trust_score:>7} "
+                f"{policy.coverage_limit:>10,.0f}  {customer.email}"
             )
     finally:
         db.close()
@@ -260,7 +274,22 @@ def cmd_submit(args: argparse.Namespace) -> None:
         print(f"escalation_flags:  {decision_data.get('escalation_flags')}")
         for m in decision_data.get("escalation_messages", []):
             print(f"  - {m}")
+        trust = _decision_trust(claim_id)
+        if trust:
+            score = trust.get("score")
+            print(f"customer_trust:    {trust.get('tier')} ({'-' if score is None else score}/100)")
+            for r in (trust.get("reasons") or [])[:4]:
+                print(f"  {'+' if r['impact'] == 'positive' else '-' if r['impact'] == 'negative' else '·'} {r['label']}")
         print(f"reasoning:         {d['reasoning']}")
+
+
+def _decision_trust(claim_id: int) -> dict | None:
+    db = SessionLocal()
+    try:
+        claim = db.get(Claim, claim_id)
+        return claim.customer_trust_json if claim else None
+    finally:
+        db.close()
 
 
 def main() -> None:
@@ -283,6 +312,11 @@ def main() -> None:
         "--no-signal",
         action="store_true",
         help="List non-lakehouse policies (no PolicyRiskSignal row) instead — ignores --band",
+    )
+    p_find.add_argument(
+        "--trust-tier",
+        choices=["PREFERRED", "STANDARD", "WATCH", "UNSCORED"],
+        help="Filter by the policy customer's Customer Trust Score tier",
     )
     p_find.set_defaults(func=cmd_find)
 

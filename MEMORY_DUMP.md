@@ -813,3 +813,94 @@ All scoped to `phase4-insurer-risk-ui` only (not cherry-picked — they
 reference Phase-4-specific concepts like `LH-POL-*`/book-of-business),
 except the `validate_submit_gates` bugfix above, which is a universal
 bugfix and went to both branches.
+
+## 2026-09-23 — Customer Trust Score (credit score + customer profile) — built overnight, NOT yet merged
+
+User asked to improve auto-approval with credit score + other customer
+profile data (steps 1-4 of the proposal; optional step 5 — trained ML
+model on a CAI Model endpoint — deferred). Built autonomously while the
+user slept, on branch **`feature/customer-trust-score`** (pushed to
+origin; **not merged to `main`** — env 2 tracks `main`, and the CDE
+Repository syncs `REPO_BRANCH="main"`, so merging is the go-live switch).
+
+**Core rule:** the trust tier changes how fast a claim is auto-approved
+(the amount limit), never whether a valid claim is paid — it can never
+cause `REJECTED`. No protected attributes; `driver_age` is stored but
+not scored. Customers with no profile row are `UNSCORED` = exactly the
+old behaviour.
+
+### What was built
+1. **CDE** — independent parallel chain in the Airflow DAG (3 new jobs in
+   `deploy_jobs.sh`, also added to `time_travel_drill.sh`):
+   `generate_customer_profile_bronze.py` (800 synthetic customers, emails
+   `customer{i}@example.com` = policy_master owners of `LH-POL-2000+i`;
+   latent "care" variable correlates attributes; 7% financial-stress, 4%
+   cross-insurer-claimant, 3% address-churn outliers) →
+   `transform_customer_profile_silver.py` (validate + clean, fails on 0
+   usable rows) → `curate_customer_profile_gold.py` (MERGE into
+   `insurance_lakehouse.customer_profile_signals`, adds
+   `credit_score_percentile`, `credit_band`, `driving_record_band`).
+   `lakehouse history/as-of` know the new table (`--customer-email`).
+2. **App ingest** — new SQLite table `customer_profile_signals`
+   (`CustomerProfileSignal`, 1:1 with Customer; `ensure_schema` creates it
+   plus the new nullable `claims.customer_trust_json`). `lakehouse ingest`
+   upserts by email (tolerant if the gold table doesn't exist yet).
+   `seed.py` gives `test@example.com` a DEMO_SEED profile → PREFERRED (89).
+3. **`services/customer_trust_service.py`** — pure, explainable 0-100
+   score: credit 30%, financial stability 10%, driving record 20%,
+   relationship (tenure/multi-policy/NCB) 15%, claims elsewhere 15%,
+   identity (KYC, address change) 10%; reason codes. Tiers (calibrated on
+   the synthetic population to ~35/55/9%): PREFERRED ≥ 82 (limit ×1.5),
+   STANDARD 60-81 (×1), WATCH < 60 (×0.5). Knobs: `TRUST_*` in config.
+4. **Decision wiring** — `finalize_claim` scales
+   `HUMAN_REVIEW_AMOUNT_THRESHOLD` by tier, freezes the trust snapshot on
+   `claims.customer_trust_json`, tier appended to the `human_reviews.reason`
+   record (not currently displayed in any UI). **Customer-facing surfaces never show the tier**
+   (decision/LLM reasoning, progress stream, customer insights + audit
+   APIs are stripped — follow-up commit after the user asked what else
+   needed changing). Two soft
+   fraud signals: `financial_stress` 0.15, `cross_insurer_claims` 0.20
+   (stacked 0.35 < 0.40 review threshold; excluded from the LLM fraud
+   prompt).
+5. **UI** — Claim Insights **Customer Trust Score card** (insurer + agent
+   review only, not the customer's TrackClaim); Book of Business
+   **Customer trust** column, tier filter, trust sort, Watch-tier stat card.
+6. **Tooling/docs** — `test-claim find --trust-tier ...` (+ trust/coverage
+   columns), `submit` prints the trust tier + reasons; demo runbook
+   **Beat 2b**; `cml/README.md` § Customer Trust Score; `cde/README.md`;
+   `README.md`; `docs/env-reference.md`.
+
+### Verified locally (no env1 access overnight)
+- CDE jobs run on local Spark 4.0.2 + Iceberg 1.10: bootstrap then MERGE
+  (2 snapshots), sane band distributions.
+- Integration script (20 checks, all pass): schema heal on an old DB,
+  seed/ingest idempotent, Book of Business sort/filter/stats, real
+  `finalize_claim` → PREFERRED ₹6L auto-approves, UNSCORED ₹6L and WATCH
+  ₹3L → PENDING_REVIEW, WATCH ₹50k auto-approves, soft fraud 0.35.
+- `pytest tests/` 15 passed (9 new in `tests/test_customer_trust.py`);
+  frontend `tsc -b` + `vite build` pass.
+- Local tooling note: used scratch venv `/tmp/trustvenv` (py3.13, stubbed
+  chromadb) because `uv sync` into `backend/.venv` was very slow and was
+  aborted — `backend/.venv` may be half-built; `uv sync` again if needed.
+- Not verified: live CDE/Impala/CAI run, LLM-generated reasoning text.
+
+### To go live in env 1 (after user review)
+```bash
+# local
+git checkout main && git merge --no-ff feature/customer-trust-score && git push origin main
+./cde/scripts/deploy_jobs.sh && ./cde/scripts/deploy_dag.sh   # repo syncs main
+cde job run --name rsingh-insurance-generate-customer-profile-bronze
+cde job run --name rsingh-insurance-transform-customer-profile-silver
+cde job run --name rsingh-insurance-curate-customer-profile-gold
+# (or just trigger the DAG — the customer chain runs in parallel)
+
+# env 1 CAI Session
+git pull && bash cml/cli.sh update
+bash cml/cli.sh lakehouse ingest        # prints profile_signals_ingested
+# restart the CAI Application
+bash cml/cli.sh test-claim find --trust-tier WATCH --not-expired
+```
+Then check Book of Business trust column + a claim's Insights trust card.
+**Env 2 impact on merge:** OLTP-only, so no lakehouse profiles — every
+customer is UNSCORED (unchanged) except the seeded `test@example.com`,
+which becomes PREFERRED (its auto-approval limit goes ₹5L → ₹7.5L).

@@ -15,6 +15,7 @@ from models.chat import ChatRole, ClaimChatMessage, CustomerChatMessage, AgentCh
 from models.claim import Claim, ClaimDocument, ClaimStatus, DocumentType
 from models.claim_progress import ClaimProgressEvent
 from models.customer import Customer
+from models.customer_profile_signal import CustomerProfileSignal
 from models.embeddings import PolicyClauseEmbedding
 from models.policy import (
     Policy,
@@ -35,6 +36,7 @@ __all__ = [
     "AuthSession",
     "Customer",
     "CustomerProfile",
+    "CustomerProfileSignal",
     "InsuranceProvider",
     "KYCStatus",
     "PolicyAgent",

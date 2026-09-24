@@ -36,22 +36,25 @@ cde/
 ├── jobs/
 │   ├── generate/
 │   │   ├── generate_bronze.py             ← Stage 1: synthesize raw policy data -> bronze
-│   │   └── generate_claims_bronze.py      ← Stage 1b: synthesize ~4,000 claims -> bronze
+│   │   ├── generate_claims_bronze.py      ← Stage 1b: synthesize ~4,000 claims -> bronze
+│   │   └── generate_customer_profile_bronze.py ← Stage 1c: synthesize 800 customer bureau profiles -> bronze
 │   ├── validate/
 │   │   ├── validate_bronze.py             ← Stage 2: policy data-quality gate
 │   │   └── validate_claims_bronze.py      ← Stage 2b: claims data-quality gate
 │   ├── transform/
 │   │   ├── transform_silver.py            ← Stage 3: clean/dedupe/type-cast -> silver
-│   │   └── transform_claims_silver.py     ← Stage 3b: clean/dedupe claims -> silver
+│   │   ├── transform_claims_silver.py     ← Stage 3b: clean/dedupe claims -> silver
+│   │   └── transform_customer_profile_silver.py ← Stage 2c/3c: validate + clean customer profiles -> silver
 │   └── curate/
 │       ├── curate_gold.py                 ← Stage 4: enrich + finalize -> gold (app-facing tables)
-│       └── curate_risk_signals_gold.py    ← Stage 4b: fraud/risk analytics -> gold
+│       ├── curate_risk_signals_gold.py    ← Stage 4b: fraud/risk analytics -> gold
+│       └── curate_customer_profile_gold.py ← Stage 4c: customer profile signals -> gold
 ├── dags/
-│   └── insurance_lakehouse_dag.py     ← Airflow DAG chaining all 8 jobs via CDEJobRunOperator
+│   └── insurance_lakehouse_dag.py     ← Airflow DAG chaining all 11 jobs via CDEJobRunOperator
 ├── resources/
 │   └── requirements.txt               ← CDE python-env deps (empty today — see below)
 └── scripts/
-    ├── deploy_jobs.sh                 ← Create/sync the CDE Repository + create the 8 Spark jobs
+    ├── deploy_jobs.sh                 ← Create/sync the CDE Repository + create the 11 Spark jobs
     └── deploy_dag.sh                  ← Register/update the Airflow DAG job
 ```
 
@@ -142,7 +145,7 @@ cde run list --filter "id[eq]<run-id>"
 Or via the CDE Airflow UI → DAGs → `insurance_lakehouse_pipeline` → trigger.
 It's `schedule_interval=None` by default (manual trigger) — flip to
 `"@daily"` etc. in `dags/insurance_lakehouse_dag.py` once you're happy with it.
-Takes ~20–30 min end-to-end (8 sequential Spark job cold-starts + Airflow overhead).
+Takes ~20–30 min end-to-end (8 sequential Spark job cold-starts + Airflow overhead; the 3 customer-profile jobs run in parallel with them).
 
 **One stage at a time, via CDE CLI** (faster feedback while iterating):
 ```bash
@@ -157,6 +160,11 @@ cde job run --name rsingh-insurance-generate-claims-bronze   --wait
 cde job run --name rsingh-insurance-validate-claims-bronze   --wait
 cde job run --name rsingh-insurance-transform-claims-silver  --wait
 cde job run --name rsingh-insurance-curate-risk-signals-gold --wait
+
+# Customer profile / bureau signals (independent of both chains above)
+cde job run --name rsingh-insurance-generate-customer-profile-bronze  --wait
+cde job run --name rsingh-insurance-transform-customer-profile-silver --wait
+cde job run --name rsingh-insurance-curate-customer-profile-gold      --wait
 ```
 
 **Check logs for a run:**
@@ -568,6 +576,47 @@ a live/streaming version is ever needed, the same generate → transform →
 curate Spark jobs can be re-run as Spark Structured Streaming instead of
 building a separate mechanism.
 
+## Customer profile signals (Customer Trust Score)
+
+A third, independent chain that lands the customer-side data a real insurer
+pulls from outside the policy system: a credit bureau (CIBIL-style 300–900
+score, loan defaults in the last 12 months), the transport authority (years
+licensed, traffic violations, drunk-driving history), the industry claims
+bureau (claims filed with *other* insurers in 3 years), and internal
+relationship data (tenure, policies held, recent address change).
+
+```
+generate_customer_profile_bronze.py   -> insurance_lakehouse_bronze.customer_profile_raw  (800 customers)
+transform_customer_profile_silver.py  -> insurance_lakehouse_silver.customer_profile     (validate + clean, one job)
+curate_customer_profile_gold.py       -> insurance_lakehouse.customer_profile_signals    (MERGE INTO, keyed by customer_email)
+  │  scripts/ingest_lakehouse.py (matches app Customer.email)
+  ▼
+App's CustomerProfileSignal -> services/customer_trust_service.py -> Trust Score + tier
+```
+
+- **Keyed by `customer_email`** using the same `customer{i}@example.com`
+  scheme as `policy_master`, so `customer0..59` line up with the ingested
+  `LH-POL-2000..2059` customers. The other ~740 customers exist only to give
+  `credit_score_percentile` a meaningful population (same reasoning as the
+  800-policy claims universe).
+- **Seeded outliers:** ~7% financially stressed (credit < 600 plus loan
+  defaults), ~4% serial claimants at other insurers (3–6 claims), ~3% brand-new
+  relationship with a recent address change.
+- **Gold adds only population features** (`credit_score_percentile`,
+  `credit_band`, `driving_record_band`). The trust score itself is computed
+  app-side so its reason codes live in one place and non-lakehouse demo
+  customers are scored by the same code.
+- **Same seed conventions** as the other generators (calendar-day seed,
+  optional 2nd arg `seed|YYYY-MM-DD`); `time_travel_drill.sh` runs this chain
+  too, and `bash cml/cli.sh lakehouse history|as-of --table
+  customer_profile_signals --customer-email customer7@example.com` works.
+- **No protected attributes are generated.** `driver_age` is generated for
+  analytics but deliberately not used by the trust score (experience comes
+  from `years_licensed`).
+- Verified locally with Spark 4.0 + Iceberg 1.10 (local Hadoop catalog):
+  run 1 bootstraps the gold table via CTAS, run 2 takes the `MERGE INTO` path
+  and commits a second snapshot. Not yet run on the env1 vcluster.
+
 ## Config knobs
 
 - `INSURANCE_N_POLICIES` (Airflow Variable, default `60`) — how many synthetic policies `generate_bronze.py` creates. Set via CDE Airflow UI → Admin → Variables, or `airflow variables set INSURANCE_N_POLICIES 200`.
@@ -580,6 +629,7 @@ building a separate mechanism.
 - Swap `generate_bronze.py`/`generate_claims_bronze.py`'s synthetic data for a real source extract (S3/JDBC) once one exists — the validate/transform/curate stages don't need to change.
 - ~~**Replace the drop+recreate gold writes with `MERGE INTO` to preserve Iceberg snapshot/time-travel history across runs**~~ — **done** (Item 3, step 1 of 3): `curate_gold.py`/`curate_risk_signals_gold.py` bootstrap via CTAS only on the very first run, then `MERGE INTO` every run after (`WHEN NOT MATCHED BY SOURCE THEN DELETE` for parity with the old full-replace semantics). Also switched `generate_bronze.py`/`generate_claims_bronze.py` from a fixed seed (42/7) to a **date-based seed** (`int(now.strftime("%Y%m%d"))`) — otherwise the synthetic population is byte-identical every run and MERGE would have nothing real to commit, making time travel boring (every snapshot would look the same). Reruns *within* the same day stay idempotent; crossing a day boundary evolves the population. Step 2 (a `test-claim`-style CLI to browse `DESCRIBE HISTORY` / `FOR SYSTEM_TIME|VERSION AS OF`) is **done** — see `backend/scripts/lakehouse_time_travel.py` / `bash cml/cli.sh lakehouse history|as-of`, documented in `cml/README.md`. Verified live in env1 with a real diff (`LH-POL-2059`: HIGH/69.6/22-claims → MEDIUM/36.4/4-claims across two snapshots) — see § Iceberg time travel below. Step 3 (a repeatable, on-demand demo drill instead of waiting for a real day boundary) is also **done** — see `cde/scripts/time_travel_drill.sh`, which passes an explicit `YYYY-MM-DD` seed override through the generate jobs' new optional 2nd arg. **All 3 steps of Item 3 are now complete.**
 - ~~**Feed `fraud_risk_score`/`claim_risk_band` into the live decision engine** — it only surfaced on the Book of Business page and the Claim Insights risk card, never influencing a claim's actual approve/reject/review outcome~~ — **done**: `services/fraud_detection.py` adds it as a `SIGNAL_WEIGHTS` rule (HIGH band meets the review threshold on its own, MEDIUM is a soft signal), and `services/escalation_service.py` raises an explicit `lakehouse_high_risk_policy` flag for HIGH band, which `decision_engine.py`'s existing generic escalation-flag check routes straight to `PENDING_REVIEW` — no `decision_engine.py` changes needed. Only applies to lakehouse-ingested policies (`policy.risk_signal` is `None` otherwise); zero frontend changes since escalation messages already render everywhere.
+- ~~**Customer-side data for approval scoring** (credit score, driving record, claims at other insurers)~~ — **done** (code-complete, pending live env1 run): see § Customer profile signals above; consumed by the app's Customer Trust Score, which scales the auto-approval amount limit and adds two soft fraud signals.
 - Add Great Expectations to the validate stages for richer expectation suites, mirroring the reference workshop's Module 05.
 - Enable the schedule (`schedule_interval="@daily"` or similar) once the demo data volume/cadence story is finalized.
 - ~~**`generate_bronze.py` anchored policy `effective_date`/`expiry_date` to a fixed `2024-01-01` calendar date**~~ — **done**: found while testing Item 2 (`bash cml/cli.sh test-claim`) — the fixed anchor meant every policy's `expiry_date` had a hard ceiling of ~2026-10-02 regardless of run time, so once real time passed it every lakehouse-linked policy would fail `PolicyValidationService`'s `policy_expired` check outright, independent of `status`/risk band. Now anchored to the job's own run time (`effective = anchor - random(30, 300) days`), guaranteeing `expiry_date >= anchor + 65 days` for every policy — re-run `generate-bronze` (+ downstream `validate`/`transform`/`curate-gold` + `lakehouse ingest`) any time you need a fresh window. Same fix applied to the superseded Phase 1 hand-seed path (`backend/scripts/lakehouse_seed.py`) for consistency.
