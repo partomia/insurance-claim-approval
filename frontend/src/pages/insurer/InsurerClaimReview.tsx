@@ -223,7 +223,7 @@ export function InsurerClaimReview() {
         </div>
 
         <div className="space-y-4">
-          <InsightsPanel insights={insights} showCustomerTrust />
+          <InsightsPanel insights={insights} showInsurerAnalytics />
 
           {canDecide ? (
             <Card className="ring-secondary/30">

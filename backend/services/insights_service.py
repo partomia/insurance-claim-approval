@@ -104,6 +104,7 @@ class InsightsService:
             },
             "score_gauges": {
                 "confidence": confidence,
+                "fraud": fraud,
                 "approval_probability": decision.approval_probability if decision and decision.approval_probability else confidence * (1 - fraud * 0.35),
                 "evidence": evidence_confidence,
             },

@@ -48,10 +48,11 @@ interface Insights {
 
 export function InsightsPanel({
   insights,
-  showCustomerTrust = false,
+  showInsurerAnalytics = false,
 }: {
   insights: Insights | null;
-  showCustomerTrust?: boolean;
+  /** Lakehouse risk signal + Customer Trust Score cards (insurer/expert views only). */
+  showInsurerAnalytics?: boolean;
 }) {
   if (!insights) {
     return <div className="text-sm text-muted-foreground p-2">Loading insights...</div>;
@@ -72,7 +73,7 @@ export function InsightsPanel({
         clauseMismatch={clauseMismatch}
       />
 
-      {insights.policy_risk_signal && (
+      {showInsurerAnalytics && insights.policy_risk_signal && (
         <div className="p-4 bg-card border rounded-lg shadow-sm space-y-3">
           <div className="flex items-center justify-between gap-2">
             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -106,7 +107,7 @@ export function InsightsPanel({
         </div>
       )}
 
-      {showCustomerTrust && insights.customer_trust && <CustomerTrustCard trust={insights.customer_trust} />}
+      {showInsurerAnalytics && insights.customer_trust && <CustomerTrustCard trust={insights.customer_trust} />}
 
       {gauges && (
         <div className="p-4 bg-card border rounded-lg shadow-sm">

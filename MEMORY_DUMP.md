@@ -916,3 +916,23 @@ which becomes PREFERRED (its auto-approval limit goes ₹5L → ₹7.5L).
 - Gotcha: macOS has no `timeout` binary; don't wrap `cde` polling in it.
 - **Remaining (user):** env 1 CAI — `git pull && bash cml/cli.sh update`,
   `bash cml/cli.sh lakehouse ingest`, restart Application, verify.
+
+### 2026-09-25 — Customer Trust Score verified live in env 1
+All three tiers verified via `test-claim submit`: PREFERRED `LH-POL-2022`
+₹6L → ANALYSIS_COMPLETE; STANDARD `LH-POL-2043` ₹6L → PENDING_REVIEW;
+WATCH `LH-POL-2030` ₹3L → PENDING_REVIEW. Screenshots confirmed Book of
+Business trust column/filter/Watch stat card, expert Claim Insights trust
+card, and no trust data on the customer's claim page.
+Fixes made during verification (all on `main`):
+- LLM decision reasoning grounded in the rule that fired + real IDV /
+  deductible (it was inventing reasons and emitting `[IDV]` placeholders).
+- Profile fraud-signal messages made generic (customer-visible).
+- Trust-tier badge on insurer + expert claim lists.
+- Pre-existing bug: `score_gauges` never included `fraud`, so the Fraud
+  Risk gauge always showed 0% — fixed.
+- Lakehouse risk card (policy_risk_signal) was visible on the customer's
+  claim page — now insurer/expert-only like the trust card
+  (`InsightsPanel showInsurerAnalytics`).
+Test-harness gotcha: re-submitting the same policy with the same incident
+text trips `duplicate_claim` (+0.45) — vary `--incident-description`.
+Next: step 5 (trained approval model on a CAI Model endpoint, shadow mode).
