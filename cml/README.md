@@ -440,7 +440,7 @@ Where it shows up:
   (including the LLM explanation), live progress feed, insights API and
   audit-report API contain no trust tier or score.
 - **Book of Business:** a "Customer trust" column (hover for reasons), a
-   trust-tier filter, trust sort, and a Watch-tier stat card.
+  trust-tier filter, trust sort, and a Watch-tier stat card.
 - **Insurer and expert claim lists:** a tier badge on each claim (hover for
   the score), taken from the decision-time snapshot.
 
