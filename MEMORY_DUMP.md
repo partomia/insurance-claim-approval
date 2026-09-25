@@ -904,3 +904,15 @@ Then check Book of Business trust column + a claim's Insights trust card.
 **Env 2 impact on merge:** OLTP-only, so no lakehouse profiles — every
 customer is UNSCORED (unchanged) except the seeded `test@example.com`,
 which becomes PREFERRED (its auto-approval limit goes ₹5L → ₹7.5L).
+
+### 2026-09-25 — merged to `main` + CDE part done in env 1
+- `feature/customer-trust-score` merged to `main` (`a8c8aa7`), pushed.
+- `deploy_jobs.sh` (all 11 jobs recreated) + `deploy_dag.sh` run.
+- Customer chain runs all **succeeded**: bronze 2182, silver 2183, gold
+  2184 → `insurance_lakehouse.customer_profile_signals` has 800 rows
+  (credit bands EXCELLENT 355 / GOOD 200 / FAIR 129 / POOR 116; driving
+  CLEAN 405 / MINOR 286 / POOR 109). Runs spend 10-20 min queued in
+  `starting` on this vcluster — normal.
+- Gotcha: macOS has no `timeout` binary; don't wrap `cde` polling in it.
+- **Remaining (user):** env 1 CAI — `git pull && bash cml/cli.sh update`,
+  `bash cml/cli.sh lakehouse ingest`, restart Application, verify.
