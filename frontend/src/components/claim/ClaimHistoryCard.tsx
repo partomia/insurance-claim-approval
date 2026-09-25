@@ -6,6 +6,7 @@ import {
   Shield,
 } from "lucide-react";
 import { ClaimStatusBadge } from "@/components/claim/ClaimStatusBadge";
+import { TrustTierBadge } from "@/components/claim/TrustTierBadge";
 import { claimStatusLabel, riskLevelLabel } from "@/lib/claimStatusLabels";
 import { formatEscalationList } from "@/lib/escalationLabels";
 import { formatINR } from "@/lib/currency";
@@ -21,6 +22,9 @@ export interface ClaimHistoryCardData {
   escalation_messages?: string[];
   document_count?: number;
   has_document_issues?: boolean;
+  /** Customer Trust Score at decision time — only sent by insurer/agent list APIs. */
+  trust_tier?: string | null;
+  trust_score?: number | null;
   submission?: {
     policy_type?: string | null;
     policy_number?: string | null;
@@ -77,6 +81,17 @@ export function ClaimHistoryCard({ claim }: { claim: ClaimHistoryCardData }) {
               {approvalPct != null && (
                 <span className="inline-flex items-center rounded-full border border-success-border bg-success-subtle px-2.5 py-0.5 text-xs font-semibold text-success">
                   {approvalPct}% likely approved
+                </span>
+              )}
+              {claim.trust_tier && (
+                <span
+                  title={
+                    claim.trust_score != null
+                      ? `Customer trust score ${claim.trust_score}/100 at decision time`
+                      : "Customer trust tier at decision time"
+                  }
+                >
+                  <TrustTierBadge tier={claim.trust_tier} />
                 </span>
               )}
             </div>

@@ -54,6 +54,8 @@ class AgentService:
             "fraud_score": claim.decision.fraud_score if claim.decision else None,
             "document_count": doc_count,
             "has_document_issues": len(issues_raw) > 0,
+            "trust_tier": (claim.customer_trust_json or {}).get("tier"),
+            "trust_score": (claim.customer_trust_json or {}).get("score"),
         }
 
     def get_dashboard_stats(self, db: Session, agent: PolicyAgent) -> dict[str, Any]:

@@ -93,6 +93,8 @@ class InsurerClaimListItem(BaseModel):
     payable_amount: Optional[float] = None
     document_count: int = 0
     has_document_issues: bool = False
+    trust_tier: Optional[str] = None
+    trust_score: Optional[int] = None
 
 
 class InsurerDashboardStatsResponse(BaseModel):
@@ -208,6 +210,8 @@ class AgentClaimListItem(BaseModel):
     approval_probability: Optional[float] = None
     document_count: int = 0
     has_document_issues: bool = False
+    trust_tier: Optional[str] = None
+    trust_score: Optional[int] = None
 
 
 class AgentCustomerSummary(BaseModel):

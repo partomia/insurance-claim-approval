@@ -204,16 +204,10 @@ def fraud_signals(signal: Optional[CustomerProfileSignal]) -> list[tuple[str, st
         and signal.credit_score < FINANCIAL_STRESS_CREDIT_MAX
         and (signal.loan_defaults_12m or 0) >= 1
     ):
-        out.append((
-            "financial_stress",
-            f"Financial stress indicators (credit score {signal.credit_score}, "
-            f"{signal.loan_defaults_12m} recent loan default(s))",
-        ))
+        # Fraud signals are visible to the customer; specifics stay on the insurer-only trust card.
+        out.append(("financial_stress", "Customer profile indicates elevated financial risk"))
     if (signal.other_insurer_claims_3y or 0) >= CROSS_INSURER_CLAIMS_MIN:
-        out.append((
-            "cross_insurer_claims",
-            f"{signal.other_insurer_claims_3y} claims filed with other insurers in the last 3 years",
-        ))
+        out.append(("cross_insurer_claims", "Frequent recent claims history across insurers"))
     return out
 
 

@@ -6,6 +6,7 @@ import { Select } from "@/components/ui/select";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClaimStatusBadge } from "@/components/claim/ClaimStatusBadge";
+import { TrustTierBadge } from "@/components/claim/TrustTierBadge";
 import { agentApiJson } from "@/lib/agentApi";
 import { formatEscalationSummary } from "@/lib/escalationLabels";
 import { formatINR } from "@/lib/currency";
@@ -27,6 +28,8 @@ interface AgentClaim {
   approval_probability?: number | null;
   document_count?: number;
   has_document_issues?: boolean;
+  trust_tier?: string | null;
+  trust_score?: number | null;
 }
 
 interface CustomerSummary {
@@ -173,6 +176,17 @@ export function AgentClaims() {
                       {claim.approval_probability != null && (
                         <span className="inline-flex rounded-full bg-success-subtle text-success px-2 py-0.5 text-xs font-semibold">
                           {(claim.approval_probability * 100).toFixed(0)}% approval
+                        </span>
+                      )}
+                      {claim.trust_tier && (
+                        <span
+                          title={
+                            claim.trust_score != null
+                              ? `Customer trust score ${claim.trust_score}/100 at decision time`
+                              : "Customer trust tier at decision time"
+                          }
+                        >
+                          <TrustTierBadge tier={claim.trust_tier} />
                         </span>
                       )}
                       <ClaimStatusBadge status={claim.status} />

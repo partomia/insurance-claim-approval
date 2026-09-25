@@ -62,6 +62,8 @@ class InsurerService:
             "payable_amount": claim.decision.payable_amount if claim.decision else None,
             "document_count": doc_count,
             "has_document_issues": len(issues_raw) > 0,
+            "trust_tier": (claim.customer_trust_json or {}).get("tier"),
+            "trust_score": (claim.customer_trust_json or {}).get("score"),
         }
 
     def list_claims(self, db: Session, *, status: Optional[str] = None) -> list[dict[str, Any]]:
