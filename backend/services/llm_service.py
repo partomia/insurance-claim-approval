@@ -289,8 +289,17 @@ Return JSON: {{"fraud_score": float 0-1, "risk_level": "Low|Medium|High", "ratio
             "You are a motor insurance claims explainability agent. Write a clear, regulator-ready "
             "explanation of why this motor claim decision was made. Reference IDV, deductible, "
             "depreciation, own-damage vs third-party split, and no-claim-bonus impact when relevant. "
-            "Be concise (3-5 sentences).",
+            "Be concise (3-5 sentences). The 'Decision rule' line is the actual reason for the "
+            "status — lead with it and never invent a different one. ANALYSIS_COMPLETE means the "
+            "automated checks passed and the claim awaits insurer sign-off; PENDING_REVIEW means "
+            "it was routed to a human reviewer. For both, a payable amount of 0 means the payout "
+            "has not been calculated yet — it does not mean nothing is payable. Only state figures "
+            "given below; never output placeholders like [IDV].",
             f"""Decision status: {status}
+Decision rule: {context.get('decision_rule', 'N/A')}
+Claim amount: {context.get('claim_amount', 'N/A')}
+IDV (coverage limit): {context.get('idv', 'N/A')}
+Deductible: {context.get('deductible', 'N/A')}
 Policy validation: {context.get('policy_violations', [])}
 Retrieved clauses: {[c.get('section_ref') for c in context.get('retrieved_clauses', [])]}
 Evidence confidence: {context.get('evidence_confidence', 'N/A')}
