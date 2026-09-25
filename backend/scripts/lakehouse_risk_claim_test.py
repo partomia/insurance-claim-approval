@@ -120,7 +120,15 @@ def cmd_find(args: argparse.Namespace) -> None:
             policy.id: customer_trust_service.for_customer(db, customer, policy) for policy, _, customer in rows
         }
         if args.trust_tier:
+            candidates = len(rows)
             rows = [r for r in rows if trust_by_policy[r[0].id].tier == args.trust_tier]
+            if candidates and not rows:
+                print(
+                    f"No {args.trust_tier}-tier customers among {candidates} matching policies. "
+                    "If every customer shows UNSCORED, customer profiles haven't been ingested yet — "
+                    "run the CDE customer-profile jobs, then 'bash cml/cli.sh lakehouse ingest'."
+                )
+                return
         if not rows:
             print(
                 "No matching policies found. The synthetic lakehouse policy population's "
