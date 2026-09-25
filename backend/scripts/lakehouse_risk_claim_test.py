@@ -190,7 +190,16 @@ def cmd_submit(args: argparse.Namespace) -> None:
 
     base = args.base_url.rstrip("/")
     with httpx.Client(base_url=base, timeout=30.0) as client:
-        client.post("/auth/login", json={"email": email, "password": args.password})
+        try:
+            client.post("/auth/login", json={"email": email, "password": args.password})
+        except httpx.ConnectError:
+            print(
+                f"[error] No app listening at {base}. 'submit' needs a running backend in this "
+                "Session (the CAI Application runs in a separate container): run "
+                "'bash cml/cli.sh start --bg' first, or pass --base-url for the port it chose.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         resp = client.post("/auth/verify-otp", json={"email": email, "otp": args.otp})
         resp.raise_for_status()
         token = resp.json()["access_token"]
