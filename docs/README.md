@@ -14,6 +14,7 @@ pipeline, SQLAlchemy on SQLite (dev) or Postgres (prod).
 | [`frontend.md`](./frontend.md) | Frontend routes and components |
 | [`env-reference.md`](./env-reference.md) | All environment variables, defaults, and when to change them |
 | [`steps-to-demo-execution.md`](./steps-to-demo-execution.md) | Click/command runbook for demoing the OLTP + Lakehouse story end-to-end (resources assumed already running) |
+| [`plans/step5-approval-model-plan.md`](./plans/step5-approval-model-plan.md) | Next step (not started): trained approval model — CDE features → CAI Job training → CAI Model endpoint → shadow mode in the app |
 | [`diagrams/`](./diagrams/) | Mermaid + PNG diagrams for architecture, data flow, portals, agent pipeline |
 
 ## Quick start

@@ -936,3 +936,11 @@ Fixes made during verification (all on `main`):
 Test-harness gotcha: re-submitting the same policy with the same incident
 text trips `duplicate_claim` (+0.45) — vary `--incident-description`.
 Next: step 5 (trained approval model on a CAI Model endpoint, shadow mode).
+
+## 2026-09-26 — Step 5 paused; plan written
+User paused before starting step 5 (trained approval model). Full plan of
+action: **`docs/plans/step5-approval-model-plan.md`** (phases 0-6, done-when
+criteria, risks, how to resume). Key finding recorded there: synthetic claim
+`status` in `generate_claims_bronze.py` is drawn independently of all
+features, so Phase 0 must make outcomes feature-dependent before any model
+can learn. Work on `feature/approval-model`, not `main`.
