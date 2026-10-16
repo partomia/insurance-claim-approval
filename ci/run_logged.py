@@ -47,10 +47,13 @@ def fetch(name: str) -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 2 and sys.argv[1] == "--fetch":
-        sys.exit(fetch(sys.argv[2]))
-    if len(sys.argv) < 2:
+    argv = sys.argv[1:] or os.environ.get("MCC_RUN_SCRIPT", "").split()
+    if argv and argv[0] == "-f":  # ipykernel's own argv, not the job arguments
+        argv = os.environ.get("MCC_RUN_SCRIPT", "").split()
+    if len(argv) > 1 and argv[0] == "--fetch":
+        sys.exit(fetch(argv[1]))
+    if not argv:
         sys.exit(__doc__)
-    rc = run(sys.argv[1], sys.argv[2:])
+    rc = run(argv[0], argv[1:])
     if rc:
         sys.exit(rc)
