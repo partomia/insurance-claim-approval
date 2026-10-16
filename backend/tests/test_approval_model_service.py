@@ -78,12 +78,15 @@ def test_failures_are_recorded_not_raised(shadow, monkeypatch):
 
 def test_model_vs_rules():
     rows = [
-        _claim(id=1, model_prediction_json={"agrees_with_rules": True, "fraud_band": "CLEAR"}),
+        # scored at ANALYSIS_COMPLETE, approved by the insurer later: compared with that
+        _claim(id=1, model_prediction_json={"approval_band": "LIKELY_APPROVE", "rules_decision": "ANALYSIS_COMPLETE",
+                                            "fraud_band": "CLEAR"}),
         _claim(id=2, claim_number="CLM-2", status=ClaimStatus.REJECTED,
-               model_prediction_json={"agrees_with_rules": False, "approval_band": "LIKELY_APPROVE",
-                                      "rules_decision": "REJECTED", "fraud_band": "FRAUD_REVIEW"}),
-        _claim(id=3, model_prediction_json={"agrees_with_rules": None, "approval_band": "UNCERTAIN"}),
+               model_prediction_json={"approval_band": "LIKELY_APPROVE", "rules_decision": "REJECTED",
+                                      "fraud_band": "FRAUD_REVIEW"}),
+        _claim(id=3, model_prediction_json={"approval_band": "UNCERTAIN"}),
         _claim(id=4, model_prediction_json={"error": "TimeoutError"}),
+        _claim(id=5, status=ClaimStatus.PENDING_REVIEW, model_prediction_json={"approval_band": "REVIEW"}),
     ]
 
     class Q:
@@ -97,6 +100,8 @@ def test_model_vs_rules():
             return rows
 
     out = svc.model_vs_rules(SimpleNamespace(query=lambda m: Q()))
-    assert (out["scored"], out["errors"], out["compared"], out["agreement_rate"]) == (3, 1, 2, 0.5)
+    assert (out["scored"], out["errors"], out["compared"], out["agreement_rate"]) == (4, 1, 2, 0.5)
     assert out["fraud_review"] == 1
     assert [d["claim_number"] for d in out["disagreements"]] == ["CLM-2"]
+    assert svc.view(rows[0])["agrees_with_rules"] is True and svc.view(rows[0])["rules_decision"] == "APPROVED"
+    assert svc.view(rows[4])["agrees_with_rules"] is None and svc.view(rows[3]) == {"error": "TimeoutError"}

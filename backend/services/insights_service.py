@@ -3,6 +3,7 @@ from typing import Any
 from sqlalchemy.orm import Session, joinedload
 
 from models.claim import Claim
+from services import approval_model_service
 from services.progress_service import progress_service
 from services.analysis_service import analysis_to_dict
 from services.customer_trust_service import customer_trust_service
@@ -129,5 +130,5 @@ class InsightsService:
             ],
             "policy_risk_signal": policy_risk_signal,
             "customer_trust": customer_trust,
-            "model_view": claim.model_prediction_json,
+            "model_view": approval_model_service.view(claim),
         }

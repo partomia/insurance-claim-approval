@@ -123,6 +123,30 @@ def score(claim, rules_decision: str | None) -> dict[str, Any]:
     return record
 
 
+def final_decision(claim) -> str | None:
+    """APPROVED / REJECTED once the claim has one (the pipeline's own, or the insurer's sign-off
+    later), else the decision recorded when it was scored."""
+    status = claim.status.value if hasattr(claim.status, "value") else str(claim.status)
+    return status if status in COMPARABLE else (claim.model_prediction_json or {}).get("rules_decision")
+
+
+def agrees(record: dict, decision: str | None) -> bool | None:
+    """serve/scoring.agrees_with_rules on a stored record: None while either side is undecided."""
+    band = record.get("approval_band")
+    if decision not in COMPARABLE or band not in ("LIKELY_APPROVE", "REVIEW"):
+        return None
+    return (band == "LIKELY_APPROVE") == (decision == "APPROVED")
+
+
+def view(claim) -> dict | None:
+    """The stored record for Claim Insights, compared with the claim's decision as it stands now."""
+    record = claim.model_prediction_json
+    if not record or record.get("error"):
+        return record
+    decision = final_decision(claim)
+    return {**record, "rules_decision": decision, "agrees_with_rules": agrees(record, decision)}
+
+
 def model_vs_rules(db, limit: int = 20) -> dict[str, Any]:
     """Insurer dashboard: how often the shadow model agrees with the rules, and the
     claims where it does not (newest first) for a reviewer to look at."""
@@ -131,17 +155,18 @@ def model_vs_rules(db, limit: int = 20) -> dict[str, Any]:
     claims = (db.query(Claim).filter(Claim.model_prediction_json.isnot(None))
               .order_by(Claim.updated_at.desc()).all())
     scored = [c for c in claims if not (c.model_prediction_json or {}).get("error")]
-    compared = [c for c in scored if c.model_prediction_json.get("agrees_with_rules") is not None]
-    agree = sum(1 for c in compared if c.model_prediction_json["agrees_with_rules"])
+    verdict = {c.id: agrees(c.model_prediction_json, final_decision(c)) for c in scored}
+    compared = [c for c in scored if verdict[c.id] is not None]
+    agree = sum(1 for c in compared if verdict[c.id])
     disagreements = [
         {"claim_id": c.id, "claim_number": c.claim_number, "status": c.status.value,
-         "rules_decision": c.model_prediction_json.get("rules_decision"),
+         "rules_decision": final_decision(c),
          "approval_band": c.model_prediction_json.get("approval_band"),
          "fraud_band": c.model_prediction_json.get("fraud_band"),
          "p_approve": c.model_prediction_json.get("p_approve"),
          "p_fraud": c.model_prediction_json.get("p_fraud"),
          "scored_at": c.model_prediction_json.get("scored_at")}
-        for c in compared if not c.model_prediction_json["agrees_with_rules"]
+        for c in compared if not verdict[c.id]
     ]
     return {
         "mode": mode(),
