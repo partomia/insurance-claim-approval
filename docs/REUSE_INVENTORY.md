@@ -32,3 +32,9 @@ OGX = O-G-Asset-Integrity-Lakehouse, GDL = General-DataLakehouse, CXR = the ches
 | `scripts/run_semantic.py` | O-G-Asset-Integrity-Lakehouse `scripts/run_semantic.py` | engines, renderer, results writer kept; check/adhoc rewritten for STP, CCT, LR |
 | `dataviz/build_dashboard.py` | O-G-Asset-Integrity-Lakehouse `dataviz/build_dashboard.py` | export/import/verify machinery unchanged; datasets, sheets, dashboards and PKs (14000+) new |
 | `sql/semantic/50_dashboard_views.sql` (`dash_recon`, `dash_load_audit`) | O-G-Asset-Integrity-Lakehouse `sql/semantic/50_dashboard_views.sql` | layer labels add mdm and gold |
+| `lakehouse/store.py`, `lakehouse/publish.py` | O-G-Asset-Integrity-Lakehouse | adapted: MCC_ prefix, model_event KPI columns (pr_auc, base_rate), version id includes the head |
+| `guardrails/events.py`, `guardrails/input_checks.py`, `guardrails/output_policy.py` | O-G-Asset-Integrity-Lakehouse | adapted: claim checks (policy/customer resolved, missing features, amount range), NaN-aware OOD, approval/fraud bands |
+| `train/train_validate.py`, `gate/kpi_gate.py` | O-G-Asset-Integrity-Lakehouse | adapted: tabular heads, calibrated gradient boosting, PR-AUC lift gate, both heads per job |
+| `serve/predict.py`, `serve/registry.py`, `serve/deploy_champion.py` | O-G-Asset-Integrity-Lakehouse (from CXR) | adapted: two heads behind one endpoint mcc-approval |
+| `monitor/drift.py`, `ci/retrain_trigger.py` | O-G-Asset-Integrity-Lakehouse | adapted: claims via the batch scoring path; new labels = newly decided claims |
+| `ci/cai_jobs.py`, `ci/setup_cai.py`, `ci/push_files.py`, `ci/sync_code.py` | O-G-Asset-Integrity-Lakehouse (from CXR) | adapted: blank project for a private repo, CODE_VERSION written by the push |

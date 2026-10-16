@@ -54,6 +54,17 @@ def model_names(cfg: dict) -> list[str]:
     return list(cfg.get("models") or {})
 
 
+def selected_models() -> list[str]:
+    """The heads a chain job works on: MCC_MODEL=all (the CAI chain jobs), a single name, or
+    both when unset."""
+    want = os.environ.get("MCC_MODEL", "all")
+    if want and want != "all":
+        return [want]
+    import yaml
+
+    return list(yaml.safe_load((ROOT / "config" / "pipeline.yaml").read_text())["models"])
+
+
 def feature_table_dir(cfg: dict, version: str | None = None) -> Path:
     v = version or cfg["features"]["version"]
     return ROOT / cfg["features"]["store_dir"] / f"v{v}"
@@ -69,13 +80,16 @@ def load_feature_table(cfg: dict, version: str | None = None):
 
 
 def git_sha() -> str:
-    """HEAD of the project; outputs/git_sha.txt (written by sync-code) where git is unavailable."""
+    """HEAD of the project; in the CAI project (a blank project fed by ci/push_files.py, no git)
+    the CODE_VERSION file that push writes, else outputs/git_sha.txt."""
     try:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
                                        stderr=subprocess.DEVNULL).strip()
     except Exception:
-        p = ROOT / "outputs" / "git_sha.txt"
-        return p.read_text().strip() if p.exists() else "unknown"
+        for p in (ROOT / "CODE_VERSION", ROOT / "outputs" / "git_sha.txt"):
+            if p.exists():
+                return p.read_text().split()[0].strip()
+        return "unknown"
 
 
 def parse_args(ap: argparse.ArgumentParser) -> argparse.Namespace:

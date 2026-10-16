@@ -36,6 +36,10 @@ process:
     max_ood_rate: 0.10
     max_abstain_rate: 0.25
 
+promotion:                            # serve/promote_champion.py (mcc-07): shadow -> assist
+  min_scored: 200                     # shadow scores of the serving champion in gold.fact_model_score
+  min_agreement: 0.80                 # approval band agrees with the decisions made
+
 retrain:                              # ci/retrain_trigger.py (mcc-08-retrain-trigger)
   on_drift_alert: true
   drift_cooldown_days: 7

@@ -1,0 +1,172 @@
+"""
+Job mcc-04-deploy-champion (runs only if mcc-03-kpi-gate succeeded). Copied from
+O-G-Asset-Integrity-Lakehouse (from CXR) and adapted to two heads on one endpoint:
+  1. per head (approval, fraud): archive the current champion, promote the gated candidate to
+     serving.champion_dir
+  2. pin requirements-model.txt to this environment's scikit-learn (the one that trained the
+     models), then build and deploy serve/predict.py as CAI Model mcc-approval with the
+     Cloudera AI API v2 (cmlapi); the build snapshots the project files, both champions included
+  3. if the build or deployment fails, put every previous champion back (ROLLED_BACK)
+  4. before step 2, register each champion as a new version of models.<name>.registry_name in the
+     Cloudera AI Registry (serve/registry.py, from the candidate's MLflow run), so a deployment
+     that times out still leaves the version; REGISTERED, DEPLOYED or ROLLED_BACK go to ref.model_event
+Inside a CAI job, cmlapi.default_client() authenticates as the job: no API key in the project.
+"""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def _repo_root() -> Path:
+    try:
+        return Path(__file__).resolve().parents[1]
+    except NameError:  # CAI job kernels run the script without __file__; cwd is the project
+        return Path(os.getcwd())
+
+
+ROOT = _repo_root()
+sys.path.insert(0, str(ROOT))
+
+from common import finish, load_config, selected_models  # noqa: E402
+
+
+def promote(cfg) -> tuple[dict, Path | None]:
+    cand = ROOT / cfg["serving"]["candidate_dir"]
+    gate_path = cand / "gate_result.json"
+    gate = json.loads(gate_path.read_text()) if gate_path.exists() else {"passed": False}
+    meta = json.loads((cand / "model_meta.json").read_text())
+    if not gate["passed"] or gate.get("candidate_git_sha") != meta["git_sha"]:
+        raise SystemExit("Candidate has no passing gate result - refusing to deploy.")
+    target = ROOT / cfg["serving"]["champion_dir"]
+    archived = None
+    if target.exists():
+        archived = ROOT / cfg["serving"]["archive_dir"] / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-champion")
+        archived.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(target), str(archived))
+        print(f"archived previous champion -> {archived}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(cand, target)
+    return meta, archived
+
+
+def rollback(cfg, archived: Path | None) -> None:
+    target = ROOT / cfg["serving"]["champion_dir"]
+    shutil.rmtree(target, ignore_errors=True)
+    if archived and archived.exists():
+        shutil.move(str(archived), str(target))
+        print(f"rolled back: previous champion restored from {archived}")
+
+
+def pin_requirements() -> None:
+    import sklearn
+
+    (ROOT / "requirements-model.txt").write_text(
+        "# The mcc-approval model endpoint (cdsw-build.sh installs this on a model build); pinned by mcc-04.\n"
+        f"numpy\npandas<3\nscikit-learn=={sklearn.__version__}\njoblib\npyyaml\n")
+    print(f"requirements-model.txt: scikit-learn=={sklearn.__version__}", flush=True)
+
+
+def wait(fn, ok: set, what: str, timeout=2400):
+    t0, last = time.time(), None
+    while time.time() - t0 < timeout:
+        status = str(fn().status or "").lower()
+        if status != last:
+            print(f"  {what}: {status}", flush=True)
+            last = status
+        if status in ok:
+            return status
+        if "fail" in status or status in {"stopped", "timedout"}:
+            raise RuntimeError(f"{what} ended in status {status}")
+        time.sleep(20)
+    raise RuntimeError(f"{what} timed out after {timeout} s")
+
+
+def deploy(cfg, meta) -> dict:
+    import cmlapi
+
+    from ci.cai_jobs import resolve_runtime
+
+    client = cmlapi.default_client()
+    pid = os.environ["CDSW_PROJECT_ID"]
+    name = cfg["serving"]["model_name"]
+    runtime = resolve_runtime(client, cfg["cai"]["runtime_identifier"])
+    found = [m for m in client.list_models(pid, search_filter=json.dumps({"name": name})).models if m.name == name]
+    model = found[0] if found else client.create_model(cmlapi.CreateModelRequest(
+        project_id=pid, name=name, description="Motor Claim Copilot: approval and fraud second opinion (shadow mode)",
+        disable_authentication=False), pid)
+    print(f"model {model.name} id={model.id}, runtime {runtime}", flush=True)
+    t = meta["metrics"]["test"]
+    # Builds take ~100 s, but now and then one stops reporting (stuck in "building" or "pushing"
+    # for hours) while an identical new build finishes normally: replace it instead of waiting.
+    attempts = int(cfg["cai"].get("build_attempts", 3))
+    for attempt in range(1, attempts + 1):
+        build = client.create_model_build(cmlapi.CreateModelBuildRequest(
+            project_id=pid, model_id=model.id, file_path="serve/predict.py", function_name="predict",
+            runtime_identifier=runtime,
+            comment=f"approval+fraud {meta['feature_version']} git {meta['git_sha'][:7]} test auroc {t['auroc']:.3f}",
+        ), pid, model.id)
+        try:
+            wait(lambda: client.get_model_build(pid, model.id, build.id), {"built", "succeeded"}, "build",
+                 timeout=int(cfg["cai"].get("build_timeout_s", 600)))
+            break
+        except RuntimeError as e:
+            if attempt == attempts:
+                raise
+            print(f"build {build.id} attempt {attempt}: {e}; starting a new build", flush=True)
+    dep = client.create_model_deployment(cmlapi.CreateModelDeploymentRequest(
+        project_id=pid, model_id=model.id, build_id=build.id,
+        cpu=cfg["cai"]["model_cpu"], memory=cfg["cai"]["model_memory_gb"]), pid, model.id, build.id)
+    wait(lambda: client.get_model_deployment(pid, model.id, build.id, dep.id), {"deployed"}, "deployment",
+         timeout=int(cfg["cai"].get("deploy_timeout_s", 2400)))
+    print(f"champion deployed: model {model.id} build {build.id} deployment {dep.id}", flush=True)
+    return {"model_id": model.id, "build_id": build.id, "deployment_id": dep.id}
+
+
+def main() -> int:
+    from lakehouse.publish import publish_model_event
+    from serve import registry
+
+    heads = []
+    for name in selected_models():
+        cfg = load_config(model=name)
+        meta, archived = promote(cfg)
+        print(f"champion: {meta['model']} {meta['model_version']}, test AUROC {meta['metrics']['test']['auroc']:.3f}",
+              flush=True)
+        heads.append((cfg, meta, archived))
+    pin_requirements()
+    # Register before the endpoint deploy: the version records what passed the gate, and a slow or
+    # failed deployment must not leave the AI Registry without it (the rollback is its own event).
+    for cfg, meta, _ in heads:
+        champ_meta = ROOT / cfg["serving"]["champion_dir"] / "model_meta.json"
+        gate = json.loads((ROOT / cfg["serving"]["champion_dir"] / "gate_result.json").read_text())
+        reg = registry.registrar(cfg, meta, "champion")
+        if reg:
+            meta.update(registry_version=reg["number"], registry_model_id=reg["model_id"])
+            champ_meta.write_text(json.dumps(meta, indent=2))
+            publish_model_event("REGISTERED", meta, gate, stage="champion",
+                                detail=f"{cfg['model']['registry_name']} v{reg['number']} (previous {reg['previous']})")
+        else:
+            publish_model_event("REGISTERED", meta, gate, stage="champion", detail=f"not registered: {registry.LAST_ERROR}")
+    cfg0, meta0, _ = next((h for h in heads if h[1]["model"] == "approval"), heads[0])
+    try:
+        ids = deploy(cfg0, meta0)
+    except Exception as e:  # noqa: BLE001
+        print(f"deploy failed: {e}", flush=True)
+        for cfg, meta, archived in heads:
+            rollback(cfg, archived)
+            publish_model_event("ROLLED_BACK", meta, stage="candidate", detail=str(e))
+        return 1
+    for cfg, meta, _ in heads:
+        publish_model_event("DEPLOYED", meta, stage="champion", trigger_reason=meta.get("trigger_reason"),
+                            detail=json.dumps(ids))
+    return 0
+
+
+if __name__ == "__main__":
+    finish(main())

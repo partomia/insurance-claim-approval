@@ -120,7 +120,8 @@ def fact_claim(claims, vehicles, garages, crashes, dim_policy, dim_customer) -> 
 
 
 def training_features(fact: DataFrame, policy_cur: DataFrame, golden: DataFrame) -> DataFrame:
-    """Point-in-time features of every claim (history strictly before its FNOL) and both labels."""
+    """Point-in-time features of every claim (history strictly before its FNOL, over every claim
+    filed, whatever its status now) and both labels; the caller keeps the decided ones."""
     base = (fact.join(policy_cur.select("policy_number", "coverage_limit", "ncb_pct", "vehicle_year", "customer_since"),
                       "policy_number", "left")
             .join(golden.select("golden_customer_id", "policies_held", "credit_score", "years_licensed",
@@ -385,7 +386,7 @@ def run(spark, argv=None) -> dict:
         policy_cur = pol_snaps.where(F.col("business_date") == day).drop("business_date")
         golden = mdm("customer_golden").where(F.col("business_date") == day).drop("business_date")
         fact_d = fact.withColumn("business_date", day)
-        feats = training_features(fact_d.where(F.col("status").isin("APPROVED", "REJECTED")), policy_cur, golden)
+        feats = training_features(fact_d, policy_cur, golden).where(F.col("status").isin("APPROVED", "REJECTED"))
         publish("claim_training_features", feats, "standardise", "gold.fact_claim,silver.policy,mdm.customer_golden",
                 details="decided claims, point-in-time features, labels approved and fraud_confirmed")
         publish("fact_policy_month", policy_month(policy_cur, fact, d), "standardise",

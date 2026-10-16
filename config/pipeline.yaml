@@ -44,9 +44,9 @@ features:
     - vin_mismatch
     - cross_claimant
   categorical:
-    claim_type: [Collision, ThirdParty, Theft, Flood, Fire, Glass, Vandalism]
+    claim_type: [Collision, ThirdParty, Theft, Fire, Glass, NaturalDisaster]
     garage_network_status: [PREFERRED, STANDARD, WATCHLIST, UNKNOWN]
-    credit_band: [EXCELLENT, GOOD, FAIR, POOR, UNKNOWN]
+    credit_band: [EXCELLENT, GOOD, FAIR, POOR, NO_HIT]
 
 training:
   estimator: hist_gradient_boosting

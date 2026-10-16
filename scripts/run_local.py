@@ -10,6 +10,7 @@ ones CDE runs; only the Spark session differs. Copied from General-DataLakehouse
   python scripts/run_local.py bronze --dates 2026-10-13 -- --mode fail-during:cl_claim
   python scripts/run_local.py silver mdm gold recon --dates 2026-10-12
   python scripts/run_local.py semantic                   # sql/semantic/*.sql on Spark SQL
+  python scripts/run_local.py export                     # gold.claim_training_features (last date) -> parquet
   python scripts/run_local.py history rsingh_mcc_bronze.cl_claim
   python scripts/run_local.py sql "SELECT * FROM rsingh_mcc_ref.load_audit"
 
@@ -147,7 +148,7 @@ def main() -> int:
     per_date = [s for s in stages if s in STAGES or s == "semantic"]
     once = [s for s in stages if s in ("adhoc", "time-travel", "search")]
     unknown = [s for s in stages if s not in STAGES and s not in ("land", "stream", "semantic", "adhoc",
-                                                                   "time-travel", "search")]
+                                                                   "time-travel", "search", "export")]
     if unknown:
         p.error(f"unknown stages {unknown}")
     if "stream" in stages and (per_date or once):
@@ -156,7 +157,7 @@ def main() -> int:
 
         subprocess.run([sys.executable, __file__, "stream", "--dates", ",".join(dates), "--landing", args.landing,
                         "--warehouse", args.warehouse, "--db-prefix", args.db_prefix], check=True)
-    if not per_date and not once and "stream" not in stages:
+    if not per_date and not once and "stream" not in stages and "export" not in stages:
         return 0
     spark = local_spark(Path(args.warehouse))
     if "stream" in stages and not (per_date or once):
@@ -181,7 +182,26 @@ def main() -> int:
     if once:
         print(f"\n=== {' '.join(once)} {dates[-1]}", flush=True)
         run_semantic.run(engine, args.db_prefix, [date.fromisoformat(dates[-1])], once)
+    if "export" in stages:
+        export_training(spark, args.db_prefix, dates[-1])
     return 0
+
+
+def export_training(spark, prefix: str, d: str) -> None:
+    """The training table of one date as parquet (the CAI chain's MCC_FEATURE_SOURCE=local input).
+    Timestamps leave Spark as strings, the session's wall-clock time, as Impala returns them."""
+    import pandas as pd
+    from pyspark.sql import functions as F
+
+    df = spark.table(f"{prefix}_gold.claim_training_features").where(F.col("business_date") == d)
+    ts = [f.name for f in df.schema if f.dataType.typeName().startswith("timestamp")]
+    pdf = df.select(*[F.date_format(c, "yyyy-MM-dd HH:mm:ss").alias(c) if c in ts else c for c in df.columns]).toPandas()
+    for c in ts:
+        pdf[c] = pd.to_datetime(pdf[c])
+    out = ROOT / "outputs" / "exports" / "claim_training_features.parquet"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    pdf.to_parquet(out, index=False)
+    print(f"\n=== export {d}: {len(pdf)} rows -> {out.relative_to(ROOT)}", flush=True)
 
 
 if __name__ == "__main__":
