@@ -1,0 +1,56 @@
+name: CI
+
+# Every push to main, every pull request, or by hand from the Actions tab. Copied from
+# O-G-Asset-Integrity-Lakehouse and adapted. Lakehouse: unit tests, then the CDE jobs and the
+# semantic SQL on local Spark + Iceberg for all five business dates with the KPI consistency
+# check, and the CAI ML chain offline (config/ci.yaml). App: backend tests and the SPA build.
+# Nothing here talks to Cloudera.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lakehouse:
+    name: Unit tests + the pipeline on local Spark + Iceberg
+    runs-on: ubuntu-latest
+    env:
+      MCC_CONFIG_OVERLAY: config/ci.yaml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Set up Java (local Spark / Iceberg needs it)
+        uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - run: pip install -r requirements-ci.txt
+      - name: Unit tests (generators, MDM, stream producer, ML chain, governance, platform)
+        run: pytest -q
+      - name: CDE jobs for every business date, then the semantic layer and KPI consistency
+        run: |
+          python scripts/run_local.py all --landing "$RUNNER_TEMP/landing" --warehouse "$RUNNER_TEMP/warehouse"
+          python scripts/run_local.py semantic --landing "$RUNNER_TEMP/landing" --warehouse "$RUNNER_TEMP/warehouse"
+
+  backend:
+    name: Copilot backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: backend }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --dev
+      - run: uv run pytest -q
+
+  frontend:
+    name: Copilot SPA type check and build
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: frontend }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+      - run: npm run build

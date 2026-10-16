@@ -151,3 +151,21 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
   (app, model, 4 crons, the stream run). Nothing stopped.
 - `docs/DEMO_RUNBOOK.md`, README status section, always-applied `.cursor/rules/project-start-stop.mdc`
   (`.gitignore` now shares `.cursor/rules/`).
+
+## 2026-10-16 23:45–00:30 - Remaining items: schemas, DAG, workflows, public dataset
+
+- Schema Registry (Knox): `mcc.claim.events`, `mcc.telematics.crash`, `mcc.control` registered,
+  version 1 each, read back (9, 9, 5 fields).
+- DAG: task `cai_score_claims` (starts mcc-06 with MCC_BUSINESS_DATE, waits) after
+  batch_complete. Code pushed to rsingh-mcc-code at 0278922 (unpushed commit, ALLOW_UNPUSHED);
+  CDE job `rsingh-mcc-orchestration` created **paused** (30 20 * * * UTC, 10-18 → 10-20).
+  Airflow Variables MCC_CAI_HOST / _PROJECT_ID / _API_KEY / _SCORE_JOB_ID created (values not
+  printed). The scoring task's call tested directly: mcc-06 run vicejlfs2iyspus3 with
+  MCC_BUSINESS_DATE=2026-10-16 succeeded in 41 s. The DAG itself was not triggered (10-12..10-16
+  are loaded; a manual run would re-land a date).
+- `.github/workflows/ci.yml` (lakehouse tests + full local pipeline, backend tests, SPA build)
+  and `cai-mlops.yml` (push files, then follow mcc-00 → 04). Local rehearsal of the pipeline
+  step: `run_local.py all` + `semantic`, 5 dates, KPI consistency 8/8 MATCHED each date, 5 min.
+- `scripts/fetch_dataset.py`: Kaggle shivamb/vehicle-claim-fraud-detection v1 (CC0) via
+  MCC_KAGGLE_API_TOKEN; fraud_oracle.csv sha256 8b6aa597…, 15,420 claims, 923 fraud, into the
+  git-ignored data/public/.

@@ -40,3 +40,5 @@ OGX = O-G-Asset-Integrity-Lakehouse, GDL = General-DataLakehouse, CXR = the ches
 | `ci/cai_jobs.py`, `ci/setup_cai.py`, `ci/push_files.py`, `ci/sync_code.py` | O-G-Asset-Integrity-Lakehouse (from CXR) | adapted: blank project for a private repo, CODE_VERSION written by the push |
 | `scripts/governance.py` | O-G-Asset-Integrity-Lakehouse (from GDL) | adapted: MCC_ tag prefix, MCC_WORKLOAD_* credentials; `config/governance.json` new (claims PII, bureau score, VIN) |
 | `scripts/platform_ctl.py`, `.cursor/rules/project-start-stop.mdc` | O-G-Asset-Integrity-Lakehouse | adapted: no NiFi or Flink layers; MCC_* credentials, mcc_deploy_streaming.sh; `config/platform.json` (Phase 2 scaffold) gains the cron per CAI schedule |
+| `cde/scripts/set_airflow_variables.py`, `cai_score_claims` in `cde/dags/mcc_dag.py` | Chest-X-ray-Triage | adapted: MCC_CAI_* variables, mcc-06-score-claims with MCC_BUSINESS_DATE |
+| `ci/trigger_cai_pipeline.py`, `.github/workflows/cai-mlops.yml`, `.github/workflows/ci.yml` | O-G-Asset-Integrity-Lakehouse (from CXR) | adapted: the runner pushes files (push_files.py, CODE_VERSION) before the chain; CI adds backend tests and the SPA build |

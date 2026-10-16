@@ -1,0 +1,53 @@
+# GitHub Push -> Train & Validate -> KPI Gate -> Deploy + AI Registry, on Cloudera AI (API v2).
+# Copied from O-G-Asset-Integrity-Lakehouse. The repository is private and the CAI project blank,
+# so the runner first pushes the commit's files (ci/push_files.py writes CODE_VERSION), then
+# starts and follows the CAI chain; training stays in the workbench. Until the CAI_URL secret is
+# set, the cai-pipeline job prints a notice and succeeds.
+# Retraining without a push: mcc-05-nightly-drift + mcc-08-retrain-trigger (scheduled in CAI).
+name: mcc-approval-mlops
+
+on:
+  push:
+    branches: [main]
+    paths: ["features/**", "train/**", "gate/**", "serve/**", "guardrails/**", "monitor/**", "lakehouse/**",
+            "ci/**", "config/pipeline.yaml", "config/guardrails.yaml", "requirements.txt",
+            "requirements-model.txt", "cdsw-build.sh"]
+  workflow_dispatch: {}
+
+concurrency:            # never run two pipelines against the same CAI project at once
+  group: mcc-approval-cai
+  cancel-in-progress: false
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements-ci.txt
+      - run: pytest -q
+
+  cai-pipeline:         # heavy work runs INSIDE Cloudera AI Workbench
+    needs: unit-tests
+    # A workbench on a private network: repository variable CAI_RUNS_ON = ["self-hosted","cai"]
+    runs-on: ${{ fromJSON(vars.CAI_RUNS_ON || '"ubuntu-latest"') }}
+    environment: cai-demo    # optional: add required reviewers here for a manual approval step
+    timeout-minutes: 240
+    env:
+      CAI_URL: ${{ secrets.CAI_URL }}
+      CAI_API_KEY: ${{ secrets.CAI_API_KEY }}
+      CAI_PROJECT_ID: ${{ secrets.CAI_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install requests
+      - name: Push the commit's files to the CAI project (writes CODE_VERSION)
+        if: env.CAI_URL != ''
+        run: python ci/push_files.py --all
+        env:
+          MCC_CAI_HOST: ${{ secrets.CAI_URL }}
+          MCC_CAI_API_KEY: ${{ secrets.CAI_API_KEY }}
+      - name: Trigger the CAI chain (sync, features, train, KPI gate, deploy + registry) and follow it
+        run: python ci/trigger_cai_pipeline.py
