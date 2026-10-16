@@ -25,3 +25,7 @@ OGX = O-G-Asset-Integrity-Lakehouse, GDL = General-DataLakehouse, CXR = the ches
 | `stream/producer/topics.py` | OGX `stream/producer/topics.py` | mcc topics and schemas; no NiFi topic |
 | `cde/jobs/stream_produce.py` | OGX `cde/jobs/stream_produce.py` | claim producer; files sink passthrough |
 | `cde/jobs/stream_bronze.py` | OGX `cde/jobs/stream_telemetry_bronze.py` | tables from the stream contracts |
+| `cde/scripts/mcc_deploy_jobs.sh`, `mcc_deploy_streaming.sh`, `mcc_deploy_dag.sh` | OGX `cde/scripts/deploy_*.sh` | files resource rsingh-mcc-code (private repo); mcc stages; the go01 `deploy_jobs.sh` and `deploy_dag.sh` are untouched |
+| `cde/scripts/mcc_deploy_code.sh` | new | `git archive` of a pushed commit to the files resource, CODE_VERSION inside |
+| `cde/dags/mcc_dag.py` | OGX `cde/dags/ogx_dag.py` | mcc stages; created paused |
+| `cde/jobs/build_silver.py`, `build_mdm.py`, `build_gold.py` | new (structure after OGX build_*.py) | insurer silver, MDM, gold, app tables with the columns of `cde/jobs/curate/*` |
