@@ -20,3 +20,4 @@ OGX = O-G-Asset-Integrity-Lakehouse, GDL = General-DataLakehouse, CXR = the ches
 | `scripts/install_hooks.sh`, `scripts/hooks/*` | OGX (GDL) | wording only |
 | `.env.example` | OGX `.env.example` | `MCC_` names; Groq |
 | `tests/conftest.py` | OGX `tests/conftest.py` | `MCC_CONFIG_OVERLAY` |
+| `cde/jobs/reconcile.py` | OGX `cde/jobs/reconcile.py` (GDL) | object checks removed; mcc stream tables; silver, mdm and gold checks are mcc-specific |

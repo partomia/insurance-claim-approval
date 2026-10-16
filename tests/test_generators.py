@@ -90,3 +90,13 @@ def test_contract_formats_cover_all_entities():
 def test_scheduled_dates_have_claims(world):
     for d in C.CFG["scheduled_dates"]:
         assert "claims" in files_for(world, date.fromisoformat(d))
+
+
+def test_recon_status_rules():
+    from reconcile import Recon
+
+    r = Recon(None, C.Names("x"), date(2026, 10, 12))
+    r.add("bronze", "e", "a", 10, 10)
+    r.add("bronze", "e", "b", 10, 9, explained_by=-1)
+    r.add("bronze", "e", "c", 10, 9)
+    assert [x[9] for x in r.rows] == ["MATCHED", "EXPLAINED", "MISMATCH"]
