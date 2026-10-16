@@ -31,6 +31,18 @@ class Settings(BaseSettings):
     # datalakehouse story (policy reference data), while the live app keeps
     # running its OLTP workload on DB_BACKEND=sqlite. See cml/cli.sh lakehouse.
     lakehouse_database: str = "insurance_lakehouse"
+    # Where export_claims_to_lakehouse.py writes app_claims_raw; empty =
+    # "<lakehouse_database>_bronze" (the go01 layout).
+    lakehouse_bronze_database: str = ""
+
+    # Claim approval / fraud model on a Cloudera AI endpoint (serve/predict.py).
+    # off: never called. shadow: scored after the rules decide, shown to
+    # insurers and agents only, never changes a decision.
+    approval_model_mode: str = "off"
+    approval_model_url: str = ""
+    approval_model_access_key: str = ""
+    approval_model_api_key: str = ""
+    approval_model_timeout_s: float = 8.0
 
     redis_url: str = "redis://localhost:6379/0"
 

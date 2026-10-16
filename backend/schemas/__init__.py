@@ -591,6 +591,8 @@ class InsightsResponse(BaseModel):
     # Most claims won't have one — that's expected, not an error.
     policy_risk_signal: Optional[PolicyRiskSignalSummary] = None
     customer_trust: Optional[CustomerTrustSummary] = None
+    # Shadow-mode model score (Claim.model_prediction_json); insurer/agent only.
+    model_view: Optional[dict[str, Any]] = None
 
 
 class KYCStatusResponse(BaseModel):

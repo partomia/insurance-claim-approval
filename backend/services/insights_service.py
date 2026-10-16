@@ -129,4 +129,5 @@ class InsightsService:
             ],
             "policy_risk_signal": policy_risk_signal,
             "customer_trust": customer_trust,
+            "model_view": claim.model_prediction_json,
         }

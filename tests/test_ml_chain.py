@@ -96,6 +96,12 @@ def test_serving_row_formulas():
     assert len(FL.vector(r)) == len(FL.feature_names())
     empty = FL.serving_row({"claim_type": "Glass", "amount_requested": 1000}, None, None, {})
     assert math.isnan(empty["idv"]) and FL.missing_fraction(empty) > 0.3
+    # no garage named (the app): missing, not the never-trained UNKNOWN; a named garage absent from the master: UNKNOWN
+    assert empty["garage_network_status"] is None and math.isnan(empty["garage_claims_30d"])
+    garage_cols = [i for i, n in enumerate(FL.feature_names()) if n.startswith("garage_network_status")]
+    assert garage_cols and all(FL.vector(empty)[i] == 0.0 for i in garage_cols)
+    named = FL.serving_row({"claim_type": "Glass", "amount_requested": 1000, "garage_id": "G9"}, None, None, {})
+    assert named["garage_network_status"] == "UNKNOWN" and named["garage_claims_30d"] == 0
 
 
 def test_chain_trains_and_gates(chain):

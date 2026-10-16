@@ -462,9 +462,10 @@ def get_claim_insights(
 ):
     _get_owned_claim(db, claim_id, customer.id)
     data = insights_service.build(db, claim_id)
-    # Customer Trust Score and lakehouse risk analytics are insurer/agent-only.
+    # Customer Trust Score, lakehouse risk analytics and the model score are insurer/agent-only.
     data["customer_trust"] = None
     data["policy_risk_signal"] = None
+    data["model_view"] = None
     return schemas.InsightsResponse(**data)
 
 

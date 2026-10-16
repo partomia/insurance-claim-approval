@@ -5,6 +5,7 @@ import { PayoutWaterfallChart } from "./charts/PayoutWaterfallChart";
 import { PolicySummaryCard } from "./PolicySummaryCard";
 import { RiskBandBadge } from "./RiskBandBadge";
 import { CustomerTrustCard, type CustomerTrust } from "./CustomerTrustCard";
+import { ModelViewCard, type ModelView } from "./ModelViewCard";
 import { Database, AlertTriangle } from "lucide-react";
 
 interface PolicySummary {
@@ -44,6 +45,7 @@ interface Insights {
   policy_summary?: PolicySummary;
   policy_risk_signal?: PolicyRiskSignal | null;
   customer_trust?: CustomerTrust | null;
+  model_view?: ModelView | null;
 }
 
 export function InsightsPanel({
@@ -108,6 +110,8 @@ export function InsightsPanel({
       )}
 
       {showInsurerAnalytics && insights.customer_trust && <CustomerTrustCard trust={insights.customer_trust} />}
+
+      {showInsurerAnalytics && insights.model_view && <ModelViewCard view={insights.model_view} />}
 
       {gauges && (
         <div className="p-4 bg-card border rounded-lg shadow-sm">

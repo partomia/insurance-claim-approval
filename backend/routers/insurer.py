@@ -11,6 +11,7 @@ from models.audit import HumanReview, HumanReviewStatus
 from models.claim import Claim, ClaimDocument, ClaimStatus
 from models.insurer_user import InsurerUser
 from routers.claims import _claim_status_response, _decision_response
+from services import approval_model_service
 from services.document_serving import resolve_claim_document_path, serve_claim_document_file
 from services.explainability import ExplainabilityService
 from services.insights_service import InsightsService
@@ -30,6 +31,15 @@ def insurer_dashboard_stats(
     db: Session = Depends(get_db),
 ):
     return insurer_service.get_dashboard_stats(db)
+
+
+@router.get("/model-vs-rules")
+def insurer_model_vs_rules(
+    limit: int = Query(20, ge=1, le=200),
+    _insurer: InsurerUser = Depends(get_current_insurer),
+    db: Session = Depends(get_db),
+):
+    return approval_model_service.model_vs_rules(db, limit=limit)
 
 
 @router.get("/book-of-business", response_model=list[schemas.BookOfBusinessPolicyItem])

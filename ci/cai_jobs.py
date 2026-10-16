@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 
+MODEL = "mcc-approval"
 RUNTIME = "docker.repository.cloudera.com/cloudera/cdsw/ml-runtime-pbj-jupyterlab-python3.11-standard:2026.08.1-b5"
 ALL = {"MCC_MODEL": "all"}
 
@@ -43,6 +44,14 @@ JOBS = [
      "cpu": 1, "memory": 4, "timeout": 600, "schedule": None},
     {"name": "mcc-08-retrain-trigger", "script": "ci/retrain_trigger.py", "parent": None,
      "cpu": 1, "memory": 4, "timeout": 600, "schedule": "30 2 * * *"},
+    # The Copilot app (Phase 10): one-off setup (uv venv, demo seed, lakehouse ingest, SPA build),
+    # then the existing go01 job scripts, which read the app settings from the project environment.
+    {"name": "mcc-09-app-setup", "script": "cml/launch_app.py", "parent": None,
+     "cpu": 2, "memory": 8, "timeout": 3600, "schedule": None, "env": {"MCC_APP_SETUP_ONLY": "1"}},
+    {"name": "mcc-lakehouse-ingest", "script": "cml/jobs/lakehouse_ingest_job.py", "parent": None,
+     "cpu": 1, "memory": 4, "timeout": 1800, "schedule": "0 3 * * *"},
+    {"name": "mcc-export-claims", "script": "cml/jobs/lakehouse_export_claims_job.py", "parent": None,
+     "cpu": 1, "memory": 4, "timeout": 1800, "schedule": "45 1 * * *"},
     # any script with its output in outputs/logs/ (set MCC_RUN_SCRIPT on the job; ci/run_logged.py --fetch)
     {"name": "mcc-99-debug", "script": "ci/run_logged.py", "parent": None,
      "cpu": 1, "memory": 4, "timeout": 3600, "schedule": None, "env": {"MCC_RUN_SCRIPT": "ci/sync_code.py"}},

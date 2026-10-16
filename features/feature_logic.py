@@ -127,8 +127,11 @@ def serving_row(claim: dict, policy: dict | None, garage: dict | None, type_mean
          policy  its gold.scoring_context_policy row (customer and history features)
          garage  its gold.scoring_context_garage row
          type_means  mean amount_requested per claim type in the training table
-    Same formulas as build_gold.training_features; history comes from the scoring context."""
+    Same formulas as build_gold.training_features; history comes from the scoring context.
+    A claim that names no garage (the Copilot app has no garage master) leaves the garage
+    features missing; UNKNOWN is for a named garage absent from the master."""
     p, g = policy or {}, garage or {}
+    named_garage = bool(garage) or bool(claim.get("garage_id"))
     fnol, inc = _ts(claim.get("fnol_ts")) or datetime.utcnow(), _ts(claim.get("incident_ts"))
     amount = _num(claim.get("amount_requested"))
     idv = _num(p.get("idv"))
@@ -155,13 +158,13 @@ def serving_row(claim: dict, policy: dict | None, garage: dict | None, type_mean
         "idv": idv,
         "ncb_pct": _num(p.get("ncb_pct")),
         "garage_risk_score": _num(g.get("garage_risk_score")),
-        "garage_claims_30d": _num(g.get("garage_claims_30d", 0)),
+        "garage_claims_30d": _num(g.get("garage_claims_30d", 0)) if named_garage else math.nan,
         "crash_event_match": int(bool(claim.get("crash_event_match"))),
         "telematics_enrolled": int(_num(p.get("telematics_enrolled")) == 1),
         "police_report": _yn(claim.get("police_report")),
         "vin_mismatch": int(bool(stated_vin and policy_vin and stated_vin != policy_vin)),
         "cross_claimant": int(not math.isnan(other) and other >= 3),
         "claim_type": claim.get("claim_type"),
-        "garage_network_status": g.get("garage_network_status") or "UNKNOWN",
+        "garage_network_status": (g.get("garage_network_status") or "UNKNOWN") if named_garage else None,
         "credit_band": credit_band(p.get("credit_score")),
     }

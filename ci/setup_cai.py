@@ -30,7 +30,7 @@ from pathlib import Path
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ci.cai_jobs import JOBS, RUNTIME, SCORE_JOB  # noqa: E402
+from ci.cai_jobs import JOBS, MODEL, RUNTIME, SCORE_JOB  # noqa: E402
 
 CAI_PROJECT_NAME = "rsingh-motor-claim-copilot"
 PROJECT_ENV = {"MCC_DB_PREFIX": "rsingh_mcc"}
@@ -92,9 +92,30 @@ def wanted_env() -> dict:
             **{k: os.environ[k] for k in PROJECT_ENV_OPTIONAL if os.environ.get(k)}}
 
 
-def ensure_env(wb: Workbench, project: dict, dry_run: bool) -> None:
+def app_env(wb: Workbench, pid: str) -> dict:
+    """The Copilot's own settings (backend/config.py names) for the application and the
+    cml/jobs/lakehouse_* jobs: OLTP on SQLite, lakehouse = the mcc gold/bronze databases on
+    CDW Impala, the model endpoint in shadow mode."""
+    imp = json.loads((Path(__file__).resolve().parents[1] / "config" / "lakehouse.json").read_text())["impala"]
+    prefix = PROJECT_ENV["MCC_DB_PREFIX"]
+    env = {"DB_BACKEND": "sqlite", "LAKEHOUSE_DATABASE": f"{prefix}_gold",
+           "LAKEHOUSE_BRONZE_DATABASE": f"{prefix}_bronze", "IMPALA_DATABASE": f"{prefix}_gold",
+           "IMPALA_HOST": imp["host"], "IMPALA_PORT": str(imp["port"]), "IMPALA_HTTP_PATH": imp["http_path"],
+           "IMPALA_AUTH_MECHANISM": imp["auth_mechanism"], "IMPALA_USE_SSL": "true",
+           "IMPALA_USE_HTTP_TRANSPORT": "true", "IMPALA_USER": os.environ["MCC_IMPALA_USER"],
+           "IMPALA_PASSWORD": os.environ["MCC_IMPALA_PASSWORD"], "APPROVAL_MODEL_MODE": "shadow"}
+    model = next((m for m in wb("GET", f"/projects/{pid}/models").get("models", []) if m["name"] == MODEL), None)
+    if model:
+        host = os.environ["MCC_CAI_HOST"].rstrip("/").replace("://", "://modelservice.", 1)
+        env.update({"APPROVAL_MODEL_URL": f"{host}/model", "APPROVAL_MODEL_ACCESS_KEY": model["access_key"]})
+    else:
+        print(f"model {MODEL} not deployed yet: the app starts with the model call skipped")
+    return env
+
+
+def ensure_env(wb: Workbench, project: dict, dry_run: bool, app: bool = False) -> None:
     current = json.loads(wb("GET", f"/projects/{project['id']}").get("environment") or "{}")
-    wanted = wanted_env()
+    wanted = {**wanted_env(), **(app_env(wb, project["id"]) if app else {})}
     changed = sorted(k for k, v in wanted.items() if current.get(k) != v)
     if not changed:
         print("project environment: up to date")
@@ -208,7 +229,7 @@ def main() -> int:
             raise SystemExit(f"no job {args.run}")
         env = dict(kv.split("=", 1) for kv in args.env.split(",") if kv)
         return 0 if run_job(wb, project["id"], job["id"], args.run, env, args.poll) == "succeeded" else 1
-    ensure_env(wb, project, args.dry_run)
+    ensure_env(wb, project, args.dry_run, app=args.app)
     ids = ensure_jobs(wb, project, args.dry_run)
     if args.app:
         ensure_app(wb, project, args.dry_run)

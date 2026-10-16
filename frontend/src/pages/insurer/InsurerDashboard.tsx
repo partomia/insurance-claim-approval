@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClaimStatusBadge } from "@/components/claim/ClaimStatusBadge";
+import { ModelVsRulesPanel } from "@/components/insurer/ModelVsRulesPanel";
 import { insurerApiJson } from "@/lib/insurerApi";
 import { Building2, CheckCircle2, Clock3, IndianRupee, XCircle } from "lucide-react";
 import { formatINR } from "@/lib/currency";
@@ -166,6 +167,8 @@ export function InsurerDashboard() {
           )}
         </CardContent>
       </Card>
+
+      <ModelVsRulesPanel />
 
       <div className="flex justify-end">
         <Link to="/insurer/claims">

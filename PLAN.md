@@ -184,7 +184,7 @@ row and a glossary term; a consistency check proves consumers agree):
 | Process | KPI gate + non-regression, feature-hash lock | `gate/kpi_gate.py`, `serve/predict.py` | Chain stops, champion keeps serving |
 | Process | Named approver for promotion / route mode | `serve/promote_champion.py` | `PROMOTION_REFUSED` without evidence |
 | Process | Drift (PSI), `TOO_FEW` below 30 | `monitor/drift.py` | Guardrail event + dashboard flag |
-| LLM | Reasoning grounded in the rule that fired; PII kept out of prompts | existing `llm_service.py` + `guardrails/llm_guard.py` | Template fallback |
+| LLM | Reasoning grounded in the rule that fired; PII kept out of prompts | existing `llm_service.py` + `backend/services/llm_guard.py` | Template fallback |
 
 All events land in `ref.guardrail_event`.
 

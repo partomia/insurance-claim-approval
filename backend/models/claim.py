@@ -105,6 +105,10 @@ class Claim(Base):
     # (CustomerTrustService result dict). NULL = decided before the trust
     # score existed.
     customer_trust_json = Column(JSON, nullable=True)
+    # Shadow-mode model score (services/approval_model_service.py): p_approve,
+    # p_fraud, bands, top factors, agreement with the rules. Never shown to
+    # the customer. NULL = model off or not scored.
+    model_prediction_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

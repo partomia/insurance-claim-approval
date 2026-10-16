@@ -6,6 +6,7 @@ from typing import Any, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from config import get_settings
+from services import llm_guard
 
 # NOTE: ChatGroq/ChatOpenAI are imported lazily inside _build_llm(), not here.
 # langchain_openai creates a global SSL context at *import* time (certifi +
@@ -284,7 +285,7 @@ Return JSON: {{"fraud_score": float 0-1, "risk_level": "Low|Medium|High", "ratio
         status: str,
         context: dict[str, Any],
     ) -> str:
-        """Regulator-ready motor claim decision explanation."""
+        """Regulator-ready motor claim decision explanation (services/llm_guard.py checks it)."""
         result = self.invoke(
             "You are a motor insurance claims explainability agent. Write a clear, regulator-ready "
             "explanation of why this motor claim decision was made. Reference IDV, deductible, "
@@ -296,7 +297,7 @@ Return JSON: {{"fraud_score": float 0-1, "risk_level": "Low|Medium|High", "ratio
             "it was routed to a human reviewer. For both, a payable amount of 0 means the payout "
             "has not been calculated yet — it does not mean nothing is payable. Only state figures "
             "given below; never output placeholders like [IDV].",
-            f"""Decision status: {status}
+            llm_guard.redact(f"""Decision status: {status}
 Decision rule: {context.get('decision_rule', 'N/A')}
 Claim amount: {context.get('claim_amount', 'N/A')}
 IDV (coverage limit): {context.get('idv', 'N/A')}
@@ -308,9 +309,9 @@ Fraud score: {context.get('fraud_score', 'N/A')}
 Confidence score: {context.get('confidence_score', 'N/A')}
 Payable amount: {context.get('payable_amount', 0)}
 Customer risk: {context.get('customer_risk_score', 'N/A')}
-Escalation flags: {context.get('escalation_flags', [])}""",
+Escalation flags: {context.get('escalation_flags', [])}"""),
         )
-        return result
+        return llm_guard.checked_reasoning(status, result)
 
     def analyze_policy_documents(self, policy_type: str, policy_number: str, document_text: str) -> dict[str, Any]:
         return self.invoke_json(

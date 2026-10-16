@@ -8,6 +8,7 @@ from config import get_settings
 from database import SessionLocal
 from models.audit import HumanReview, HumanReviewStatus, AuditLog
 from models.claim import Claim, ClaimStatus
+from services import approval_model_service
 from services.customer_profile import CustomerProfileService
 from services.customer_trust_service import TIER_UNSCORED, amount_multiplier_for_tier, customer_trust_service
 from services.decision_engine import DecisionEngine, DecisionInput
@@ -400,6 +401,8 @@ def finalize_claim(claim_id: int, parallel_results: list[dict]) -> dict[str, Any
             full_clauses=merged.get("retrieved_clauses", []),
             payout_breakdown=payout_breakdown,
         )
+
+        approval_model_service.score_and_store(db, claim, decision.status.value)
 
         if claim.assigned_agent_id is None and decision.status in (
             ClaimStatus.ANALYSIS_COMPLETE,

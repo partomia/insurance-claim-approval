@@ -91,7 +91,7 @@ STATUS_MAP = {
 
 
 def bronze_db() -> str:
-    return f"{settings.lakehouse_database}{BRONZE_DB_SUFFIX}"
+    return settings.lakehouse_bronze_database or f"{settings.lakehouse_database}{BRONZE_DB_SUFFIX}"
 
 
 def sql_val(v) -> str:
