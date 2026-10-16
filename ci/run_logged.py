@@ -13,7 +13,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+try:
+    ROOT = Path(__file__).resolve().parents[1]
+except NameError:  # CAI runs job scripts in a Jupyter kernel: no __file__, cwd is /home/cdsw
+    ROOT = Path(os.getcwd())
 
 
 def run(script: str, args: list[str]) -> int:
