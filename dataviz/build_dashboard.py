@@ -42,6 +42,8 @@ DASHBOARD_PK0 = 14000
 DATASET_PK0 = 14100
 VISUAL_PK0 = 14200
 DEFAULT_VERSION = {"Arcviz Version": "8.1.4.1000", "Description": "8.1.4.1000-4"}
+WORKSPACE = "MCC - Insurance Claim Processing"   # created in the UI; looked up by name on --import
+workspace_id = 1                                  # Public, for a file built without --import
 
 DATASETS = {                          # key: (name, view, integer columns that are dimensions)
     "stp": ("MCC - Straight-through rate", "mis_stp_by_month", {"is_latest"}),
@@ -328,7 +330,7 @@ def visual_record(v: dict, pk: int, sheet: str, types: dict[str, str], dataset_p
     }
     return {"model": "reports.report", "pk": pk, "fields": {
         "report_name": "", "report_description": f"{dash['title']} / {sheet}", "dataset": dataset_pk,
-        "workspace": 1, "report_type": kind, "report_mode": "", "dashboard_url_name": "",
+        "workspace": workspace_id, "report_type": kind, "report_mode": "", "dashboard_url_name": "",
         "report_data": json.dumps({"report_data": report, "report_type": kind}), "shared_visual_dashboards": None,
         "parent_report": None, "uuid": uid("visual", dash["key"], sheet, v["title"]), "imported_uuid": None,
         "has_css_styles": False, "report_search_text": ""}}
@@ -353,7 +355,7 @@ def dashboard_record(d: dict, pk0: int, visuals: list[dict], ds_pk: dict[str, in
             "global_control_widgets": [], "control_widgets": [], "click_behavior": {}}
     return {"model": "reports.report", "pk": d["pk"], "fields": {
         "report_name": d["title"], "report_description": "docs/DATAVIZ.md",
-        "dataset": ds_pk[d["main_ds"]], "workspace": 1, "report_type": "dashboard", "report_mode": None,
+        "dataset": ds_pk[d["main_ds"]], "workspace": workspace_id, "report_type": "dashboard", "report_mode": None,
         "dashboard_url_name": "", "report_data": json.dumps(dash), "shared_visual_dashboards": "[]",
         "parent_report": None, "uuid": uid("dashboard", d["key"]), "imported_uuid": None, "has_css_styles": False,
         "report_search_text": None}}
@@ -452,6 +454,12 @@ class DataViz:
             raise SystemExit(f"no connection {name!r}; --list-connections shows them")
         return found["id"]
 
+    def workspace_id(self, name: str) -> int:
+        found = next((w for w in self.get("/arc/adminapi/v1/workspaces") if w["name"] == name), None)
+        if found is None:
+            raise SystemExit(f"no workspace {name!r} in Data Visualization")
+        return found["id"]
+
     def version(self) -> dict:
         return self.get("/arc/migration/api/export/", dashboards="[]", filename="version", dry_run="False")["version"]
 
@@ -514,6 +522,9 @@ def main() -> int:
         p.error("--import needs --connection (see --list-connections)")
     types = {k: column_types(engine, k) for k in DATASETS}
     conn_id = viz.connection_id(args.connection) if viz else 1
+    if viz:
+        global workspace_id
+        workspace_id = viz.workspace_id(WORKSPACE)
     doc = build(types, conn_id, viz.version() if viz else DEFAULT_VERSION)
     OUT.write_text(json.dumps(doc, indent=1) + "\n")
     print(f"wrote {OUT.relative_to(ROOT)}: {len(doc['dashboards'])} dashboards, {len(doc['datasets'])} datasets, "
