@@ -6,8 +6,6 @@ API instead (ci/run_logged.py --fetch <name> from a laptop).
     on CAI:  python ci/run_logged.py features/build_feature_table.py [args...]
     laptop:  python ci/run_logged.py --fetch build_feature_table
 """
-from __future__ import annotations
-
 import os
 import subprocess
 import sys
