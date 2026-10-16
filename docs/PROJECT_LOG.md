@@ -178,3 +178,12 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
 - Merge check: main has no commits since the branch point (fast-forward); the branch deletes no
   file and leaves the go01 CDE files untouched; the backend changes default to the go01 behaviour
   (model off, bronze database `<lakehouse_database>_bronze`).
+
+## 2026-10-17 00:00–00:30 - Merged to main
+
+- `feature/cloudera-mcc` fast-forwarded into `main` and pushed. The push that added the
+  workflows started no run; CI dispatched by hand: run 38945756303 failed only on the backend's
+  `kerberos` build (no krb5 headers), fixed with libkrb5-dev; run 38946663742 green (lakehouse
+  tests + full local pipeline, backend tests, SPA build).
+- `mcc-approval-mlops` not dispatched: it retrains on CAI (mcc-00 is 2 vCPU / 8 GB and competes
+  with the running app for quota). Run it from the Actions tab when wanted.
