@@ -99,3 +99,29 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
   (cooldown 0 of 7 days, 13 of 200 new labels).
 - `retrain_trigger.py --dry-run` from the laptop had published a RETRAIN_SKIPPED row for the
   laptop champion: dry run no longer publishes; that one row deleted from ref.model_event.
+
+## 2026-10-16 18:45–22:30 - Phase 10: Copilot on CAI in shadow mode
+
+- App code: `backend/services/approval_model_service.py` (off by default; shadow scores a claim
+  after the rules decide, stores `claims.model_prediction_json`, never changes a decision),
+  Model view card in Claim Insights (insurer/agent only; stripped from the customer route),
+  insurer `/api/insurer/model-vs-rules` + dashboard panel (agreement with the claim's final
+  decision), `backend/services/llm_guard.py` (PII redaction in the decision prompt; reasoning
+  that contradicts the decision falls back to the template), `LAKEHOUSE_BRONZE_DATABASE`.
+- Serving fix: a claim that names no garage (the app) had `garage_network_status=UNKNOWN`, a
+  one-hot never seen in training (std 0) → OOD distance ~1e10, the model always abstained.
+  Now missing garage features; UNKNOWN stays for a named garage absent from the master.
+  Chain rerun at `9e82dfa` (00→04 succeeded); champion approval-1.0.0-9e82dfa-20261016154341.
+- Local check against federal: the app's `ingest_lakehouse.py` reads rsingh_mcc_gold (60
+  policies, 240 clauses, 837 risk signals, 800 profiles); 3 LH-POL claims scored LIKELY_APPROVE.
+- CAI: project environment gains the app settings (DB_BACKEND, LAKEHOUSE_*, IMPALA_*,
+  APPROVAL_MODEL_*; names only). Jobs mcc-09-app-setup, mcc-lakehouse-ingest (03:00),
+  mcc-export-claims (01:45) created. setup.sh failed at the nvm Node install (no egress to
+  it on federal): the SPA is built on the laptop and uploaded (`push_files.py --dist`).
+  Setup run succeeded (backend venv, demo seed, ingest of mcc gold, RAG 270 vectors).
+- Application `MCC Motor Claim Copilot` (an2h-0mhg-cj4x-5yg4, 2 vCPU / 8 GB), subdomain
+  `rsingh-mcc-copilot`: running; /health and the SPA answer.
+- End to end on CAI (a second backend in a job pod, same SQLite): claim CLMA7A06866 on
+  LH-POL-2011 → rules ANALYSIS_COMPLETE, model p_approve 0.855 LIKELY_APPROVE, fraud CLEAR,
+  stored. Claim CLM0E281A89 (incident 26 days before filing) → model ABSTAIN on OOD (6.64 >
+  3.94): the guardrail working as intended.
