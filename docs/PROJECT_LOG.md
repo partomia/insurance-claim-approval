@@ -187,3 +187,24 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
   tests + full local pipeline, backend tests, SPA build).
 - `mcc-approval-mlops` not dispatched: it retrains on CAI (mcc-00 is 2 vCPU / 8 GB and competes
   with the running app for quota). Run it from the Actions tab when wanted.
+
+## 2026-10-17 00:10–02:10 - DAG started, first end-to-end run (business date 2026-10-17)
+
+- `rsingh-mcc-orchestration` unpaused; manual run for 2026-10-17.
+- Run 648: "success" with no task instances. A manual run's logical date (now) was before the
+  DAG's start_date (10-18 20:30) and Airflow creates no tasks for it. Fix: start_date 2026-10-16
+  and an `in_window` ShortCircuit that skips scheduled runs outside scheduled_dates
+  (10-19..10-21), so scheduled 10-17 and 10-18 do nothing; test keeps the list equal to
+  lakehouse.json.
+- Run 649: land and bronze OK, build_silver failed twice with no Python output, reconcile ran
+  (all_done), the run went red as designed. Cause: `STATUS_RANK` was a Spark Column built at
+  import, and with no SparkContext yet that raises a bare AssertionError. The earlier loads went
+  through rsingh-mcc-stages, which starts Spark before importing the stages; pyspark 4 locally
+  only fails the same way without a session. Fix: built per call; new test imports every CDE
+  job in a fresh interpreter.
+- Run 655: success in 10 min, all 13 tasks (stream legs skipped for a manual run). Audit:
+  bronze 153, silver 13,155, mdm 800, gold 18,756, reconcile 22 checks (19 MATCHED, 3
+  EXPLAINED, 0 MISMATCH). gold.fact_claim 4,242 for 10-17; cai_score_claims ran mcc-06:
+  142 scores (110 LIKELY_APPROVE, 17 NEUTRAL, 9 UNCERTAIN, 6 REVIEW); KPI views at 10-17.
+- The DAG stays unpaused. The first run that does work is the scheduled 10-19 run
+  (20:30 UTC), which replays the stream: stop rsingh-mcc-stream-bronze before then.
