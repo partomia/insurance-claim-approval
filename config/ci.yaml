@@ -1,0 +1,27 @@
+# Overlay for GitHub Actions and laptop tests (MCC_CONFIG_OVERLAY=config/ci.yaml): no network,
+# a smaller synthetic feature table (tests write it), relaxed gate so a tiny sample can pass.
+data:
+  local_export: outputs/ci/exports/claim_training_features.parquet
+  min_rows: 100
+features:
+  store_dir: outputs/ci/feature_store/mcc_features
+gate:
+  min_auroc: 0.6
+  max_brier: 0.30
+serving:
+  champion_dir: outputs/ci/models/champion
+  trial_dir: outputs/ci/models/silent_trial
+  archive_dir: outputs/ci/models/archive
+  candidate_dir: outputs/ci/candidate
+registry:
+  enabled: false
+models:
+  fraud:
+    overrides:
+      features: {store_dir: outputs/ci/feature_store/mcc_features}
+      gate: {min_auroc: 0.6, min_pr_auc_lift: 1.2, max_brier: 0.30}
+      serving:
+        champion_dir: outputs/ci/models/fraud/champion
+        trial_dir: outputs/ci/models/fraud/silent_trial
+        archive_dir: outputs/ci/models/archive/fraud
+        candidate_dir: outputs/ci/fraud/candidate

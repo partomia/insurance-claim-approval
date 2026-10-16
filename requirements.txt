@@ -1,0 +1,12 @@
+# CAI sessions, jobs mcc-00..08 and the model build (cdsw-build.sh). The Copilot app installs
+# backend/pyproject.toml with uv (cml/setup.sh) instead.
+numpy
+pandas<3
+pyarrow
+scikit-learn==1.9.1
+joblib
+pyyaml
+requests
+# mlflow is pre-installed in Cloudera AI with mlflow-cml-plugin: do not add it here.
+impyla==0.21.0             # CDW Impala over HTTPS (lakehouse/store.py)
+kafka-python>=2.0.2        # stream producer from a session

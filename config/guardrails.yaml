@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------------------
+# ML guardrails (guardrails/, docs/GUARDRAILS.md). Every check that fires is an event
+# in ref.guardrail_event (and outputs/guardrails/events.jsonl in the CAI project).
+# ---------------------------------------------------------------------------
+input:
+  # a claim whose policy or customer the MDM did not resolve is never scored
+  require_resolved_policy: true
+  require_resolved_customer: true
+  # out-of-distribution: standardised distance of the feature vector to the training set
+  # (mean of squared z-scores); the limit is the training set's ood_quantile, stored with the model
+  ood_quantile: 0.995
+  max_missing_fraction: 0.30          # more missing features than this -> abstain
+  amount_max: 5000000                 # INR; above -> abstain (outside anything trained on)
+
+output:
+  # a probability within this distance of a band edge is reported as "uncertain"
+  uncertain_margin: 0.05
+  # shadow mode: the model scores and explains; it never rejects or approves a claim
+  allowed_actions: ["score", "explain", "rank_review_queue"]
+  customer_visible: false
+  # protected or proxy attributes never enter the feature vector
+  excluded_features: [holder_name, holder_dob, holder_email, holder_mobile, city, pincode, gender]
+
+fairness:                             # monitor/fairness.py: approval-rate gap of the model's band
+  slices: [age_band, city_tier]
+  max_rate_gap: 0.10
+
+process:
+  kpi_gate: gate/kpi_gate.py          # chain stops, champion keeps serving
+  feature_hash_lock: true             # endpoint refuses to start on a mismatch
+  named_approver_for_promotion: true  # serve/promote_champion.py
+  drift:                              # monitor/drift.py (mcc-05-nightly-drift)
+    psi_warn: 0.10
+    psi_alert: 0.25
+    min_samples: 30
+    max_ood_rate: 0.10
+    max_abstain_rate: 0.25
+
+retrain:                              # ci/retrain_trigger.py (mcc-08-retrain-trigger)
+  on_drift_alert: true
+  drift_cooldown_days: 7
+  min_new_labels: 200                 # newly decided claims since the last training
+  max_model_age_days: 30
+
+llm:                                  # the Copilot's CrewAI agents (Groq)
+  redact_classifications: [MCC_SENSITIVE_PII, MCC_SENSITIVE_FINANCIAL]

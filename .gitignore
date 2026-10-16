@@ -11,6 +11,40 @@ Thumbs.db
 # Cursor / local tooling
 .cursor/
 
+# --- Cloudera use case (mcc) ---
+# Secrets & local config
+.env
+.env.*
+!.env.example
+*.jks
+*.keytab
+*.pem
+*.p12
+certs/
+# Data, features, models, run outputs (live only in the CAI project / S3)
+/data/
+feature_store/
+models/archive/
+outputs/
+checkpoints/
+mlruns/
+spark-warehouse/
+metastore_db/
+derby.log
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+# CAI home-directory state: model builds copy every non-ignored file
+.local/
+.cache/
+.config/
+.experiments/
+.ipython/
+.jupyter/
+.Rprofile
+
 # --- Backend (Python) ---
 backend/.venv/
 backend/venv/

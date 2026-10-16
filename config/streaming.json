@@ -1,0 +1,22 @@
+{
+  "_comment": "Kafka topics, the producer and the CDE streaming job (standard library json). Topics are created from CDE (the brokers' ports are closed from the laptop).",
+  "topics": {
+    "crash": {"name": "mcc.telematics.crash", "partitions": 3, "replication": 3, "retention_hours": 168},
+    "claim_event": {"name": "mcc.claim.events", "partitions": 3, "replication": 3, "retention_hours": 168},
+    "control": {"name": "mcc.control", "partitions": 3, "replication": 3, "retention_hours": 168}
+  },
+  "producer": {
+    "live_rate_msgs_s": 5,
+    "late_fraction": 0.01,
+    "late_seconds": [120, 900],
+    "out_of_order_fraction": 0.02,
+    "duplicate_fraction": 0.005
+  },
+  "spark": {
+    "kafka_package": "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.4",
+    "trigger_seconds": 60,
+    "watermark": "30 minutes",
+    "starting_offsets": "earliest",
+    "max_offsets_per_trigger": 50000
+  }
+}

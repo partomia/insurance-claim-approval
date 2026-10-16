@@ -1,0 +1,24 @@
+{
+  "_comment": "scripts/platform_ctl.py: what 'stop' and 'start' touch. project = this demo's workloads only; platform = the shared CDP services of the environment as well (also used by sibling demos). Names are resolved by the CDP CLI at run time.",
+  "environment": "federal-cdp-env",
+  "project": {
+    "cai_project": "rsingh-motor-claim-copilot",
+    "cai_job_prefix": "mcc-",
+    "cai_apps": ["MCC Motor Claim Copilot"],
+    "cai_models": ["mcc-approval"],
+    "cai_scheduled_jobs": ["mcc-05-nightly-drift", "mcc-08-retrain-trigger"],
+    "cde_job_prefix": "rsingh-mcc-",
+    "cde_streaming_jobs": ["rsingh-mcc-stream-bronze"],
+    "cde_dag_jobs": ["rsingh-mcc-orchestration"]
+  },
+  "platform": {
+    "datahubs": {"kafka": "federal-kafka"},
+    "cai_workspace": "federal-cml-ws",
+    "cde_service": "federal-cde",
+    "cde_vc": "federal-cde-vc",
+    "cdw_vws": ["federal-impala-1"],
+    "cdw_dbc": null
+  },
+  "stop_order": ["cai", "cde", "cdw", "kafka"],
+  "start_order": ["kafka", "cdw", "cde", "cai"]
+}

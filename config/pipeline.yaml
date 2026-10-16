@@ -1,0 +1,123 @@
+# ---------------------------------------------------------------------------
+# mcc: single source of configuration for the CAI side (features, training, gate,
+# serving, scoring). MCC_CONFIG_OVERLAY (comma-separated YAML files) is merged on
+# top, e.g. config/ci.yaml for the offline CI run. Copied from OGX's pipeline.yaml.
+# ---------------------------------------------------------------------------
+project:
+  name: mcc-motor-claims
+  mlflow_experiment: mcc-motor-claims
+
+data:
+  # gold.claim_training_features (one row per decided claim), read through CDW Impala;
+  # a local parquet export of the same table when MCC_FEATURE_SOURCE=local
+  source_table: claim_training_features
+  local_export: outputs/exports/claim_training_features.parquet
+  time_column: fnol_ts
+  split: {train: 0.70, valid: 0.15, test: 0.15}   # by time: train < valid < test
+  min_rows: 500
+
+features:
+  version: "1.0.0"                    # BUMP when anything below (or feature_logic.py) changes
+  store_dir: feature_store/mcc_features
+  numeric:
+    - amount_requested
+    - amount_vs_type_mean
+    - amount_vs_idv
+    - report_delay_days
+    - incident_hour
+    - policy_age_days
+    - days_since_renewal
+    - prior_claims_12m
+    - prior_rejected_12m
+    - customer_policies
+    - credit_score
+    - years_licensed
+    - traffic_violations
+    - vehicle_age_years
+    - idv
+    - ncb_pct
+    - garage_risk_score
+    - garage_claims_30d
+    - crash_event_match
+    - telematics_enrolled
+    - police_report
+    - vin_mismatch
+    - cross_claimant
+  categorical:
+    claim_type: [Collision, ThirdParty, Theft, Flood, Fire, Glass, Vandalism]
+    garage_network_status: [PREFERRED, STANDARD, WATCHLIST, UNKNOWN]
+    credit_band: [EXCELLENT, GOOD, FAIR, POOR, UNKNOWN]
+
+training:
+  estimator: hist_gradient_boosting
+  max_iter: 300
+  learning_rate: 0.05
+  max_leaf_nodes: 15
+  l2_regularization: 1.0
+  calibrate: isotonic                 # on VALID
+
+evaluation:
+  bands: {high: 0.70, low: 0.30}      # approval: >= high APPROVE-LIKELY, <= low REVIEW; fraud reversed
+
+gate:                                 # absolute KPIs, measured on the held-out TEST split (time-based)
+  min_auroc: 0.75
+  max_brier: 0.20
+  max_auroc_regression: 0.02
+  require_feature_hash_match: true
+
+serving:
+  model_name: mcc-approval            # the CAI Model (endpoint): serves both champion heads
+  champion_dir: models/champion
+  trial_dir: models/silent_trial
+  archive_dir: models/archive
+  candidate_dir: outputs/candidate
+
+cai:
+  runtime_identifier: ""
+  model_cpu: 1
+  model_memory_gb: 2
+  deploy_timeout_s: 4200
+  build_timeout_s: 600
+  build_attempts: 3
+  git_branch: main
+
+registry:
+  enabled: true
+
+# ---------------------------------------------------------------------------
+# The two heads. Every job works on ONE model, MCC_MODEL (default approval), set on the
+# CAI job; load_config() merges models.<name>.overrides onto the sections above.
+# Both are shadow-mode only: the score is shown to the adjuster next to the rules
+# decision; it never rejects a claim and is never shown to the customer.
+# ---------------------------------------------------------------------------
+models:
+  approval:
+    label: approved                   # 1 = the claim was approved (any amount)
+    stage_on_pass: champion
+    registry_name: mcc-approval
+    description: "Probability that a motor claim is approved, from claim, policy, customer (MDM golden record), garage and telematics features (gradient boosting, isotonic calibration). Shadow mode: advisory to the adjuster only."
+
+  fraud:
+    label: fraud_confirmed            # 1 = rejected by SIU with FRAUD_CONFIRMED
+    stage_on_pass: champion
+    registry_name: mcc-fraud
+    description: "Probability that a motor claim is confirmed fraud by SIU (gradient boosting). Shadow mode: ranks the adjuster's review queue; never auto-rejects."
+    overrides:
+      training:
+        class_weight: balanced
+      gate:
+        min_auroc: 0.75
+        min_pr_auc_lift: 2.0          # PR-AUC >= 2 x the base rate
+        max_brier: 0.10
+      features:
+        store_dir: feature_store/mcc_features
+      serving:
+        champion_dir: models/fraud/champion
+        trial_dir: models/fraud/silent_trial
+        archive_dir: models/archive/fraud
+        candidate_dir: outputs/fraud/candidate
+
+monitoring:
+  psi_warn: 0.10
+  psi_alert: 0.25
+  min_samples_for_drift: 30

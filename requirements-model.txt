@@ -1,0 +1,6 @@
+# The mcc-approval model endpoint (cdsw-build.sh installs this on a model build).
+numpy
+pandas<3
+scikit-learn==1.9.1
+joblib
+pyyaml

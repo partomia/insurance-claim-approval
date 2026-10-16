@@ -1,0 +1,47 @@
+{
+  "_comment": "Certified KPI definitions and parameters. build_gold.py loads them into ref.kpi_definition and ref.kpi_parameter; the semantic views read only those tables, so a parameter changes here and nowhere else.",
+  "parameters": {
+    "stp_decided_by": ["AUTO"],
+    "decided_statuses": ["APPROVED", "REJECTED"],
+    "cycle_time_unit_hours": 24,
+    "loss_ratio_earned_basis": "pro_rata_days"
+  },
+  "kpis": [
+    {
+      "kpi_code": "STP",
+      "name": "Straight-through rate",
+      "definition": "Share of claims decided in the business date that were decided automatically (decided_by = AUTO) without an adjuster or SIU touch, by claim type and business date.",
+      "formula": "stp_rate = COUNT(decided AND decided_by = 'AUTO') / COUNT(decided) GROUP BY claim_type, business_date",
+      "grain": "claim x decision date",
+      "certified_view": "kpi_straight_through_rate",
+      "owner": "Claims Operations",
+      "version": "1.0",
+      "certified_on": "2026-10-16",
+      "glossary_term": "Straight-through rate"
+    },
+    {
+      "kpi_code": "CCT",
+      "name": "Claim cycle time",
+      "definition": "Days from first notice of loss (FNOL) to the final decision (APPROVED or REJECTED), median and P90, by claim type and decision date.",
+      "formula": "cycle_days = (decided_ts - fnol_ts) / 86400 per decided claim; median and P90 GROUP BY claim_type, business_date",
+      "grain": "claim x decision date",
+      "certified_view": "kpi_claim_cycle_time",
+      "owner": "Claims Operations",
+      "version": "1.0",
+      "certified_on": "2026-10-16",
+      "glossary_term": "Claim cycle time"
+    },
+    {
+      "kpi_code": "LR",
+      "name": "Loss ratio",
+      "definition": "Approved claim amount divided by earned premium, by product line and business month. Earned premium is the annual premium pro rata for the policy days in force within the month.",
+      "formula": "loss_ratio = SUM(amount_approved) / SUM(premium_amount * days_in_force_in_month / 365) GROUP BY business_month",
+      "grain": "policy x month",
+      "certified_view": "kpi_loss_ratio",
+      "owner": "Underwriting",
+      "version": "1.0",
+      "certified_on": "2026-10-16",
+      "glossary_term": "Loss ratio"
+    }
+  ]
+}
