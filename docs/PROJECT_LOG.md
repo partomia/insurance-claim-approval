@@ -125,3 +125,19 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
   LH-POL-2011 → rules ANALYSIS_COMPLETE, model p_approve 0.855 LIKELY_APPROVE, fraud CLEAR,
   stored. Claim CLM0E281A89 (incident 26 days before filing) → model ABSTAIN on OOD (6.64 >
   3.94): the guardrail working as intended.
+
+## 2026-10-16 22:30–23:15 - Phase 11: governance (Atlas, Ranger)
+
+- DataViz dashboards moved by the user to workspace "MCC - Insurance Claim Processing" (id 7);
+  `dataviz/build_dashboard.py --import` now looks the workspace up by name.
+- Deferred by the user to after end to end: the ~576% loss ratio (claim-dense synthetic book)
+  and the drift ALERT baseline (regenerate at ~6 claims/day).
+- `scripts/governance.py` + `config/governance.json`: plan (89 changes), apply, verify OK.
+  Atlas: classifications MCC_SENSITIVE_HASH (names, emails, bureau_ref), _CONTACT (mobiles,
+  show last 4), _DOB (show year; string dob in bronze → hash), _VEHICLE_ID (VIN, reg no, hash),
+  _FINANCIAL (credit_score/band, NULL), not propagated; 82 columns tagged across bronze,
+  silver, mdm, gold, semantic. Glossary "MCC Claims KPIs": STP, CCT, LR, each assigned to its
+  kpi_ and mis_ view. Ranger cm_tag: rsingh-mcc-sensitive-{hash,contact,dob,vehicle-id,
+  financial}, masking federal01 only; rsingh and federal07 clear.
+- Checked as rsingh: mobile, credit_score, dob, vin clear (training and app reads unaffected).
+  The federal01 masked view is not checked here (no federal01 credentials in .env).

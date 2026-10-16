@@ -1,0 +1,103 @@
+{
+  "_comment": "Atlas classifications, glossary and Ranger tag masking for the rsingh_mcc_* databases, applied by scripts/governance.py. Only MCC_* classifications and rsingh-mcc-* policies are created or changed; other projects' tags and policies are left alone.",
+  "atlas_cluster": "cm",
+  "databases": [
+    "rsingh_mcc_bronze",
+    "rsingh_mcc_silver",
+    "rsingh_mcc_mdm",
+    "rsingh_mcc_gold",
+    "rsingh_mcc_semantic"
+  ],
+  "classifications": {
+    "MCC_SENSITIVE_HASH": {
+      "description": "Person name, email or bureau reference: masked users see a hash, so joins and counts per customer still work",
+      "mask": {
+        "dataMaskType": "hive:MASK_HASH"
+      }
+    },
+    "MCC_SENSITIVE_CONTACT": {
+      "description": "Mobile number: masked users see only the last 4 digits",
+      "mask": {
+        "dataMaskType": "hive:MASK_SHOW_LAST_4"
+      }
+    },
+    "MCC_SENSITIVE_DOB": {
+      "description": "Date of birth: masked users see only the year (driver_age stays usable)",
+      "mask": {
+        "dataMaskType": "hive:MASK_DATE_SHOW_YEAR"
+      }
+    },
+    "MCC_SENSITIVE_VEHICLE_ID": {
+      "description": "VIN or registration number: masked users see a hash, so VIN-mismatch and crash matching still compare",
+      "mask": {
+        "dataMaskType": "hive:MASK_HASH"
+      }
+    },
+    "MCC_SENSITIVE_FINANCIAL": {
+      "description": "Credit bureau score or band: masked users see NULL",
+      "mask": {
+        "dataMaskType": "hive:MASK_NULL"
+      }
+    }
+  },
+  "columns": {
+    "full_name": "MCC_SENSITIVE_HASH",
+    "name_norm": "MCC_SENSITIVE_HASH",
+    "holder_name": "MCC_SENSITIVE_HASH",
+    "holder_name_norm": "MCC_SENSITIVE_HASH",
+    "claimant_name": "MCC_SENSITIVE_HASH",
+    "claimant_name_norm": "MCC_SENSITIVE_HASH",
+    "customer_name": "MCC_SENSITIVE_HASH",
+    "email": "MCC_SENSITIVE_HASH",
+    "holder_email": "MCC_SENSITIVE_HASH",
+    "customer_email": "MCC_SENSITIVE_HASH",
+    "bureau_ref": "MCC_SENSITIVE_HASH",
+    "mobile": "MCC_SENSITIVE_CONTACT",
+    "mobile_norm": "MCC_SENSITIVE_CONTACT",
+    "holder_mobile": "MCC_SENSITIVE_CONTACT",
+    "holder_mobile_norm": "MCC_SENSITIVE_CONTACT",
+    "claimant_mobile": "MCC_SENSITIVE_CONTACT",
+    "claimant_mobile_norm": "MCC_SENSITIVE_CONTACT",
+    "dob": {
+      "date": "MCC_SENSITIVE_DOB",
+      "string": "MCC_SENSITIVE_HASH"
+    },
+    "holder_dob": {
+      "date": "MCC_SENSITIVE_DOB",
+      "string": "MCC_SENSITIVE_HASH"
+    },
+    "vin": "MCC_SENSITIVE_VEHICLE_ID",
+    "vehicle_vin": "MCC_SENSITIVE_VEHICLE_ID",
+    "covered_vehicle_vin": "MCC_SENSITIVE_VEHICLE_ID",
+    "policy_vin": "MCC_SENSITIVE_VEHICLE_ID",
+    "vehicle_reg_no": "MCC_SENSITIVE_VEHICLE_ID",
+    "credit_score": "MCC_SENSITIVE_FINANCIAL",
+    "credit_band": "MCC_SENSITIVE_FINANCIAL"
+  },
+  "masking": {
+    "service": "cm_tag",
+    "policy_prefix": "rsingh-mcc-sensitive-",
+    "masked_users": [
+      "federal01"
+    ],
+    "_comment": "federal07 and rsingh are in no masking policy and see clear values"
+  },
+  "glossary": {
+    "name": "MCC Claims KPIs",
+    "description": "Certified motor-claims KPIs of the Motor Claim Copilot lakehouse. Each term is defined once (config/kpi.json) and assigned to its certified semantic view and the MIS view that reads it.",
+    "assigned_to": {
+      "STP": [
+        "kpi_straight_through_rate",
+        "mis_stp_by_month"
+      ],
+      "CCT": [
+        "kpi_claim_cycle_time",
+        "mis_cycle_time"
+      ],
+      "LR": [
+        "kpi_loss_ratio",
+        "mis_loss_ratio_by_month"
+      ]
+    }
+  }
+}

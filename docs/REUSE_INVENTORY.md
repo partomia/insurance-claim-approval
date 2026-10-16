@@ -38,3 +38,4 @@ OGX = O-G-Asset-Integrity-Lakehouse, GDL = General-DataLakehouse, CXR = the ches
 | `serve/predict.py`, `serve/registry.py`, `serve/deploy_champion.py` | O-G-Asset-Integrity-Lakehouse (from CXR) | adapted: two heads behind one endpoint mcc-approval |
 | `monitor/drift.py`, `ci/retrain_trigger.py` | O-G-Asset-Integrity-Lakehouse | adapted: claims via the batch scoring path; new labels = newly decided claims |
 | `ci/cai_jobs.py`, `ci/setup_cai.py`, `ci/push_files.py`, `ci/sync_code.py` | O-G-Asset-Integrity-Lakehouse (from CXR) | adapted: blank project for a private repo, CODE_VERSION written by the push |
+| `scripts/governance.py` | O-G-Asset-Integrity-Lakehouse (from GDL) | adapted: MCC_ tag prefix, MCC_WORKLOAD_* credentials; `config/governance.json` new (claims PII, bureau score, VIN) |
