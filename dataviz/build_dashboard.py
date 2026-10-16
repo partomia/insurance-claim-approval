@@ -201,7 +201,7 @@ CUSTOMER_SHEETS = [
              filters=[LATEST], pos=(1, 1, 21, 10)),
         dict(type="kpi", ds="xref", title="Golden customers (latest)",
              measures=[("count(distinct [golden_customer_id])", "Golden")], filters=[LATEST], pos=(22, 1, 21, 10)),
-        dict(type="kpi", ds="exc", title="Match exceptions (latest)", measures=[("sum(1)", "Exceptions")],
+        dict(type="kpi", ds="exc", title="Match exceptions (latest)", measures=[("count(1)", "Exceptions")],
              filters=[LATEST], may_be_empty=True, pos=(43, 1, 22, 10)),
         dict(type="trellis-bars", ds="xref", title="Source records by resolving rule and system (latest)",
              x=[("rule_label", "Rule")], measures=[("sum(1)", "Records")], color=[("source_system", "Source")],
@@ -486,7 +486,7 @@ class DataViz:
         if ok and v["type"] == "kpi":
             want = engine.query(tile_sql(v))[1][0][0]
             got = rows[0][-1] if isinstance(rows[0], list) else list(rows[0].values())[-1]
-            ok = abs(float(got) - float(want)) < 1e-6
+            ok = got == want if None in (got, want) else abs(float(got) - float(want)) < 1e-6
             note = f"{got} (Impala {want})"
         print(f"{'ok  ' if ok else 'FAIL'} {where} / {v['title']}: {note}")
         return ok

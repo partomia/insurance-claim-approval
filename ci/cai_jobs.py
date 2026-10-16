@@ -43,6 +43,9 @@ JOBS = [
      "cpu": 1, "memory": 4, "timeout": 600, "schedule": None},
     {"name": "mcc-08-retrain-trigger", "script": "ci/retrain_trigger.py", "parent": None,
      "cpu": 1, "memory": 4, "timeout": 600, "schedule": "30 2 * * *"},
+    # any script with its output in outputs/logs/ (set MCC_RUN_SCRIPT on the job; ci/run_logged.py --fetch)
+    {"name": "mcc-99-debug", "script": "ci/run_logged.py", "parent": None,
+     "cpu": 1, "memory": 4, "timeout": 3600, "schedule": None, "env": {"MCC_RUN_SCRIPT": "ci/sync_code.py"}},
 ]
 
 CHAIN = ["mcc-00-sync-code", "mcc-01-build-features", "mcc-02-train-validate", "mcc-03-kpi-gate",

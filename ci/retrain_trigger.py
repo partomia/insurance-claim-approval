@@ -132,12 +132,13 @@ def main() -> int:
     reason = "; ".join(reasons)
     print(f"champion {meta.get('model_version') if meta else None}; drift {drift and drift.get('status')}; "
           f"reasons: {reason or 'none'}", flush=True)
+    if args.dry_run:
+        print("dry run: " + ("would start the retraining chain" if reasons else
+                             "skip: " + skip_detail(meta, rules, drift, datetime.now(timezone.utc))))
+        return 0
     if not reasons:
         publish_model_event("RETRAIN_SKIPPED", meta, stage="champion",
                             detail=skip_detail(meta, rules, drift, datetime.now(timezone.utc)))
-        return 0
-    if args.dry_run:
-        print("dry run: would start the retraining chain")
         return 0
     run_id = start_chain(reason)
     publish_model_event("RETRAIN_TRIGGERED", meta, stage="champion", trigger_reason=reason,

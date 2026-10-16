@@ -77,3 +77,25 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
 - CAI: project `rsingh-motor-claim-copilot` (`lq1n-y700-fo51-vgx8`, blank), environment
   (Impala workload user, GROQ_*, MCC_DB_PREFIX; names only), 295 files pushed (CODE_VERSION
   7776dc0), jobs mcc-00..08 created.
+
+## 2026-10-16 15:50–18:45 - Phase 8 and 9 live: semantic, DataViz, CAI chain, endpoint
+
+- Run **647** gold+recon (all dates, history fix): **succeeded**.
+- CDW: semantic views created; consistency checks 8/8 MATCHED for every date (2026-10-16:
+  STP 31.9%, cycle time 3.66 days, loss ratio 576.5%).
+- DataViz: imported on `federal-impala-1` (4 dashboards, 9 datasets, 39 visuals). `--check`
+  39/39 on Impala, `--verify` 39/39 through the Data API (KPI tiles equal to Impala). The
+  "Match exceptions" tile is `count(1)`: mdm.match_exception is empty, `sum(1)` showed blank.
+- CAI: mcc-01 failed in 5 s. CAI serves job logs only over the UI websocket, so added
+  `ci/run_logged.py` + job `mcc-99-debug` (output to outputs/logs/, fetched over the v1 files
+  API). Cause: unpinned `pyarrow` resolved to 26.0.0, which needs numpy 2; the runtime image
+  (python3.11 2026.08.1-b5) ships numpy 1.26.4 → pinned `pyarrow==19.0.1`.
+  Also: kernel argv carries no job arguments (use job env), job `environment` is a JSON string.
+- Chain at `9e94bf3`: mcc-00 → 01 → 02 → 03 (gate passed both heads) → 04 **succeeded**
+  (17:57–18:02). Registry mcc-approval v1, mcc-fraud v1; endpoint `mcc-approval` built and
+  deployed; a test claim returns both heads, bands, top factors and guardrails (shadow mode).
+- mcc-06 (2026-10-16): 124 claims → gold.fact_model_score (avg p_approve 0.812, 4 FRAUD_REVIEW).
+- mcc-05 drift: 339 claims scored, status ALERT (the volume surge above). mcc-08: RETRAIN_SKIPPED
+  (cooldown 0 of 7 days, 13 of 200 new labels).
+- `retrain_trigger.py --dry-run` from the laptop had published a RETRAIN_SKIPPED row for the
+  laptop champion: dry run no longer publishes; that one row deleted from ref.model_event.
