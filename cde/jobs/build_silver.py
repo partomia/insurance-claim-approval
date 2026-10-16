@@ -35,8 +35,12 @@ from pyspark.sql import functions as F  # noqa: E402
 
 STAGE = "silver"
 ORPHAN_SCHEMA = "entity string, record_key string, reason string, detail string, business_date date"
-STATUS_RANK = F.create_map(*[F.lit(x) for kv in (("FILED", 0), ("UNDER_REVIEW", 1), ("APPROVED", 2), ("REJECTED", 2))
-                             for x in kv])
+STATUS_RANKS = (("FILED", 0), ("UNDER_REVIEW", 1), ("APPROVED", 2), ("REJECTED", 2))
+
+
+def status_rank(col):
+    # built per call: a Column needs an active SparkContext, which does not exist at import time
+    return F.create_map(*[F.lit(x) for kv in STATUS_RANKS for x in kv])[col]
 
 
 def parser():
@@ -133,18 +137,18 @@ def status_events(spark, names, d):
 
 def claim(spark, names, d, policies: DataFrame, events: DataFrame | None) -> tuple[DataFrame, DataFrame, int]:
     b = _bronze(spark, names, "cl_claim", d)
-    t = _typed(b, "cl_claim", ["_business_date"]).withColumn("_rank", STATUS_RANK[F.col("status")])
+    t = _typed(b, "cl_claim", ["_business_date"]).withColumn("_rank", status_rank(F.col("status")))
     n_snapshots = t.count()
     cur = _latest(t, ["claim_id"], F.desc("_rank"), F.desc_nulls_last("decided_ts"), F.desc("_business_date"))
     resent = n_snapshots - t.select("claim_id").distinct().count()
     if events is not None:
-        last = _latest(events.withColumn("_er", STATUS_RANK[F.col("to_status")]), ["claim_id"],
+        last = _latest(events.withColumn("_er", status_rank(F.col("to_status"))), ["claim_id"],
                        F.desc("_er"), F.desc("event_ts")).select(
             "claim_id", F.col("event_ts").alias("_ev_ts"), F.col("to_status").alias("_ev_status"),
             F.col("amount_approved").alias("_ev_amount"), F.col("reason_code").alias("_ev_reason"),
             F.col("decided_by").alias("_ev_decided_by"))
         cur = cur.join(last, "claim_id", "left")
-        newer = (F.col("_ev_ts").isNotNull() & (STATUS_RANK[F.col("_ev_status")] >= F.col("_rank")))
+        newer = (F.col("_ev_ts").isNotNull() & (status_rank(F.col("_ev_status")) >= F.col("_rank")))
         decided = F.col("_ev_status").isin("APPROVED", "REJECTED")
         cur = (cur.withColumn("status", F.when(newer, F.col("_ev_status")).otherwise(F.col("status")))
                .withColumn("amount_approved", F.when(newer & decided, F.col("_ev_amount")).otherwise(F.col("amount_approved")))
