@@ -1,0 +1,61 @@
+{
+  "type": "record",
+  "name": "ClaimEvent",
+  "namespace": "com.mcc.claims",
+  "doc": "FNOL or claim status change (mcc.claim.events)",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "unique event id"
+    },
+    {
+      "name": "claim_number",
+      "type": "string",
+      "doc": "claim id"
+    },
+    {
+      "name": "policy_number",
+      "type": "string",
+      "doc": "policy number"
+    },
+    {
+      "name": "event_type",
+      "type": "string",
+      "doc": "FNOL or STATUS"
+    },
+    {
+      "name": "status",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null,
+      "doc": "claim status after the event"
+    },
+    {
+      "name": "amount",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null,
+      "doc": "requested (FNOL) or approved amount, INR"
+    },
+    {
+      "name": "event_ts",
+      "type": "string",
+      "doc": "event time, ISO-8601 UTC"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "doc": "emitting system"
+    },
+    {
+      "name": "producer_run",
+      "type": "string",
+      "doc": "producer run id"
+    }
+  ]
+}

@@ -9,8 +9,7 @@
     "live_rate_msgs_s": 5,
     "late_fraction": 0.01,
     "late_seconds": [120, 900],
-    "out_of_order_fraction": 0.02,
-    "duplicate_fraction": 0.005
+    "out_of_order_fraction": 0.02
   },
   "spark": {
     "kafka_package": "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.4",

@@ -1,0 +1,33 @@
+{
+  "type": "record",
+  "name": "StreamControl",
+  "namespace": "com.mcc.claims",
+  "doc": "Producer's per-minute counts per topic (mcc.control): the stream reconciliation control",
+  "fields": [
+    {
+      "name": "minute",
+      "type": "string",
+      "doc": "event-time minute, ISO-8601 UTC"
+    },
+    {
+      "name": "topic",
+      "type": "string",
+      "doc": "topic the counts are for"
+    },
+    {
+      "name": "counts",
+      "type": "string",
+      "doc": "JSON object: topic -> messages sent in that minute"
+    },
+    {
+      "name": "total",
+      "type": "long",
+      "doc": "messages sent in that minute"
+    },
+    {
+      "name": "producer_run",
+      "type": "string",
+      "doc": "producer run id"
+    }
+  ]
+}

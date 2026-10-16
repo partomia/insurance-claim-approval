@@ -1,0 +1,69 @@
+{
+  "type": "record",
+  "name": "TelematicsCrash",
+  "namespace": "com.mcc.claims",
+  "doc": "Crash event from a telematics device (mcc.telematics.crash)",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "unique event id"
+    },
+    {
+      "name": "vin",
+      "type": "string",
+      "doc": "vehicle VIN"
+    },
+    {
+      "name": "event_ts",
+      "type": "string",
+      "doc": "event time, ISO-8601 UTC"
+    },
+    {
+      "name": "g_force",
+      "type": "double",
+      "doc": "peak g-force"
+    },
+    {
+      "name": "speed_kmph",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null,
+      "doc": "speed at impact"
+    },
+    {
+      "name": "lat",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null,
+      "doc": "latitude"
+    },
+    {
+      "name": "lon",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null,
+      "doc": "longitude"
+    },
+    {
+      "name": "device_id",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null,
+      "doc": "telematics device"
+    },
+    {
+      "name": "producer_run",
+      "type": "string",
+      "doc": "producer run id"
+    }
+  ]
+}

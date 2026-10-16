@@ -21,3 +21,7 @@ OGX = O-G-Asset-Integrity-Lakehouse, GDL = General-DataLakehouse, CXR = the ches
 | `.env.example` | OGX `.env.example` | `MCC_` names; Groq |
 | `tests/conftest.py` | OGX `tests/conftest.py` | `MCC_CONFIG_OVERLAY` |
 | `cde/jobs/reconcile.py` | OGX `cde/jobs/reconcile.py` (GDL) | object checks removed; mcc stream tables; silver, mdm and gold checks are mcc-specific |
+| `stream/producer/claim_producer.py` | OGX `stream/producer/sensor_producer.py` | crash and claim events from the seeded universe; per-topic minute control counts |
+| `stream/producer/topics.py` | OGX `stream/producer/topics.py` | mcc topics and schemas; no NiFi topic |
+| `cde/jobs/stream_produce.py` | OGX `cde/jobs/stream_produce.py` | claim producer; files sink passthrough |
+| `cde/jobs/stream_bronze.py` | OGX `cde/jobs/stream_telemetry_bronze.py` | tables from the stream contracts |
