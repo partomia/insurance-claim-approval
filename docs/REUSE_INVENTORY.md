@@ -29,3 +29,6 @@ OGX = O-G-Asset-Integrity-Lakehouse, GDL = General-DataLakehouse, CXR = the ches
 | `cde/scripts/mcc_deploy_code.sh` | new | `git archive` of a pushed commit to the files resource, CODE_VERSION inside |
 | `cde/dags/mcc_dag.py` | OGX `cde/dags/ogx_dag.py` | mcc stages; created paused |
 | `cde/jobs/build_silver.py`, `build_mdm.py`, `build_gold.py` | new (structure after OGX build_*.py) | insurer silver, MDM, gold, app tables with the columns of `cde/jobs/curate/*` |
+| `scripts/run_semantic.py` | O-G-Asset-Integrity-Lakehouse `scripts/run_semantic.py` | engines, renderer, results writer kept; check/adhoc rewritten for STP, CCT, LR |
+| `dataviz/build_dashboard.py` | O-G-Asset-Integrity-Lakehouse `dataviz/build_dashboard.py` | export/import/verify machinery unchanged; datasets, sheets, dashboards and PKs (14000+) new |
+| `sql/semantic/50_dashboard_views.sql` (`dash_recon`, `dash_load_audit`) | O-G-Asset-Integrity-Lakehouse `sql/semantic/50_dashboard_views.sql` | layer labels add mdm and gold |
