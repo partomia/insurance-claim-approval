@@ -53,3 +53,27 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
 - Jobs created: `rsingh-mcc-stream-bronze`, `rsingh-mcc-stream-produce`.
 - Run **645** `rsingh-mcc-stream-produce --setup --mode backfill` (topics `mcc.claim.events`,
   `mcc.telematics.crash`, `mcc.control`, 3 partitions, 7 days).
+
+## 2026-10-16 15:05–15:50 - Phase 8 live checks, streaming live, Phase 9 code and CAI project
+
+- Run **644** (stages land→recon, 2026-10-12..16): **succeeded** in 14 min; recon identical to
+  local (only the planted bureau trailer MISMATCH on 2026-10-14).
+- Run **645** producer: topics created, 1,251 backfill messages sent (run backfill-d138b32c).
+- Run **646** `rsingh-mcc-stream-bronze` running; batch 0 wrote crash 222, claim_event 413,
+  control 616, quarantine 0 (= all 1,251).
+- DataViz: `dataviz/build_dashboard.py`, 4 dashboards / 38 visuals (PKs 14000+); every visual's
+  query checked on local Spark. Not imported yet.
+- Fixes found by a training/serving skew check (serving_row vs gold.claim_training_features):
+  `pipeline.yaml` categoricals did not match the data (claim types, credit band NO_HIT); gold
+  history features were computed over decided claims only (an open claim vanished from later
+  claims' history) → now over every claim; batch scoring recomputes history point in time.
+  Remaining skew: amount_vs_type_mean < 1%.
+- Local chain: approval TEST AUROC 0.792, fraud TEST AUROC 0.968 / PR-AUC 0.631 (base 0.042):
+  gate passed for both.
+- Drift (local): psi_feature_max ALERT. The synthetic history runs at ~5.6 claims/day, the live
+  dates at 40/day: volume features (garage_claims_30d) shift for real. Kept (regenerating would
+  orphan the Kafka backfill); retrain trigger respects the 7-day cooldown.
+- Resource re-uploaded at `7776dc0`; run **647** gold+recon for all dates (history fix).
+- CAI: project `rsingh-motor-claim-copilot` (`lq1n-y700-fo51-vgx8`, blank), environment
+  (Impala workload user, GROQ_*, MCC_DB_PREFIX; names only), 295 files pushed (CODE_VERSION
+  7776dc0), jobs mcc-00..08 created.
