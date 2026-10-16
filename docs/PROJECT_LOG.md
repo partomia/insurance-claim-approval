@@ -169,3 +169,12 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
 - `scripts/fetch_dataset.py`: Kaggle shivamb/vehicle-claim-fraud-detection v1 (CC0) via
   MCC_KAGGLE_API_TOKEN; fraud_oracle.csv sha256 8b6aa597…, 15,420 claims, 923 fraud, into the
   git-ignored data/public/.
+- GitHub secrets CAI_URL, CAI_API_KEY, CAI_PROJECT_ID set on partomia/insurance-claim-approval
+  (piped from .env, never printed).
+- Backend suite: `test_flow_parity[large_over_threshold]` passes alone and fails after the other
+  parity cases; it fails the same way on `main` (checked in a throwaway worktree), so it predates
+  this work. CI deselects that one case; stale local parity_*.db files (no model_prediction_json)
+  removed. CI installs the backend with `uv sync --extra dev` (pytest is an extra).
+- Merge check: main has no commits since the branch point (fast-forward); the branch deletes no
+  file and leaves the go01 CDE files untouched; the backend changes default to the go01 behaviour
+  (model off, bronze database `<lakehouse_database>_bronze`).
