@@ -1,0 +1,34 @@
+{
+  "entity": "pa_clause",
+  "source": "policy_admin",
+  "format": "csv",
+  "file_glob": "clauses_*.csv",
+  "description": "Policy wording clauses per policy (RAG source for the app)",
+  "key": [
+    "policy_number",
+    "section_ref"
+  ],
+  "control_field": null,
+  "columns": [
+    {
+      "name": "policy_number",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "section_ref",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "content_text",
+      "type": "string",
+      "required": true
+    }
+  ]
+}

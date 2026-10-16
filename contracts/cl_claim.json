@@ -1,0 +1,129 @@
+{
+  "entity": "cl_claim",
+  "source": "claims",
+  "format": "jsonl",
+  "file_glob": "claims_*.jsonl",
+  "description": "Claims system: FNOL records (day 1 also carries the 24-month history extract)",
+  "key": [
+    "claim_id"
+  ],
+  "control_field": "amount_requested",
+  "columns": [
+    {
+      "name": "claim_id",
+      "type": "string",
+      "required": true,
+      "pattern": "^CLM-[0-9]{6}$",
+      "severity": "reject"
+    },
+    {
+      "name": "policy_number",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "claimant_name",
+      "type": "string"
+    },
+    {
+      "name": "claimant_mobile",
+      "type": "string"
+    },
+    {
+      "name": "claim_type",
+      "type": "string",
+      "required": true,
+      "allowed": [
+        "Collision",
+        "Theft",
+        "Fire",
+        "Glass",
+        "ThirdParty",
+        "NaturalDisaster"
+      ]
+    },
+    {
+      "name": "incident_ts",
+      "type": "timestamp",
+      "required": true,
+      "format": "yyyy-MM-dd HH:mm:ss"
+    },
+    {
+      "name": "fnol_ts",
+      "type": "timestamp",
+      "required": true,
+      "format": "yyyy-MM-dd HH:mm:ss"
+    },
+    {
+      "name": "incident_city",
+      "type": "string"
+    },
+    {
+      "name": "amount_requested",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "vehicle_vin",
+      "type": "string"
+    },
+    {
+      "name": "garage_id",
+      "type": "string"
+    },
+    {
+      "name": "police_report",
+      "type": "string",
+      "allowed": [
+        "Y",
+        "N"
+      ]
+    },
+    {
+      "name": "third_party_involved",
+      "type": "string",
+      "allowed": [
+        "Y",
+        "N"
+      ]
+    },
+    {
+      "name": "channel",
+      "type": "string",
+      "allowed": [
+        "APP",
+        "CALL_CENTRE",
+        "AGENT"
+      ]
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "required": true,
+      "allowed": [
+        "FILED",
+        "UNDER_REVIEW",
+        "APPROVED",
+        "REJECTED"
+      ]
+    },
+    {
+      "name": "amount_approved",
+      "type": "decimal"
+    },
+    {
+      "name": "decided_ts",
+      "type": "timestamp",
+      "format": "yyyy-MM-dd HH:mm:ss"
+    },
+    {
+      "name": "decided_by",
+      "type": "string",
+      "allowed": [
+        "AUTO",
+        "ADJUSTER",
+        "FRAUD_SIU"
+      ]
+    }
+  ]
+}

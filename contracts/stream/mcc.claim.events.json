@@ -1,0 +1,48 @@
+{
+  "topic": "mcc.claim.events",
+  "table": "stream_claim_event",
+  "key": "event_id",
+  "event_time": "event_ts",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "claim_number",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "policy_number",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "event_type",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "required": false
+    },
+    {
+      "name": "amount",
+      "type": "double",
+      "required": false
+    },
+    {
+      "name": "event_ts",
+      "type": "timestamp",
+      "required": true
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "required": true
+    }
+  ]
+}

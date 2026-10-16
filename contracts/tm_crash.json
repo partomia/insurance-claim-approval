@@ -1,0 +1,49 @@
+{
+  "entity": "tm_crash",
+  "source": "telematics",
+  "format": "jsonl",
+  "file_glob": "crash_events_*.jsonl",
+  "description": "Telematics vendor bulk export of crash/impact events before the stream went live (day 1 only)",
+  "key": [
+    "event_id"
+  ],
+  "control_field": null,
+  "columns": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "vin",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "event_ts",
+      "type": "timestamp",
+      "required": true,
+      "format": "yyyy-MM-dd HH:mm:ss"
+    },
+    {
+      "name": "g_force",
+      "type": "double"
+    },
+    {
+      "name": "speed_kmph",
+      "type": "double"
+    },
+    {
+      "name": "lat",
+      "type": "double"
+    },
+    {
+      "name": "lon",
+      "type": "double"
+    },
+    {
+      "name": "device_id",
+      "type": "string"
+    }
+  ]
+}

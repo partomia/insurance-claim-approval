@@ -1,0 +1,164 @@
+{
+  "entity": "pa_policy",
+  "source": "policy_admin",
+  "format": "csv",
+  "file_glob": "policies_*.csv",
+  "description": "Policy admin system: motor policies with holder and vehicle (day 1 full extract)",
+  "key": [
+    "policy_number"
+  ],
+  "control_field": "premium_amount",
+  "columns": [
+    {
+      "name": "policy_number",
+      "type": "string",
+      "required": true,
+      "pattern": "^LH-POL-[0-9]{4}$",
+      "severity": "reject"
+    },
+    {
+      "name": "customer_ref",
+      "type": "string",
+      "required": true,
+      "pattern": "^PA-C[0-9]{6}$"
+    },
+    {
+      "name": "holder_name",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "holder_dob",
+      "type": "date",
+      "format": "dd/MM/yyyy"
+    },
+    {
+      "name": "holder_mobile",
+      "type": "string"
+    },
+    {
+      "name": "holder_email",
+      "type": "string",
+      "required": true,
+      "severity": "warn"
+    },
+    {
+      "name": "address_city",
+      "type": "string"
+    },
+    {
+      "name": "customer_since",
+      "type": "date",
+      "format": "yyyy-MM-dd"
+    },
+    {
+      "name": "provider_name",
+      "type": "string"
+    },
+    {
+      "name": "policy_type",
+      "type": "string",
+      "required": true,
+      "allowed": [
+        "Motor"
+      ]
+    },
+    {
+      "name": "premium_amount",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "required": true,
+      "allowed": [
+        "ACTIVE",
+        "EXPIRED",
+        "LAPSED",
+        "CANCELLED"
+      ]
+    },
+    {
+      "name": "coverage_limit",
+      "type": "decimal",
+      "required": true
+    },
+    {
+      "name": "deductible",
+      "type": "decimal"
+    },
+    {
+      "name": "co_pay_pct",
+      "type": "decimal"
+    },
+    {
+      "name": "waiting_period_days",
+      "type": "int"
+    },
+    {
+      "name": "effective_date",
+      "type": "date",
+      "format": "yyyy-MM-dd",
+      "required": true
+    },
+    {
+      "name": "expiry_date",
+      "type": "date",
+      "format": "yyyy-MM-dd",
+      "required": true
+    },
+    {
+      "name": "depreciation_rate",
+      "type": "decimal"
+    },
+    {
+      "name": "vehicle_vin",
+      "type": "string",
+      "required": true,
+      "pattern": "^MA[0-9A-Z]{15}$",
+      "severity": "reject"
+    },
+    {
+      "name": "vehicle_reg_no",
+      "type": "string"
+    },
+    {
+      "name": "vehicle_make",
+      "type": "string"
+    },
+    {
+      "name": "vehicle_model",
+      "type": "string"
+    },
+    {
+      "name": "vehicle_year",
+      "type": "int"
+    },
+    {
+      "name": "ncb_pct",
+      "type": "decimal"
+    },
+    {
+      "name": "zero_dep_addon",
+      "type": "string",
+      "allowed": [
+        "Y",
+        "N"
+      ]
+    },
+    {
+      "name": "rsa_addon",
+      "type": "string",
+      "allowed": [
+        "Y",
+        "N"
+      ]
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "format": "yyyy-MM-dd HH:mm:ss"
+    }
+  ]
+}

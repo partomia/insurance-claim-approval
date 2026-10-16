@@ -1,0 +1,49 @@
+{
+  "entity": "gn_garage",
+  "source": "garages",
+  "format": "csv",
+  "file_glob": "garages_*.csv",
+  "description": "Garage network master (cashless network), day 1 full then changes",
+  "key": [
+    "garage_id"
+  ],
+  "control_field": null,
+  "columns": [
+    {
+      "name": "garage_id",
+      "type": "string",
+      "required": true,
+      "pattern": "^GRG-[0-9]{3}$",
+      "severity": "reject"
+    },
+    {
+      "name": "garage_name",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "city",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "network_status",
+      "type": "string",
+      "required": true,
+      "allowed": [
+        "PREFERRED",
+        "STANDARD",
+        "WATCHLIST"
+      ]
+    },
+    {
+      "name": "onboarded_on",
+      "type": "date",
+      "format": "yyyy-MM-dd"
+    },
+    {
+      "name": "labour_rate",
+      "type": "decimal"
+    }
+  ]
+}

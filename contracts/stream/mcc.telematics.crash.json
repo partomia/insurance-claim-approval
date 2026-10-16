@@ -1,0 +1,48 @@
+{
+  "topic": "mcc.telematics.crash",
+  "table": "stream_telematics",
+  "key": "event_id",
+  "event_time": "event_ts",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "vin",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "event_ts",
+      "type": "timestamp",
+      "required": true
+    },
+    {
+      "name": "g_force",
+      "type": "double",
+      "required": true
+    },
+    {
+      "name": "speed_kmph",
+      "type": "double",
+      "required": false
+    },
+    {
+      "name": "lat",
+      "type": "double",
+      "required": false
+    },
+    {
+      "name": "lon",
+      "type": "double",
+      "required": false
+    },
+    {
+      "name": "device_id",
+      "type": "string",
+      "required": false
+    }
+  ]
+}

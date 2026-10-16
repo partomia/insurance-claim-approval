@@ -1,0 +1,38 @@
+{
+  "entity": "pa_policy_cdc",
+  "source": "policy_admin",
+  "format": "jsonl",
+  "file_glob": "policy_cdc_*.jsonl",
+  "description": "Policy admin change events (Debezium style: op, ts_ms, full after-image as JSON)",
+  "key": [
+    "policy_number",
+    "ts_ms"
+  ],
+  "control_field": null,
+  "columns": [
+    {
+      "name": "op",
+      "type": "string",
+      "required": true,
+      "allowed": [
+        "c",
+        "u",
+        "d"
+      ]
+    },
+    {
+      "name": "ts_ms",
+      "type": "bigint",
+      "required": true
+    },
+    {
+      "name": "policy_number",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "after",
+      "type": "string"
+    }
+  ]
+}

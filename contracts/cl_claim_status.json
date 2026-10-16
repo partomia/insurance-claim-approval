@@ -1,0 +1,57 @@
+{
+  "entity": "cl_claim_status",
+  "source": "claims",
+  "format": "jsonl",
+  "file_glob": "claim_status_*.jsonl",
+  "description": "Claim status transitions (adjudication events)",
+  "key": [
+    "claim_id",
+    "event_ts",
+    "to_status"
+  ],
+  "control_field": null,
+  "columns": [
+    {
+      "name": "claim_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "event_ts",
+      "type": "timestamp",
+      "required": true,
+      "format": "yyyy-MM-dd HH:mm:ss"
+    },
+    {
+      "name": "from_status",
+      "type": "string"
+    },
+    {
+      "name": "to_status",
+      "type": "string",
+      "required": true,
+      "allowed": [
+        "UNDER_REVIEW",
+        "APPROVED",
+        "REJECTED"
+      ]
+    },
+    {
+      "name": "amount_approved",
+      "type": "decimal"
+    },
+    {
+      "name": "reason_code",
+      "type": "string"
+    },
+    {
+      "name": "decided_by",
+      "type": "string",
+      "allowed": [
+        "AUTO",
+        "ADJUSTER",
+        "FRAUD_SIU"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "entity": "bu_profile",
+  "source": "bureau",
+  "format": "psv",
+  "file_glob": "bureau_*.psv",
+  "description": "Credit + driving bureau profiles, pipe-delimited with trailer T|count|sum(credit_score); day 1 full, then deltas",
+  "key": [
+    "bureau_ref",
+    "as_of_date"
+  ],
+  "control_field": "credit_score",
+  "columns": [
+    {
+      "name": "bureau_ref",
+      "type": "string",
+      "required": true,
+      "pattern": "^BU[0-9]{8}$",
+      "severity": "reject"
+    },
+    {
+      "name": "full_name",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "dob",
+      "type": "date",
+      "format": "dd/MM/yyyy"
+    },
+    {
+      "name": "mobile",
+      "type": "string"
+    },
+    {
+      "name": "credit_score",
+      "type": "int"
+    },
+    {
+      "name": "loan_defaults_12m",
+      "type": "int"
+    },
+    {
+      "name": "active_vehicle_loan",
+      "type": "string",
+      "allowed": [
+        "Y",
+        "N"
+      ]
+    },
+    {
+      "name": "driver_age",
+      "type": "int"
+    },
+    {
+      "name": "years_licensed",
+      "type": "int"
+    },
+    {
+      "name": "traffic_violations_3y",
+      "type": "int"
+    },
+    {
+      "name": "dui_history",
+      "type": "string",
+      "allowed": [
+        "Y",
+        "N"
+      ]
+    },
+    {
+      "name": "address_changed_90d",
+      "type": "string",
+      "allowed": [
+        "Y",
+        "N"
+      ]
+    },
+    {
+      "name": "other_insurer_claims_3y",
+      "type": "int"
+    },
+    {
+      "name": "as_of_date",
+      "type": "date",
+      "format": "dd/MM/yyyy",
+      "required": true
+    }
+  ]
+}
