@@ -30,7 +30,7 @@ from ci.setup_cai import Workbench, find_project  # noqa: E402
 # What the CAI side needs (jobs, endpoint, app); the CDE jobs, docs and tests stay out.
 CAI_PATHS = ("common.py", "cdsw-build.sh", "requirements.txt", "requirements-model.txt", ".gitignore",
              "config/", "features/", "train/", "gate/", "serve/", "monitor/", "guardrails/", "lakehouse/",
-             "ci/", "scripts/fetch_dataset.py", "backend/", "frontend/", "cml/", "run.py", "start.sh")
+             "ci/", "scripts/fetch_dataset.py", "backend/", "frontend/", "cml/", "docs/demo-assets/", "run.py", "start.sh")
 
 
 def changed(since: str) -> list[str]:
