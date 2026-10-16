@@ -25,7 +25,7 @@ trap 'rm -rf "${TMP}"' EXIT
 git archive --format=tar --prefix=code/ "${SHA}" cde config contracts generators stream | tar -x -C "${TMP}"
 printf '%s %s %s\n' "${SHA}" "${BRANCH}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${TMP}/code/CODE_VERSION"
 find "${TMP}/code" -name '__pycache__' -prune -exec rm -rf {} +
-(cd "${TMP}/code" && tar -czf "${TMP}/code.tar.gz" .)
+(cd "${TMP}/code" && tar -czf "${TMP}/code.tar.gz" -- *)
 
 if ! cde resource describe --name "${RESOURCE}" &>/dev/null; then
   echo "==> Creating files resource ${RESOURCE}"

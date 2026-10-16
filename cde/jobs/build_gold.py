@@ -9,6 +9,8 @@ Stage 4 - Gold: dimensions, facts, the training feature table and the Copilot ap
                     crash match (same VIN, within 2 h of the incident, g >= 2), delay, cycle time
   claim_training_features  one row per decided claim, every feature point-in-time (only what was
                     known before the claim's FNOL), labels approved and fraud_confirmed
+  fact_policy_month earned premium per policy and calendar month of its current term, with the
+                    claims approved on incidents in that month and term (the loss-ratio grain)
   scoring_context   the same history features as of now, per policy and per garage: what the app
                     sends the model endpoint for a new claim (one definition, no train/serve skew)
   app tables        policy_master, policy_clauses, policy_risk_signals, garage_risk_signals,
@@ -22,7 +24,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -73,19 +74,19 @@ def scd2(snapshots: DataFrame, key: str, tracked: list[str], sk: str) -> DataFra
                                             F.when(F.col("_last") < F.lit(latest), F.col("_last"))
                                             .otherwise(F.lit(OPEN_END).cast("date"))))
          .withColumn("is_current", F.col("valid_to") == F.lit(OPEN_END).cast("date"))
-         .withColumn("version", F.row_number().over(w2))
+         .withColumn("version_no", F.row_number().over(w2))
          .withColumn(sk, F.substring(F.sha2(F.concat_ws("|", F.col(key), F.col("valid_from").cast("string")), 256), 1, 16)))
     return v.drop("_h", "_prev", "_next", "_last", "business_date")
 
 
 def version_at(fact: DataFrame, dim: DataFrame, key: str, sk: str, at_col: str) -> DataFrame:
     """The dimension version valid on at_col's date; before the first version, the first version."""
-    d = dim.select(key, sk, "valid_from", "valid_to", "version")
+    d = dim.select(key, sk, "valid_from", "valid_to", "version_no")
     j = fact.join(d, key, "left").withColumn(
         "_ok", (F.to_date(at_col) >= F.col("valid_from")) & (F.to_date(at_col) <= F.col("valid_to")))
-    w = Window.partitionBy("claim_id").orderBy(F.desc("_ok"), F.asc("version"))
+    w = Window.partitionBy("claim_id").orderBy(F.desc("_ok"), F.asc("version_no"))
     return (j.withColumn("_rn", F.row_number().over(w)).where("_rn = 1")
-            .drop("_rn", "_ok", "valid_from", "valid_to", "version"))
+            .drop("_rn", "_ok", "valid_from", "valid_to", "version_no"))
 
 
 # ---------------------------------------------------------------- facts and features
@@ -175,6 +176,29 @@ def training_features(fact: DataFrame, policy_cur: DataFrame, golden: DataFrame)
         "status", "reason_code", "decided_by",
         (F.col("status") == "APPROVED").cast("int").alias("approved"),
         F.coalesce(F.col("reason_code") == "FRAUD_CONFIRMED", F.lit(False)).cast("int").alias("fraud_confirmed"))
+
+
+def policy_month(policy_cur: DataFrame, fact: DataFrame, d) -> DataFrame:
+    """Earned premium per policy x month of its term (pro rata days), up to the business date."""
+    end = F.least(F.col("expiry_date"), F.lit(d.isoformat()).cast("date"))
+    p = (policy_cur.where(F.col("effective_date") <= end)
+         .select("policy_number", "effective_date", F.col("expiry_date"), end.alias("_end"),
+                 F.col("premium_amount").cast("double").alias("premium_amount"))
+         .withColumn("premium_month", F.explode(F.sequence(F.trunc("effective_date", "month"), F.trunc("_end", "month"),
+                                                   F.expr("INTERVAL 1 MONTH"))))
+         .withColumn("_from", F.greatest("effective_date", "premium_month"))
+         .withColumn("_to", F.least("_end", F.date_sub(F.add_months("premium_month", 1), 1)))
+         .withColumn("days_in_force", F.datediff("_to", "_from") + 1)
+         .withColumn("earned_premium", F.round(F.col("premium_amount") * F.col("days_in_force") / 365.0, 2)))
+    c = (fact.where(F.col("status") == "APPROVED")
+         .select("policy_number", F.trunc(F.to_date("incident_ts"), "month").alias("premium_month"),
+                 F.to_date("incident_ts").alias("_inc"), F.col("amount_approved").cast("double").alias("_amt")))
+    j = (p.join(c, ["policy_number", "premium_month"], "left")
+         .withColumn("_amt", F.when((F.col("_inc") >= F.col("effective_date")) & (F.col("_inc") <= F.col("_end")),
+                                    F.col("_amt")).otherwise(0.0)))
+    return (j.groupBy("policy_number", "premium_month", "days_in_force", "earned_premium")
+            .agg(F.round(F.sum(F.coalesce("_amt", F.lit(0.0))), 2).alias("approved_amount"),
+                 F.sum(F.when(F.col("_amt") > 0, 1).otherwise(0)).alias("approved_claims")))
 
 
 def scoring_context(fact: DataFrame, policy_cur: DataFrame, golden: DataFrame, vehicles: DataFrame,
@@ -299,11 +323,11 @@ def kpi_ref(spark, names) -> None:
     rows = [(k["kpi_code"], k["name"], k["definition"], k["formula"], k["grain"], k["certified_view"], k["owner"],
              k["version"], k["certified_on"], k["glossary_term"]) for k in cfg["kpis"]]
     C.replace_table(spark.createDataFrame(rows, "kpi_code string, name string, definition string, formula string, "
-                                                "grain string, certified_view string, owner string, version string, "
+                                                "grain string, certified_view string, owner string, kpi_version string, "
                                                 "certified_on string, glossary_term string"),
                     names.t("ref", "kpi_definition"))
-    params = [(k, json.dumps(v)) for k, v in cfg["parameters"].items()]
-    C.replace_table(spark.createDataFrame(params, "parameter string, value_json string"), names.t("ref", "kpi_parameter"))
+    params = [(k, ",".join(map(str, v)) if isinstance(v, list) else str(v)) for k, v in cfg["parameters"].items()]
+    C.replace_table(spark.createDataFrame(params, "parameter string, value string"), names.t("ref", "kpi_parameter"))
 
 
 # ---------------------------------------------------------------- run
@@ -364,6 +388,8 @@ def run(spark, argv=None) -> dict:
         feats = training_features(fact_d.where(F.col("status").isin("APPROVED", "REJECTED")), policy_cur, golden)
         publish("claim_training_features", feats, "standardise", "gold.fact_claim,silver.policy,mdm.customer_golden",
                 details="decided claims, point-in-time features, labels approved and fraud_confirmed")
+        publish("fact_policy_month", policy_month(policy_cur, fact, d), "standardise",
+                "silver.policy,gold.fact_claim", partition=True, details="earned premium and approved claims")
         pctx, gctx = scoring_context(fact, policy_cur, golden, vehicles, garages, d)
         publish("scoring_context_policy", pctx, "standardise", "gold.fact_claim,silver.policy,mdm.customer_golden")
         publish("scoring_context_garage", gctx, "standardise", "gold.fact_claim,silver.garage")
