@@ -13,6 +13,8 @@ pipeline, SQLAlchemy on SQLite (dev) or Postgres (prod).
 | [`assistant-memory.md`](./assistant-memory.md) | STM/LTM memory layer (deep dive) |
 | [`frontend.md`](./frontend.md) | Frontend routes and components |
 | [`env-reference.md`](./env-reference.md) | All environment variables, defaults, and when to change them |
+| [`DEMO_RUNBOOK.md`](./DEMO_RUNBOOK.md) | Cloudera use case "mcc" on `federal-cdp-env`: links, logins, demo flow, start/stop, troubleshooting |
+| [`PROJECT_LOG.md`](./PROJECT_LOG.md) / [`REUSE_INVENTORY.md`](./REUSE_INVENTORY.md) | Every live action of the mcc build; files copied from sibling projects |
 | [`steps-to-demo-execution.md`](./steps-to-demo-execution.md) | Click/command runbook for demoing the OLTP + Lakehouse story end-to-end (resources assumed already running) |
 | [`plans/step5-approval-model-plan.md`](./plans/step5-approval-model-plan.md) | Next step (not started): trained approval model — CDE features → CAI Job training → CAI Model endpoint → shadow mode in the app |
 | [`diagrams/`](./diagrams/) | Mermaid + PNG diagrams for architecture, data flow, portals, agent pipeline |

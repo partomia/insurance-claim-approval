@@ -141,3 +141,13 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
   financial}, masking federal01 only; rsingh and federal07 clear.
 - Checked as rsingh: mobile, credit_score, dob, vin clear (training and app reads unaffected).
   The federal01 masked view is not checked here (no federal01 credentials in .env).
+
+## 2026-10-16 23:15–23:45 - Phase 12: operations
+
+- `scripts/platform_ctl.py` + `config/platform.json` (layers cai, cde, cdw, kafka; CAI schedules
+  stop by clearing the cron). `status --scope platform` (read-only): app RUNNING, model
+  mcc-approval deployed, 4 CAI schedules set, stream-bronze #646 running, CDE VC AppInstalled,
+  federal-impala-1 Running, federal-kafka AVAILABLE. `stop --dry-run` plans only MCC workloads
+  (app, model, 4 crons, the stream run). Nothing stopped.
+- `docs/DEMO_RUNBOOK.md`, README status section, always-applied `.cursor/rules/project-start-stop.mdc`
+  (`.gitignore` now shares `.cursor/rules/`).

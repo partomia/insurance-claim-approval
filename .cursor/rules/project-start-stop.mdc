@@ -1,0 +1,31 @@
+---
+description: How to start, stop or check the whole MCC project on Cloudera (scripts/platform_ctl.py)
+alwaysApply: true
+---
+
+# Starting and stopping the project
+
+When asked to start, stop, pause, resume or check the project (or "bring the demo up/down"),
+use `scripts/platform_ctl.py` from the repo root. Never improvise with raw API calls first.
+
+```bash
+set -a; source .env; set +a                        # credentials; never print them
+.venv/bin/python scripts/platform_ctl.py status        # always first: show the user the state
+.venv/bin/python scripts/platform_ctl.py stop --dry-run   # show the plan
+.venv/bin/python scripts/platform_ctl.py stop          # or: start
+.venv/bin/python scripts/platform_ctl.py status        # always last: confirm every layer
+```
+
+- Default scope `project` touches only this demo (config/platform.json): CAI app
+  "MCC Motor Claim Copilot", model `mcc-approval`, CAI schedules mcc-export-claims, mcc-05, mcc-08
+  and mcc-lakehouse-ingest, CDE `rsingh-mcc-*` runs, the bronze stream and the DAG schedule. Data,
+  Kafka topics and checkpoints are kept, so start resumes without gaps.
+- `--only cai,cde` limits layers. `--scope platform --yes-shared` also stops or starts the shared
+  Kafka Data Hub, CDW `federal-impala-1`, the CDE virtual cluster and the CAI workspace: sibling
+  demos use them, so ask the user explicitly before using it, every time.
+- CAI schedules are stopped by clearing the cron (API v2 ignores `paused`); start sets the crons
+  from `config/platform.json`. Read the state back; do not trust a 200.
+- `start` does not run the producer or the DAG. Live stream for a demo:
+  `cde job run --name rsingh-mcc-stream-produce --arg=--mode --arg=live --arg=--duration --arg=1800`.
+- Model endpoint restart takes ~1-3 min, the app ~30 s.
+- Afterwards add a short entry to docs/PROJECT_LOG.md and update the README status section.

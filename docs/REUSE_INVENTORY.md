@@ -39,3 +39,4 @@ OGX = O-G-Asset-Integrity-Lakehouse, GDL = General-DataLakehouse, CXR = the ches
 | `monitor/drift.py`, `ci/retrain_trigger.py` | O-G-Asset-Integrity-Lakehouse | adapted: claims via the batch scoring path; new labels = newly decided claims |
 | `ci/cai_jobs.py`, `ci/setup_cai.py`, `ci/push_files.py`, `ci/sync_code.py` | O-G-Asset-Integrity-Lakehouse (from CXR) | adapted: blank project for a private repo, CODE_VERSION written by the push |
 | `scripts/governance.py` | O-G-Asset-Integrity-Lakehouse (from GDL) | adapted: MCC_ tag prefix, MCC_WORKLOAD_* credentials; `config/governance.json` new (claims PII, bureau score, VIN) |
+| `scripts/platform_ctl.py`, `.cursor/rules/project-start-stop.mdc` | O-G-Asset-Integrity-Lakehouse | adapted: no NiFi or Flink layers; MCC_* credentials, mcc_deploy_streaming.sh; `config/platform.json` (Phase 2 scaffold) gains the cron per CAI schedule |

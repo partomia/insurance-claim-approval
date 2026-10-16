@@ -1,12 +1,18 @@
 {
-  "_comment": "scripts/platform_ctl.py: what 'stop' and 'start' touch. project = this demo's workloads only; platform = the shared CDP services of the environment as well (also used by sibling demos). Names are resolved by the CDP CLI at run time.",
+  "_comment": "scripts/platform_ctl.py: what 'stop' and 'start' touch. project = this demo's workloads only; platform = the shared CDP services of the environment as well (also used by sibling demos). No NiFi or Flink in this project. Names are resolved by the CDP CLI at run time.",
   "environment": "federal-cdp-env",
   "project": {
     "cai_project": "rsingh-motor-claim-copilot",
     "cai_job_prefix": "mcc-",
     "cai_apps": ["MCC Motor Claim Copilot"],
     "cai_models": ["mcc-approval"],
-    "cai_scheduled_jobs": ["mcc-05-nightly-drift", "mcc-08-retrain-trigger"],
+    "_cai_scheduled_jobs": "name -> cron (same as ci/cai_jobs.py): API v2 ignores paused, so stop clears the cron and start sets it back",
+    "cai_scheduled_jobs": {
+      "mcc-export-claims": "45 1 * * *",
+      "mcc-05-nightly-drift": "0 2 * * *",
+      "mcc-08-retrain-trigger": "30 2 * * *",
+      "mcc-lakehouse-ingest": "0 3 * * *"
+    },
     "cde_job_prefix": "rsingh-mcc-",
     "cde_streaming_jobs": ["rsingh-mcc-stream-bronze"],
     "cde_dag_jobs": ["rsingh-mcc-orchestration"]

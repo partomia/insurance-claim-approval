@@ -8,8 +8,9 @@ Thumbs.db
 *.swp
 *.swo
 
-# Cursor / local tooling
-.cursor/
+# Cursor / local tooling (rules are shared)
+.cursor/*
+!.cursor/rules/
 
 # --- Cloudera use case (mcc) ---
 # Secrets & local config

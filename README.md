@@ -2,6 +2,26 @@
 
 Production-grade **motor-vehicle** insurance claim processing with FastAPI, Celery, Redis, Impala (CDP), Chroma RAG, motor-tuned fraud detection, own-damage / third-party payout split, total-loss detection, and a Confidence & Explainability Layer.
 
+## Status: Cloudera lakehouse use case "mcc" (Motor Claim Copilot)
+
+Built on `federal-cdp-env` (branch `feature/cloudera-mcc`; plan in [`PLAN.md`](PLAN.md), every
+live run in [`docs/PROJECT_LOG.md`](docs/PROJECT_LOG.md), demo in
+[`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md)).
+
+| Layer | State | Where |
+|-------|-------|-------|
+| Sources and landing | 5 synthetic systems (policy admin, claims, bureau, garage, telematics) | `generators/`, CDE `rsingh-mcc-land` |
+| Bronze, silver, MDM, gold | Iceberg `rsingh_mcc_*`, load audit, quarantine, reconciliation | CDE `rsingh-mcc-*`, `cde/jobs/` |
+| Streaming | Kafka `mcc.*` → `rsingh-mcc-stream-bronze` (checkpointed) | `cde/scripts/mcc_deploy_streaming.sh` |
+| Semantic and dashboards | certified KPIs STP, cycle time, loss ratio; 4 dashboards in "MCC - Insurance Claim Processing" | `sql/semantic/`, `dataviz/build_dashboard.py` |
+| ML | approval and fraud heads, KPI gate, champion on endpoint `mcc-approval`, nightly drift and retrain trigger | CAI jobs `mcc-00`..`mcc-08` |
+| App | Copilot on CAI with the model in shadow (never changes a decision); LLM guard | `cml/launch_app.py`, `backend/services/approval_model_service.py` |
+| Governance | Atlas `MCC_SENSITIVE_*`, glossary "MCC Claims KPIs", Ranger masking for `federal01` | `scripts/governance.py`, `config/governance.json` |
+| Operations | status, stop, start at project scope | `scripts/platform_ctl.py`, `config/platform.json` |
+
+Known and deferred: the loss ratio is about 576% (the synthetic book is claim-dense), and the
+nightly drift check reports ALERT until its reference is regenerated at about 6 claims a day.
+
 ## System Architecture
 
 A simple, layer-by-layer view — from the browser down to the data platform:
