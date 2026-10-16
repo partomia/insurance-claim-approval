@@ -19,6 +19,8 @@ Scheduled nightly at 02:00 IST (20:30 UTC) for the business dates in lakehouse.j
 "scheduled_dates" (2026-10-19 .. 2026-10-21): each run closes the UTC day its data interval ends
 on and replays that day's stream first (producer backfill, then the bronze stream with an
 available-now trigger; stop the long-running stream before unpausing). Created paused.
+start_date is in the past so manual runs get tasks (Airflow creates none for a logical date
+before start_date); in_window skips every scheduled run whose date is not in SCHEDULED_DATES.
 Manual runs use params.business_date (Trigger DAG w/ config), in date order, and skip the stream:
   {"business_date": "2026-10-17"}
 Job names must match cde/scripts/mcc_deploy_jobs.sh (CDEJobRunOperator fails with 404 otherwise).
@@ -51,6 +53,11 @@ SCHEDULED = "dag_run.run_type == 'scheduled'"
 BUSINESS_DATE = ("{{ data_interval_end.strftime('%Y-%m-%d') if " + SCHEDULED +
                  " else params.business_date }}")
 CAI_DEADLINE_MIN = 60
+SCHEDULED_DATES = ("2026-10-19", "2026-10-20", "2026-10-21")   # lakehouse.json "scheduled_dates"
+
+
+def in_window(dag_run, data_interval_end, **_) -> bool:
+    return dag_run.run_type != "scheduled" or data_interval_end.strftime("%Y-%m-%d") in SCHEDULED_DATES
 
 
 def trigger_cai_score(business_date: str, run_id: str, **_):
@@ -94,8 +101,8 @@ with DAG(
     description="Insurer sources -> bronze / silver / MDM / gold on Iceberg, with reconciliation",
     default_args=default_args,
     schedule_interval="30 20 * * *",
-    # first interval ends 2026-10-19 20:30 UTC (business date 10-19), the last starts on end_date
-    start_date=datetime(2026, 10, 18, 20, 30),
+    # scheduled business dates 10-16 .. 10-18 are skipped by in_window; the last starts on end_date
+    start_date=datetime(2026, 10, 16),
     end_date=datetime(2026, 10, 20, 20, 30),
     catchup=False,
     is_paused_upon_creation=True,
@@ -116,6 +123,7 @@ with DAG(
             **kwargs,
         )
 
+    window = ShortCircuitOperator(task_id="in_window", python_callable=in_window)
     land = stage("land_sources", "land")
     bronze = stage("ingest_bronze", "bronze", "--mode", "{{ params.bronze_mode }}")
     silver = stage("build_silver", "silver")
@@ -140,6 +148,7 @@ with DAG(
                                "--starting-offsets", "earliest")
     stream_done = EmptyOperator(task_id="stream_done", trigger_rule="none_failed")
 
+    window >> [land, is_scheduled]
     land >> bronze >> silver >> mdm >> gold >> recon
     # manual run: produce and stream_bronze are skipped, stream_done (none_failed) still lets silver run
     is_scheduled >> produce >> stream_bronze >> stream_done >> silver
