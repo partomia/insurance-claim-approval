@@ -34,9 +34,11 @@ def fetch(name: str) -> int:
     from ci.setup_cai import Workbench, find_project
 
     wb = Workbench(os.environ["MCC_CAI_HOST"], os.environ["MCC_CAI_API_KEY"])
-    pid = find_project(wb)["id"]
-    path = f"outputs/logs/{name}.log".replace("/", "%2F")
-    r = requests.get(f"{wb.base}/projects/{pid}/files/{path}:download", headers=wb.h, timeout=60)
+    slug = find_project(wb)["owner"]["username"] + "/" + find_project(wb)["name"]
+    host = os.environ["MCC_CAI_HOST"].rstrip("/")
+    # v2 has no file download; v1 takes the API key as the basic-auth user
+    r = requests.get(f"{host}/api/v1/projects/{slug}/files/outputs/logs/{name}.log",
+                     auth=(os.environ["MCC_CAI_API_KEY"], ""), timeout=60)
     if not r.ok:
         print(f"HTTP {r.status_code}: {r.text[:200]}")
         return 1
