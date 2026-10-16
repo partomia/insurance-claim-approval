@@ -156,6 +156,16 @@
       ]
     },
     {
+      "name": "portal_enabled",
+      "type": "string",
+      "required": true,
+      "allowed": [
+        "Y",
+        "N"
+      ],
+      "severity": "reject"
+    },
+    {
       "name": "updated_at",
       "type": "timestamp",
       "format": "yyyy-MM-dd HH:mm:ss"

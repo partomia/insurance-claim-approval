@@ -124,6 +124,11 @@
         "ADJUSTER",
         "FRAUD_SIU"
       ]
+    },
+    {
+      "name": "reason_code",
+      "type": "string",
+      "required": false
     }
   ]
 }

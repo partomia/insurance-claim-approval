@@ -158,6 +158,8 @@ class Policy:
     rsa: bool
     has_telematics: bool
     book: bool                     # in the app's active book (policy_master)
+    customer_ref: str = ""         # the policy-admin customer number (a legacy one on second policies)
+    holder_name: str = ""          # as keyed on this policy
 
 
 @dataclass
@@ -241,6 +243,7 @@ class World:
             make=make, model=model, year=year, ncb_pct=rng.choice([0, 20, 25, 35, 45, 50]),
             zero_dep=rng.random() < 0.45, rsa=rng.random() < 0.5,
             has_telematics=rng.random() < U["telematics_fraction"], book=book)
+        p.customer_ref, p.holder_name = c.customer_ref, c.name
         c.policies.append(p)
         self.policies[number] = p
         return p
@@ -253,7 +256,11 @@ class World:
                 p.status = "ACTIVE"
         extra = rng.sample(self.customers, int(len(self.customers) * U["second_policy_fraction"]))
         for k, c in enumerate(sorted(extra, key=lambda x: x.idx)):
-            self._policy(rng, f"LH-POL-{2800 + k}", c, book=False)
+            p = self._policy(rng, f"LH-POL-{2800 + k}", c, book=False)
+            # sold through the legacy branch system: its own customer number, the name as keyed there
+            p.customer_ref = f"PA-C{900000 + k:06d}"
+            if rng.random() < 0.5:
+                p.holder_name = f"{c.first[0]}. {c.last}" if rng.random() < 0.5 else f"{typo(rng, c.first)} {c.last}"
 
     def _build_garages(self) -> None:
         rng = R(self.seed, "garages")
@@ -323,7 +330,7 @@ class World:
             cl.decided = cl.fnol + timedelta(minutes=rng.uniform(3, 240))
         else:
             cl.review_at = cl.fnol + timedelta(hours=rng.uniform(1, 30))
-            cl.decided = cl.fnol + timedelta(days=rng.uniform(0.5, 9))
+            cl.decided = max(cl.fnol + timedelta(days=rng.uniform(0.5, 9)), cl.review_at + timedelta(hours=rng.uniform(1, 6)))
 
     def _pick_policy(self, rng, weights: list[float]) -> Policy:
         return rng.choices(self._policy_list, weights=weights)[0]
@@ -403,7 +410,7 @@ class World:
 
     def policy_row(self, p: Policy, updated: datetime) -> dict:
         c = p.customer
-        return {"policy_number": p.policy_number, "customer_ref": c.customer_ref, "holder_name": c.name,
+        return {"policy_number": p.policy_number, "customer_ref": p.customer_ref, "holder_name": p.holder_name,
                 "holder_dob": c.dob.strftime("%d/%m/%Y"), "holder_mobile": c.mobile, "holder_email": c.email,
                 "address_city": c.city, "customer_since": c.customer_since.isoformat(), "provider_name": p.provider,
                 "policy_type": "Motor", "premium_amount": f"{p.premium:.2f}", "status": p.status,
@@ -412,7 +419,7 @@ class World:
                 "depreciation_rate": f"{p.depreciation_rate}", "vehicle_vin": p.vin, "vehicle_reg_no": p.reg_no,
                 "vehicle_make": p.make, "vehicle_model": p.model, "vehicle_year": str(p.year),
                 "ncb_pct": f"{p.ncb_pct}", "zero_dep_addon": "Y" if p.zero_dep else "N",
-                "rsa_addon": "Y" if p.rsa else "N", "updated_at": ts(updated)}
+                "rsa_addon": "Y" if p.rsa else "N", "portal_enabled": "Y" if p.book else "N", "updated_at": ts(updated)}
 
     def bureau_row(self, rng, c: Customer, as_of: date) -> dict:
         if c.stressed:
@@ -449,7 +456,8 @@ class World:
                 "police_report": "Y" if cl.police_report else "N", "third_party_involved": "Y" if cl.third_party else "N",
                 "channel": cl.channel, "status": status,
                 "amount_approved": cl.amount_approved if decided else None,
-                "decided_ts": ts(cl.decided) if decided else None, "decided_by": cl.decided_by if decided else None}
+                "decided_ts": ts(cl.decided) if decided else None, "decided_by": cl.decided_by if decided else None,
+                "reason_code": cl.reason_code if decided else None}
 
     @staticmethod
     def status_events(cl: Claim) -> list[tuple[datetime, dict]]:
@@ -468,6 +476,7 @@ class World:
     def truth(self) -> dict:
         """What the generator knows and the lakehouse must rediscover: identities and labels."""
         return {"customers": {c.customer_ref: {"bureau_ref": c.bureau_ref, "email": c.email,
+                                               "customer_refs": sorted({p.customer_ref for p in c.policies}),
                                                "policies": [p.policy_number for p in c.policies]}
                               for c in self.customers},
                 "fraud_claims": sorted(cl.claim_id for cl in self.claims if cl.fraud)}

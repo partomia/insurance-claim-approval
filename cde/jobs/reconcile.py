@@ -209,6 +209,86 @@ def stream_checks(r: Recon, _manifests: dict) -> None:
 CHECKS.append(("stream", stream_checks))
 
 
+# ---------------------------------------------------------------- silver, mdm, gold
+
+
+def _upto(r: Recon, df, col="_business_date"):
+    return df.where(F.col(col) <= F.lit(r.d.isoformat()).cast("date"))
+
+
+def silver_checks(r: Recon, _manifests: dict) -> None:
+    claim, policy, orphan = r.table("silver", "claim"), r.table("silver", "policy"), r.table("silver", "orphan")
+    if claim is None or policy is None:
+        return
+    orph = r.on_date(orphan, "business_date") if orphan is not None else None
+    n_orph = {e: (orph.where(F.col("entity") == e).count() if orph is not None else 0) for e in ("claim", "policy")}
+    b_claim = _upto(r, r.table("bronze", "cl_claim"))
+    ids = b_claim.select("claim_id").distinct().count()
+    s_claim = r.on_date(claim, "business_date")
+    n_s = s_claim.count()
+    r.add("silver", "claim", "silver_records", ids, n_s, explained_by=-n_orph["claim"],
+          detail=f"{ids} distinct claims in bronze up to the date, {n_s} in silver, {n_orph['claim']} parked as orphans "
+                 f"(policy unknown or quarantined)")
+    keys = [r.table("bronze", "pa_policy")]
+    cdc = r.table("bronze", "pa_policy_cdc")
+    pol_ids = _upto(r, keys[0]).select("policy_number")
+    if cdc is not None:
+        pol_ids = pol_ids.unionByName(_upto(r, cdc).select("policy_number"))
+    n_b = pol_ids.distinct().count()
+    n_p = r.on_date(policy, "business_date").count()
+    r.add("silver", "policy", "silver_records", n_b, n_p, explained_by=-n_orph["policy"],
+          detail=f"{n_b} policy numbers in the extract and CDC, {n_p} in silver, {n_orph['policy']} CDC-only (UNKNOWN_POLICY)")
+    events = r.table("silver", "claim_status_event")
+    if events is not None:
+        ev = r.on_date(events, "business_date")
+        decided = ev.where(F.col("to_status").isin("APPROVED", "REJECTED")).select("claim_id", "to_status")
+        stale = (decided.join(s_claim.select("claim_id", F.col("status").alias("_s")), "claim_id")
+                 .where(F.col("_s") != F.col("to_status")).count())
+        r.add("silver", "claim", "status_applied", 0, stale,
+              detail=f"{stale} claim(s) whose silver status disagrees with their decision event")
+
+
+def mdm_checks(r: Recon, _manifests: dict) -> None:
+    g, x, pol = r.table("mdm", "customer_golden"), r.table("mdm", "customer_xref"), r.table("silver", "policy")
+    if g is None or x is None or pol is None:
+        return
+    refs = r.on_date(pol, "business_date").select("customer_ref").distinct().count()
+    xr = r.on_date(x, "business_date").where(F.col("source_system") == "POLICY_ADMIN")
+    n_x = xr.select("source_key").distinct().count()
+    r.add("mdm", "customer_xref", "mdm_coverage", refs, n_x,
+          detail=f"{refs} policy-admin customer refs, {n_x} resolved to a golden customer")
+    dup = xr.groupBy("source_key").count().where("count > 1").count()
+    r.add("mdm", "customer_xref", "mdm_unique", 0, dup, detail=f"{dup} source key(s) mapped to more than one golden id")
+    golden = r.on_date(g, "business_date")
+    n_g = golden.count()
+    merged = golden.where(F.size("customer_refs") > 1).count()
+    r.add("mdm", "customer_golden", "mdm_golden", refs, n_g, explained_by=-(refs - n_g) if merged else None,
+          detail=f"{n_g} golden customers from {refs} refs ({merged} merged across policy-admin systems)")
+
+
+def gold_checks(r: Recon, _manifests: dict) -> None:
+    f, s = r.table("gold", "fact_claim"), r.table("silver", "claim")
+    if f is None or s is None:
+        return
+    fd, sd = r.on_date(f, "business_date"), r.on_date(s, "business_date")
+    r.add("gold", "fact_claim", "gold_records", sd.count(), fd.count(), detail="silver.claim vs gold.fact_claim")
+    r.add("gold", "fact_claim", "gold_amount", _sum(sd, "amount_requested"), _sum(fd, "amount_requested"),
+          detail="amount requested, silver vs gold (INR)")
+    unlinked = fd.where(F.col("golden_customer_id").isNull() | F.col("policy_sk").isNull()
+                        | F.col("customer_sk").isNull()).count()
+    r.add("gold", "fact_claim", "gold_links", 0, unlinked,
+          detail=f"{unlinked} claim(s) without a golden customer, policy version or customer version")
+    t = r.table("gold", "claim_training_features")
+    td = r.on_date(t, "business_date") if t is not None else None
+    if td is not None and not td.isEmpty():   # the table holds the latest build only
+        decided = sd.where(F.col("status").isin("APPROVED", "REJECTED")).count()
+        r.add("gold", "claim_training_features", "gold_records", decided, td.count(),
+              detail="decided claims in silver vs rows in the training table")
+
+
+CHECKS.extend([("silver", silver_checks), ("mdm", mdm_checks), ("gold", gold_checks)])
+
+
 # ---------------------------------------------------------------- output
 
 

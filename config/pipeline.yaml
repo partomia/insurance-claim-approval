@@ -25,14 +25,14 @@ features:
     - amount_vs_idv
     - report_delay_days
     - incident_hour
-    - policy_age_days
-    - days_since_renewal
+    - customer_tenure_days
     - prior_claims_12m
     - prior_rejected_12m
     - customer_policies
     - credit_score
     - years_licensed
     - traffic_violations
+    - other_insurer_claims_3y
     - vehicle_age_years
     - idv
     - ncb_pct
