@@ -33,8 +33,11 @@ def built() -> bool:
 
 
 def setup() -> int:
-    print("[launch_app] building the app: cml/setup.sh", flush=True)
-    rc = subprocess.run(["bash", str(ROOT / "cml" / "setup.sh")], cwd=ROOT).returncode
+    # federal has no route to the nvm/Node downloads: the SPA is built on a laptop and uploaded
+    # (ci/push_files.py --dist); setup.sh then only builds the backend
+    flags = ["--skip-frontend"] if (ROOT / "frontend" / "dist" / "index.html").exists() else []
+    print("[launch_app] building the app: cml/setup.sh", *flags, flush=True)
+    rc = subprocess.run(["bash", str(ROOT / "cml" / "setup.sh"), *flags], cwd=ROOT).returncode
     if rc:
         return rc
     print("[launch_app] lakehouse ingest from", os.environ.get("LAKEHOUSE_DATABASE", "(LAKEHOUSE_DATABASE unset)"), flush=True)

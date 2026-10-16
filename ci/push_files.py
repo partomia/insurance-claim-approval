@@ -10,6 +10,8 @@ mcc-00-sync-code checks and the models record.
   python ci/push_files.py --all                    # every tracked file of the CAI side (first push)
   python ci/push_files.py --since HEAD~1           # files changed in the last commit
   python ci/push_files.py serve/predict.py config/pipeline.yaml
+  (cd frontend && VITE_API_URL="" npm run build) && python ci/push_files.py --dist
+                                                   # the built SPA (federal cannot install Node)
 """
 from __future__ import annotations
 
@@ -49,12 +51,18 @@ def main() -> int:
     ap.add_argument("paths", nargs="*")
     ap.add_argument("--since", default="")
     ap.add_argument("--all", action="store_true", help="every tracked file of the CAI side")
+    ap.add_argument("--dist", action="store_true", help="also the built frontend/dist (git-ignored)")
     a = ap.parse_args()
     tracked = git("ls-files").split("\n")
     paths = list(a.paths) + (changed(a.since) if a.since else []) + (cai_side(tracked) if a.all else [])
     paths = sorted(set(paths))
     skipped = [p for p in paths if p not in set(tracked)]
     paths = [p for p in paths if p in set(tracked) and (ROOT / p).stat().st_size > 0]
+    if a.dist:
+        dist = ROOT / "frontend" / "dist"
+        if not (dist / "index.html").exists():
+            raise SystemExit("no frontend/dist/index.html: build it first (see above)")
+        paths += sorted(str(p.relative_to(ROOT)) for p in dist.rglob("*") if p.is_file())
     if skipped:
         print(f"not tracked, not sent: {skipped}")
     if git("status", "--porcelain", "--untracked-files=no", "--", *paths) if paths else "":
