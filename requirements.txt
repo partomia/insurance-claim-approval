@@ -2,7 +2,7 @@
 # backend/pyproject.toml with uv (cml/setup.sh) instead.
 numpy
 pandas<3
-pyarrow
+pyarrow==19.0.1            # the CAI runtime ships numpy 1.26; pyarrow >= 26 needs numpy 2
 scikit-learn==1.9.1
 joblib
 pyyaml
