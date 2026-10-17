@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# Claim app frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript + Vite SPA with three portals over the FastAPI backend. Components and
+routes in detail: [`docs/frontend.md`](../docs/frontend.md); setup: the
+[root README](../README.md).
 
-Currently, two official plugins are available:
+## Portals and routes
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Portal | Routes |
+|--------|--------|
+| Customer | `/auth`, `/dashboard`, `/kyc`, `/policies/connect`, `/profile`, `/claim`, `/claim/:id`, `/track/:id` (live pipeline), `/analysis/:id`, `/audit/:id`, `/history` |
+| Expert / agent | `/agent/auth`, `/agent/dashboard`, `/agent/claims`, `/agent/claims/:id`, `/agent/claims/:id/audit`, `/agent/customers/:id`, `/agent/profile` |
+| Insurer | `/insurer/auth`, `/insurer/dashboard`, `/insurer/book-of-business`, `/insurer/claims`, `/insurer/claims/:id`, `/insurer/claims/:id/audit` |
 
-## React Compiler
+The shadow approval-model score (mcc) appears only in the agent and insurer views, never to
+customers.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Commands
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm ci
+npm run dev        # http://localhost:5173 (./start.sh runs this with the backend)
+npm run build      # tsc -b && vite build → dist/
+npm run lint       # oxlint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Configuration
+
+`VITE_API_URL` (template [`.env.example`](.env.example)): the backend base URL. Leave it empty
+for same-origin deploys (FastAPI serving `dist/` with `SERVE_FRONTEND=true`, or the Vite dev
+proxy). Set it only when the SPA is hosted elsewhere, e.g. Vercel calling a backend in a CAI
+Session.
+
+## On Cloudera AI
+
+- **federal (mcc):** the workbench cannot reach the Node installer, so build on a laptop and
+  upload: `(cd frontend && VITE_API_URL="" npm run build) && python ci/push_files.py --dist`.
+- **go01 / AWC:** `bash cml/cli.sh setup` builds `dist/` inside the CAI Session.

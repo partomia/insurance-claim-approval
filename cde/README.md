@@ -1,4 +1,77 @@
-# Insurance Lakehouse Medallion Pipeline (CDE)
+# Cloudera Data Engineering (CDE)
+
+This folder holds two independent pipelines. They share no jobs, resources or tables.
+
+- [Motor Claim Copilot (mcc) on federal](#motor-claim-copilot-mcc-on-federal): the current
+  deployment. Top-level `cde/jobs/*.py`, `cde/dags/mcc_dag.py`, `cde/scripts/mcc_*`.
+- [go01 insurance lakehouse](#go01-insurance-lakehouse-medallion-pipeline-earlier-deployment):
+  the earlier deployment, unchanged. `cde/jobs/{generate,validate,transform,curate}/`,
+  `cde/dags/insurance_lakehouse_dag.py`, `cde/scripts/deploy_*.sh`.
+
+## Motor Claim Copilot (mcc) on federal
+
+Five synthetic source systems land as daily files in
+`s3a://federal-buk-574bcea0/data/IB/rsingh_mcc/landing`, flow through Iceberg bronze → silver
+→ MDM → gold in `rsingh_mcc_*`, and are reconciled back to the sources. Kafka claim events and
+telematics crashes stream into bronze. The design is [`PLAN.md`](../PLAN.md); the live
+history is [`docs/PROJECT_LOG.md`](../docs/PROJECT_LOG.md).
+
+| CDE job | File | Does |
+|---------|------|------|
+| `rsingh-mcc-land` | `cde/jobs/land_sources.py` | Generate one business date of source files (`generators/`) into landing |
+| `rsingh-mcc-bronze` | `cde/jobs/ingest_bronze.py` | Contract checks (`contracts/`), load audit, quarantine, bronze tables |
+| `rsingh-mcc-silver` | `cde/jobs/build_silver.py` | Conformed, deduplicated entities; claim status events; orphans |
+| `rsingh-mcc-mdm` | `cde/jobs/build_mdm.py` | `customer_golden`, `customer_xref`, `vehicle_xref`, `match_exception` |
+| `rsingh-mcc-gold` | `cde/jobs/build_gold.py` | `fact_claim`, `fact_policy_month`, `dim_customer`, `dim_policy`, `dim_garage` |
+| `rsingh-mcc-recon` | `cde/jobs/reconcile.py` | Source-to-gold counts and amounts: MATCHED / EXPLAINED / MISMATCH |
+| `rsingh-mcc-stages` | `cde/jobs/run_stages.py` | Several stages and dates in one Spark session (backfills) |
+| `rsingh-mcc-stream-bronze` | `cde/jobs/stream_bronze.py` | Long-running Kafka `mcc.*` → bronze stream tables, checkpointed |
+| `rsingh-mcc-stream-produce` | `cde/jobs/stream_produce.py` | Claim and telematics producer (backfill or live) |
+| `rsingh-mcc-orchestration` | `cde/dags/mcc_dag.py` | Airflow DAG `mcc_motor_claims` |
+
+Shared helpers are in `cde/jobs/mcc_common.py`. The jobs need only PySpark and the standard
+library. Code reaches CDE as the files resource `rsingh-mcc-code` (the repo is private, so no
+CDE Git repository), mounted at `/app/mount`.
+
+### Deploy
+
+```bash
+set -a; source .env; set +a
+./cde/scripts/mcc_deploy_code.sh          # git archive of HEAD → rsingh-mcc-code (refuses unpushed HEAD; ALLOW_UNPUSHED=1)
+./cde/scripts/mcc_deploy_jobs.sh          # create or update the Spark jobs (nothing deleted)
+./cde/scripts/mcc_deploy_streaming.sh create|start|stop|restart|status
+./cde/scripts/mcc_deploy_dag.sh           # the DAG job
+python cde/scripts/set_airflow_variables.py   # MCC_CAI_* Variables for the CAI scoring task
+```
+
+After a code change: push, then `mcc_deploy_code.sh`; jobs pick it up on their next run.
+
+### Run
+
+```bash
+# one stage by hand
+cde job run --name rsingh-mcc-bronze --arg=--business-date --arg=2026-10-12 \
+  --arg=--db-prefix --arg=rsingh_mcc --arg=--landing --arg=<landing> --wait
+# a backfill in one session
+cde job run --name rsingh-mcc-stages --arg=--stages --arg=land,bronze,silver,mdm,gold,recon \
+  --arg=--dates --arg=2026-10-12,2026-10-13 --arg=--db-prefix --arg=rsingh_mcc --arg=--landing --arg=<landing>
+```
+
+The DAG runs one business date per run: land → bronze (replaying that day's stream) → silver
+→ MDM → gold → reconcile → `cai_score_claims` (starts CAI job `mcc-06-score-claims`). Scheduled
+runs do work only on `SCHEDULED_DATES` (the `in_window` task skips the rest; kept equal to
+`config/lakehouse.json` by `tests/test_dag.py`). A manual run: Airflow UI → Trigger DAG w/
+config `{"business_date": "2026-10-17"}`. Stop `rsingh-mcc-stream-bronze` before a scheduled
+run: both write the stream tables.
+
+Locally, the same jobs run on Spark + Iceberg: `python scripts/run_local.py all`.
+
+---
+
+# go01 Insurance Lakehouse Medallion Pipeline (earlier deployment)
+
+> Everything below is the go01 pipeline (`insurance_lakehouse*`, `rsingh-insurance-*`). It is
+> unchanged by the mcc work and still deployable as described.
 
 Phase 2 of the datalakehouse story: a real bronze → silver → gold Spark
 pipeline on Cloudera Data Engineering (CDE), orchestrated with Airflow,

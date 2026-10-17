@@ -208,3 +208,14 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
   142 scores (110 LIKELY_APPROVE, 17 NEUTRAL, 9 UNCERTAIN, 6 REVIEW); KPI views at 10-17.
 - The DAG stays unpaused. The first run that does work is the scheduled 10-19 run
   (20:30 UTC), which replays the stream: stop rsingh-mcc-stream-bronze before then.
+
+## 2026-10-17 02:30 - READMEs aligned
+
+- Root README rewritten as the entry point: the four deployments (local, AWC, go01, federal
+  mcc), mcc status, architecture and build/operate commands, the app (quick starts, pipeline,
+  API incl. model-vs-rules, APPROVAL_MODEL_* / LAKEHOUSE_BRONZE_DATABASE), go01 lakehouse as
+  the earlier deployment, the full repository layout, tests and CI.
+- cde/ and cml/ READMEs: an mcc section first (CDE jobs, deploy, run, DAG; CAI setup, push,
+  app, jobs and schedules); the go01 content kept and labelled as the earlier deployment.
+- backend/, frontend/ (was the Vite template), docs/ and demo-assets READMEs corrected
+  (Chroma not FAISS, no Postgres in Compose, step-5 plan built as mcc, real routes).

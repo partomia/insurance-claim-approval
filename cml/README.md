@@ -1,4 +1,59 @@
-# Cloudera AI (Workbench / CML) automation
+# Cloudera AI (Workbench / CML)
+
+Two ways this repo runs on Cloudera AI:
+
+- [Motor Claim Copilot (mcc) on federal](#motor-claim-copilot-mcc-on-federal): the current
+  deployment. Project, jobs and the app are created through the CAI API by `ci/setup_cai.py`;
+  settings live in the project environment.
+- [go01 / AWC with `cml/cli.sh`](#go01--awc-cmlclish-earlier-deployments): the earlier
+  deployments, unchanged. A Session runs `cml/cli.sh setup`; settings live in `backend/.env`.
+
+Both end in the same launcher, `cml/run.py` (FastAPI + the built SPA on `CDSW_APP_PORT`).
+
+## Motor Claim Copilot (mcc) on federal
+
+Project `rsingh-motor-claim-copilot`, application "MCC Motor Claim Copilot". The repo is
+private, so the project is blank and the code is pushed into it from a laptop; links and
+logins are in [`docs/DEMO_RUNBOOK.md`](../docs/DEMO_RUNBOOK.md).
+
+```bash
+set -a; source .env; set +a                     # repo-root .env (MCC_CAI_*, ...)
+python ci/setup_cai.py --dry-run                # what would be created or updated
+python ci/setup_cai.py                          # project, project environment, jobs
+python ci/push_files.py --all                   # the code (writes CODE_VERSION)
+python ci/push_files.py --since HEAD~1          # later: only what changed
+(cd frontend && VITE_API_URL="" npm run build) && python ci/push_files.py --dist   # the SPA
+python ci/setup_cai.py --run mcc-09-app-setup   # build the app once (deps, seed, RAG, gold ingest)
+python ci/setup_cai.py --app                    # create or restart the application
+```
+
+`cml/launch_app.py` is both the job `mcc-09-app-setup` and the application script: it runs
+`cml/setup.sh` and the lakehouse ingest when the app is not built yet, then hands over to
+`cml/run.py`. The app reads `LAKEHOUSE_DATABASE=rsingh_mcc_gold`, `IMPALA_*` and
+`APPROVAL_MODEL_*` (shadow scoring against model `mcc-approval`) from the project environment.
+
+| CAI job | Script | When |
+|---------|--------|------|
+| `mcc-00-sync-code` → `mcc-01-build-features` → `mcc-02-train-validate` → `mcc-03-kpi-gate` → `mcc-04-deploy-champion` | `ci/sync_code.py`, `features/`, `train/`, `gate/`, `serve/` | Chain, on demand or from GitHub `mcc-approval-mlops` |
+| `mcc-05-nightly-drift` | `monitor/drift.py` | `0 2 * * *` |
+| `mcc-06-score-claims` | `lakehouse/score_claims.py` | Started by the DAG task `cai_score_claims` |
+| `mcc-07-promote-champion` | `serve/promote_champion.py` | On demand |
+| `mcc-08-retrain-trigger` | `ci/retrain_trigger.py` | `30 2 * * *` |
+| `mcc-09-app-setup` | `cml/launch_app.py` | Once per app build |
+| `mcc-lakehouse-ingest` | `cml/jobs/lakehouse_ingest_job.py` | `0 3 * * *`: gold → app |
+| `mcc-export-claims` | `cml/jobs/lakehouse_export_claims_job.py` | `45 1 * * *`: app claims → `rsingh_mcc_bronze` |
+| `mcc-99-debug` | `ci/run_logged.py` | Any script (`MCC_RUN_SCRIPT`), output in `outputs/logs/` |
+
+Stop and start: `python scripts/platform_ctl.py status|stop|start` (schedules stop by clearing
+the cron; `config/platform.json` keeps the crons above).
+
+---
+
+# go01 / AWC: `cml/cli.sh` (earlier deployments)
+
+> Everything below is the go01 and standalone-AWC flow, unchanged by the mcc work. On go01 the
+> lakehouse is `insurance_lakehouse*` (CDE jobs `rsingh-insurance-*`, see
+> [`cde/README.md`](../cde/README.md)).
 
 Everything is driven through one dispatcher, `cml/cli.sh`. All scripts
 auto-detect the repo root, so the clone name doesn't matter.

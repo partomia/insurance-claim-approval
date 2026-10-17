@@ -7,6 +7,11 @@ submission wizard's **Step 3: Evidence Upload**, e.g. to test the Phase 4
 (reset a lakehouse customer's password with
 `backend/scripts/set_demo_password.py`, log in, submit a claim).
 
+On federal (mcc) no password reset is needed: log in as `customer7@example.com` /
+`password123` and file against LH-POL-2007 or LH-POL-2011 (see
+[`docs/DEMO_RUNBOOK.md`](../../DEMO_RUNBOOK.md)); the insurer and agent views then show the
+shadow approval-model score next to the decision.
+
 Every file is watermarked "SYNTHETIC TEST DOCUMENT ... Not a real document" —
 these are plain generated images, not real photos/IDs.
 
