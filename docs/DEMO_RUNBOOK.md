@@ -54,8 +54,11 @@ long and fraud signals are seen late.
 
 - `rsingh-mcc-stream-bronze` reads the three topics into `bronze.stream_*` (checkpointed, no gap
   and no duplicate after a restart).
-- Live producer for the session:
-  `cde job run --name rsingh-mcc-stream-produce --arg=--mode --arg=live --arg=--duration --arg=1800`
+- On the scheduled dates the DAG `mcc_live_stream` runs the stream and the live producer from
+  09:00 to 19:00 IST (03:30-13:30 UTC); both stop themselves, and the nightly batch (02:00 IST)
+  waits for them before replaying the day. A demo inside that window needs nothing.
+- Outside it: `./cde/scripts/mcc_deploy_streaming.sh live 30` (stream + producer for 30 min; it
+  never runs into the batch and refuses while the batch runs).
 - Crash alerts are matched to claims (`silver.crash_event` → `crash_event_match`), visible on
   **MCC Claims & Fraud Signals**.
 
@@ -103,8 +106,9 @@ set -a; source .env; set +a
 
 The default scope is this project only: the CAI app, model `mcc-approval`, CAI schedules
 (`mcc-export-claims`, `mcc-05`, `mcc-08`, `mcc-lakehouse-ingest`; stop clears the cron and start
-sets it back), and CDE `rsingh-mcc-*` runs, the bronze stream and the DAG schedule. Data, topics
-and checkpoints are kept. `--scope platform --yes-shared` also stops Kafka, CDW, the CDE virtual
+sets it back), and CDE `rsingh-mcc-*` runs (the live stream included) and the two DAG schedules.
+Data, topics and checkpoints are kept. `start` does not start the stream: its DAG does, inside the
+live window. `--scope platform --yes-shared` also stops Kafka, CDW, the CDE virtual
 cluster and the CAI workspace, which sibling demos share: ask first, every time.
 
 ## If something is off

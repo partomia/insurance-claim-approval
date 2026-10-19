@@ -17,5 +17,15 @@
     "watermark": "30 minutes",
     "starting_offsets": "earliest",
     "max_offsets_per_trigger": 50000
+  },
+  "_live_window": "When the live stream runs (UTC; 09:00-19:00 IST): the DAG mcc_live_stream starts the bronze stream and the live producer at start_utc on lakehouse.json scheduled_dates, and both stop themselves at stop_utc. A manual start (mcc_deploy_streaming.sh start|live) stops at the next stop_utc or guard_minutes before batch_utc, whichever comes first, and refuses to start within batch_minutes after batch_utc, so a live stream never overlaps the nightly batch's replay. The producer stops producer_lead_seconds before the stream, so its last events are ingested.",
+  "live_window": {
+    "start_utc": "03:30",
+    "stop_utc": "13:30",
+    "batch_utc": "20:30",
+    "guard_minutes": 15,
+    "batch_minutes": 90,
+    "min_seconds": 300,
+    "producer_lead_seconds": 120
   }
 }

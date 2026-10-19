@@ -7,8 +7,8 @@ Copied from O-G-Asset-Integrity-Lakehouse cde/dags/ogx_dag.py and adapted.
 
 land_sources stands in for the insurer's source systems (garage network, policy admin, credit
 bureau, claims, telematics) dropping their files on the landing zone. The Kafka stream (crash
-events, claim events) does not go through this DAG for manual runs: the long-running job
-rsingh-mcc-stream-bronze keeps bronze current. reconcile runs whatever happened upstream (trigger
+events, claim events) does not go through this DAG for manual runs: during the day the live
+stream (DAG mcc_live_stream) keeps bronze current. reconcile runs whatever happened upstream (trigger
 rule all_done), so a failed batch still gets its report in ref.recon_results; batch_complete
 needs every stage to have succeeded, so the run itself is red for a failed batch.
 
@@ -18,7 +18,9 @@ The semantic layer runs on CDW Impala after the batch:
 Scheduled nightly at 02:00 IST (20:30 UTC) for the business dates in lakehouse.json
 "scheduled_dates" (2026-10-19 .. 2026-10-21): each run closes the UTC day its data interval ends
 on and replays that day's stream first (producer backfill, then the bronze stream with an
-available-now trigger; stop the long-running stream before unpausing). Created paused.
+available-now trigger). The live stream of the day is the DAG mcc_live_stream (cde/dags/
+mcc_live_dag.py, 03:30-13:30 UTC); live_stream_idle waits until no run of it is active, so the
+replay never shares the stream checkpoint with a live run. Created paused.
 start_date is in the past so manual runs get tasks (Airflow creates none for a logical date
 before start_date); in_window skips every scheduled run whose date is not in SCHEDULED_DATES.
 Manual runs use params.business_date (Trigger DAG w/ config), in date order, and skip the stream:
@@ -43,6 +45,7 @@ from airflow.exceptions import AirflowException
 from airflow.models import Variable
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.sensors.python import PythonSensor
 from cloudera.cdp.airflow.operators.cde_operator import CDEJobRunOperator
 
 JOB_PREFIX = "rsingh-mcc"
@@ -54,10 +57,20 @@ BUSINESS_DATE = ("{{ data_interval_end.strftime('%Y-%m-%d') if " + SCHEDULED +
                  " else params.business_date }}")
 CAI_DEADLINE_MIN = 60
 SCHEDULED_DATES = ("2026-10-19", "2026-10-20", "2026-10-21")   # lakehouse.json "scheduled_dates"
+LIVE_DAG_ID = "mcc_live_stream"
 
 
 def in_window(dag_run, data_interval_end, **_) -> bool:
     return dag_run.run_type != "scheduled" or data_interval_end.strftime("%Y-%m-%d") in SCHEDULED_DATES
+
+
+def live_stream_idle(**_) -> bool:
+    from airflow.models import DagRun
+    from airflow.utils.state import State
+    running = DagRun.find(dag_id=LIVE_DAG_ID, state=State.RUNNING)
+    if running:
+        print(f"{LIVE_DAG_ID} still running ({', '.join(r.run_id for r in running)}): waiting")
+    return not running
 
 
 def trigger_cai_score(business_date: str, run_id: str, **_):
@@ -147,11 +160,14 @@ with DAG(
                                "--checkpoints", CHECKPOINTS, "--trigger", "available-now",
                                "--starting-offsets", "earliest")
     stream_done = EmptyOperator(task_id="stream_done", trigger_rule="none_failed")
+    # a live run still going after 45 min fails the replay rather than share its checkpoint
+    live_idle = PythonSensor(task_id="live_stream_idle", python_callable=live_stream_idle,
+                             mode="reschedule", poke_interval=120, timeout=45 * 60, retries=0)
 
     window >> [land, is_scheduled]
     land >> bronze >> silver >> mdm >> gold >> recon
-    # manual run: produce and stream_bronze are skipped, stream_done (none_failed) still lets silver run
-    is_scheduled >> produce >> stream_bronze >> stream_done >> silver
+    # manual run: the stream legs are skipped, stream_done (none_failed) still lets silver run
+    is_scheduled >> live_idle >> produce >> stream_bronze >> stream_done >> silver
     # retries=0: a scoring failure (no champion, endpoint down) is not transient
     score = PythonOperator(task_id="cai_score_claims", python_callable=trigger_cai_score,
                            op_kwargs={"business_date": BUSINESS_DATE, "run_id": "{{ run_id }}"}, retries=0,

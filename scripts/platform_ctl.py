@@ -6,9 +6,11 @@ Stop, start or show the whole demo across every layer, in dependency order (conf
 
 Two scopes:
   project   (default) this demo's workloads only: CAI application, model deployments, scheduled
-            and running mcc-* jobs; the CDE bronze stream, running rsingh-mcc-* runs and the
-            rsingh-mcc-orchestration schedule. Kafka topics, Iceberg tables, checkpoints and
-            Schema Registry stay as they are, so a start resumes from the checkpoints with no gap and no duplicate.
+            and running mcc-* jobs; running rsingh-mcc-* runs (the live stream included) and the
+            schedules of rsingh-mcc-orchestration and rsingh-mcc-live-stream. Kafka topics, Iceberg
+            tables, checkpoints and Schema Registry stay as they are, so the next stream resumes from
+            the checkpoints with no gap and no duplicate. start does not start the stream: its DAG
+            does, inside the live window (config/streaming.json live_window).
   platform  the project scope plus the environment's shared services: the Kafka Data Hub, the CDW Impala virtual warehouse, the CDE virtual cluster and the CAI
             workspace. Sibling demos use the same services, so this needs --yes-shared.
 
@@ -48,6 +50,8 @@ sys.path.insert(0, str(ROOT))
 CFG = json.loads((ROOT / "config" / "platform.json").read_text())
 PRJ, PLT = CFG["project"], CFG["platform"]
 LAYERS = tuple(CFG["stop_order"])
+_LW = json.loads((ROOT / "config" / "streaming.json").read_text())["live_window"]
+LIVE_WINDOW = f"{_LW['start_utc']}-{_LW['stop_utc']} UTC on the scheduled dates"
 DRY = False
 
 
@@ -198,7 +202,7 @@ def cde_project(action: str) -> None:
             say(f"  schedule {j['name']}: {'paused' if j['schedule'].get('paused') else 'active'}")
         missing = [j for j in PRJ["cde_streaming_jobs"] if j not in {r["job"] for r in runs}]
         if missing:
-            say(f"  streaming not running: {', '.join(missing)}")
+            say(f"  streaming not running: {', '.join(missing)} (expected outside the live window, {LIVE_WINDOW})")
         return
     if action == "stop":
         for j in scheduled:
@@ -211,14 +215,8 @@ def cde_project(action: str) -> None:
     for j in scheduled:
         if j["schedule"].get("paused"):
             act(f"unpause CDE schedule {j['name']}", cde, "job", "schedule", "unpause", "--name", j["name"])
-    running = {r["job"] for r in runs}
-    if all(j in running for j in PRJ["cde_streaming_jobs"]):
-        say("  streaming jobs already running")
-        return
-    act("start the streaming jobs (cde/scripts/mcc_deploy_streaming.sh start, resumes from the checkpoints)",
-        subprocess.run, [str(ROOT / "cde" / "scripts" / "mcc_deploy_streaming.sh"), "start"], check=True)
-    say("  the producer is not started: cde job run --name rsingh-mcc-stream-produce "
-        "--arg=--mode --arg=live --arg=--duration --arg=10800")
+    say(f"  the live stream follows its DAG mcc_live_stream ({LIVE_WINDOW}); for an ad-hoc demo: "
+        "cde/scripts/mcc_deploy_streaming.sh live [MIN] (stops itself before the nightly batch)")
 
 
 PROJECT = {"cai": cai_project, "cde": cde_project}

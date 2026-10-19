@@ -15,7 +15,7 @@
     },
     "cde_job_prefix": "rsingh-mcc-",
     "cde_streaming_jobs": ["rsingh-mcc-stream-bronze"],
-    "cde_dag_jobs": ["rsingh-mcc-orchestration"]
+    "cde_dag_jobs": ["rsingh-mcc-orchestration", "rsingh-mcc-live-stream"]
   },
   "platform": {
     "datahubs": {"kafka": "federal-kafka"},

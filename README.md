@@ -39,8 +39,8 @@ are in [`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md).
 |-------|-------|-------|
 | Sources and landing | 5 synthetic source systems (policy admin, claims, credit bureau, garage network, telematics) with planted faults | `generators/`, `contracts/`, CDE `rsingh-mcc-land` |
 | Bronze, silver, MDM, gold | Iceberg `rsingh_mcc_*`; load audit, quarantine, reconciliation; golden customer and vehicle cross-reference | `cde/jobs/`, CDE `rsingh-mcc-*` |
-| Streaming | Kafka `mcc.claim.events`, `mcc.telematics.crash`, `mcc.control` (schemas in Schema Registry) → `rsingh-mcc-stream-bronze`, checkpointed | `stream/`, `cde/scripts/mcc_deploy_streaming.sh` |
-| Orchestration | Airflow DAG `mcc_motor_claims` (CDE job `rsingh-mcc-orchestration`), unpaused; one business date per run, ending with CAI scoring | `cde/dags/mcc_dag.py` |
+| Streaming | Kafka `mcc.claim.events`, `mcc.telematics.crash`, `mcc.control` (schemas in Schema Registry) → `rsingh-mcc-stream-bronze`, checkpointed; live only 03:30-13:30 UTC (09:00-19:00 IST) | `stream/`, `config/streaming.json` `live_window`, `cde/scripts/mcc_deploy_streaming.sh` |
+| Orchestration | Airflow DAGs: `mcc_motor_claims` (nightly batch, 20:30 UTC, ending with CAI scoring; replays the day's stream once the live DAG is idle) and `mcc_live_stream` (the day's live stream and producer, stopping themselves) | `cde/dags/mcc_dag.py`, `cde/dags/mcc_live_dag.py` |
 | Semantic and dashboards | Certified KPIs: straight-through rate, claim cycle time, loss ratio; 4 dashboards in DataViz workspace "MCC - Insurance Claim Processing" | `sql/semantic/`, `config/kpi.json`, `dataviz/build_dashboard.py` |
 | ML | Approval and fraud heads, KPI gate, champion on endpoint `mcc-approval`, batch scoring, nightly drift, retrain trigger | `features/`, `train/`, `gate/`, `serve/`, `monitor/`, CAI jobs `mcc-00`..`mcc-08` |
 | Guardrails | Input checks, out-of-distribution abstain, output bands; PII redaction and grounding check on the LLM | `guardrails/`, `backend/services/llm_guard.py` |
@@ -55,8 +55,10 @@ mismatched; 142 claims scored.
 
 Known and deferred: the loss ratio is about 576% (the synthetic book is claim-dense); the
 nightly drift check reports ALERT until its reference is regenerated at about 6 claims a day.
-Before the first scheduled DAG run that does work (2026-10-19 20:30 UTC) stop the long-running
-`rsingh-mcc-stream-bronze`: that run replays the day's stream itself.
+
+Daily cycle on the scheduled dates (2026-10-19 .. 10-21): live stream and producer 03:30-13:30
+UTC, nightly batch at 20:30 UTC, CAI nightly jobs after it. Nothing streams in between, so the
+batch's replay never overlaps a live run and the cluster is idle overnight.
 
 ### Architecture
 
@@ -118,9 +120,10 @@ private, so the CAI project is blank and code is pushed into it (`ci/push_files.
 ```bash
 # Lakehouse (CDE)
 ./cde/scripts/mcc_deploy_code.sh && ./cde/scripts/mcc_deploy_jobs.sh   # code + Spark jobs
-./cde/scripts/mcc_deploy_streaming.sh create|start|stop|restart|status  # the bronze stream
+./cde/scripts/mcc_deploy_streaming.sh create|status|stop                 # the bronze stream jobs
+./cde/scripts/mcc_deploy_streaming.sh live 30          # ad-hoc demo: stream + producer, stops itself
 python -m stream.producer.topics --create-topics --register-schemas     # Kafka topics + schemas
-./cde/scripts/mcc_deploy_dag.sh && python cde/scripts/set_airflow_variables.py
+./cde/scripts/mcc_deploy_dag.sh && python cde/scripts/set_airflow_variables.py   # both DAGs
 # manual run: Airflow UI → mcc_motor_claims → Trigger DAG w/ config {"business_date": "2026-10-17"}
 
 # Semantic layer, dashboards, governance

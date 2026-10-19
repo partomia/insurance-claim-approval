@@ -25,9 +25,10 @@ history is [`docs/PROJECT_LOG.md`](../docs/PROJECT_LOG.md).
 | `rsingh-mcc-gold` | `cde/jobs/build_gold.py` | `fact_claim`, `fact_policy_month`, `dim_customer`, `dim_policy`, `dim_garage` |
 | `rsingh-mcc-recon` | `cde/jobs/reconcile.py` | Source-to-gold counts and amounts: MATCHED / EXPLAINED / MISMATCH |
 | `rsingh-mcc-stages` | `cde/jobs/run_stages.py` | Several stages and dates in one Spark session (backfills) |
-| `rsingh-mcc-stream-bronze` | `cde/jobs/stream_bronze.py` | Long-running Kafka `mcc.*` → bronze stream tables, checkpointed |
+| `rsingh-mcc-stream-bronze` | `cde/jobs/stream_bronze.py` | Kafka `mcc.*` → bronze stream tables, checkpointed (live window, or the batch's replay) |
 | `rsingh-mcc-stream-produce` | `cde/jobs/stream_produce.py` | Claim and telematics producer (backfill or live) |
-| `rsingh-mcc-orchestration` | `cde/dags/mcc_dag.py` | Airflow DAG `mcc_motor_claims` |
+| `rsingh-mcc-orchestration` | `cde/dags/mcc_dag.py` | Airflow DAG `mcc_motor_claims`: the nightly batch |
+| `rsingh-mcc-live-stream` | `cde/dags/mcc_live_dag.py` | Airflow DAG `mcc_live_stream`: the day's live stream and producer |
 
 Shared helpers are in `cde/jobs/mcc_common.py`. The jobs need only PySpark and the standard
 library. Code reaches CDE as the files resource `rsingh-mcc-code` (the repo is private, so no
@@ -39,8 +40,8 @@ CDE Git repository), mounted at `/app/mount`.
 set -a; source .env; set +a
 ./cde/scripts/mcc_deploy_code.sh          # git archive of HEAD → rsingh-mcc-code (refuses unpushed HEAD; ALLOW_UNPUSHED=1)
 ./cde/scripts/mcc_deploy_jobs.sh          # create or update the Spark jobs (nothing deleted)
-./cde/scripts/mcc_deploy_streaming.sh create|start|stop|restart|status
-./cde/scripts/mcc_deploy_dag.sh           # the DAG job
+./cde/scripts/mcc_deploy_streaming.sh create|status|stop   # the stream jobs (stop: kill their runs)
+./cde/scripts/mcc_deploy_dag.sh           # both DAG jobs, created paused
 python cde/scripts/set_airflow_variables.py   # MCC_CAI_* Variables for the CAI scoring task
 ```
 
@@ -61,8 +62,23 @@ The DAG runs one business date per run: land → bronze (replaying that day's st
 → MDM → gold → reconcile → `cai_score_claims` (starts CAI job `mcc-06-score-claims`). Scheduled
 runs do work only on `SCHEDULED_DATES` (the `in_window` task skips the rest; kept equal to
 `config/lakehouse.json` by `tests/test_dag.py`). A manual run: Airflow UI → Trigger DAG w/
-config `{"business_date": "2026-10-17"}`. Stop `rsingh-mcc-stream-bronze` before a scheduled
-run: both write the stream tables.
+config `{"business_date": "2026-10-17"}`.
+
+### The stream follows the pipeline
+
+The live stream and the nightly replay share one checkpoint, so they must never run together
+(`config/streaming.json` `live_window`):
+
+| UTC (IST) | What runs |
+|-----------|-----------|
+| 03:30 (09:00) | `mcc_live_stream` starts `rsingh-mcc-stream-bronze` (60 s trigger) and the live producer |
+| 13:30 (19:00) | both stop themselves (`--await-seconds`, `--duration`; the producer 2 min earlier) |
+| 20:30 (02:00) | `mcc_motor_claims`: `live_stream_idle` waits for the live DAG, then the day's replay (producer backfill, stream available-now), then the batch |
+
+Live events carry their own ids, so the nightly backfill of the same date does not duplicate
+them. For a demo outside the window: `./cde/scripts/mcc_deploy_streaming.sh live 30` (stream and
+producer for 30 min). `start`/`live` always stop at the next 13:30 UTC or 20:15 UTC, whichever
+comes first, and refuse during the batch (`stream/live_window.py`).
 
 Locally, the same jobs run on Spark + Iceberg: `python scripts/run_local.py all`.
 
