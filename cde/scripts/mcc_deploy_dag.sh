@@ -3,10 +3,11 @@
 # resource rsingh-mcc-code (run mcc_deploy_code.sh first). Copied from O-G-Asset-Integrity-Lakehouse.
 #   rsingh-mcc-orchestration  cde/dags/mcc_dag.py       DAG mcc_motor_claims (nightly batch)
 #   rsingh-mcc-live-stream    cde/dags/mcc_live_dag.py  DAG mcc_live_stream (the day's live stream)
-# Both are created paused; unpause them (Airflow UI toggle, or the Airflow API
-# PATCH /dags/<dag_id> {"is_paused": false}) to let their schedules run:
+# Both are created paused; unpause them to let their schedules run (the Airflow API refuses it):
 #
 #   ./cde/scripts/mcc_deploy_dag.sh
+#   cde job schedule unpause --name rsingh-mcc-orchestration
+#   cde job schedule unpause --name rsingh-mcc-live-stream
 #   manual batch run: Airflow UI -> mcc_motor_claims -> Trigger DAG w/ config {"business_date": "2026-10-17"}
 
 set -euo pipefail

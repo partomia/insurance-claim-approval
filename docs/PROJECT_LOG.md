@@ -219,3 +219,19 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
   app, jobs and schedules); the go01 content kept and labelled as the earlier deployment.
 - backend/, frontend/ (was the Vite template), docs/ and demo-assets READMEs corrected
   (Chroma not FAISS, no Postgres in Compose, step-5 plan built as mcc, real routes).
+
+## 2026-10-19 01:30–02:00 - Stream aligned with the pipeline
+
+- Checked the scheduled runs: 10-17 and 10-18 20:30 UTC (CDE 662, 663) succeeded in ~15 s with
+  in_window true and every other task skipped, as designed (dates outside 10-19..10-21). CAI
+  nightly jobs (export, drift, retrain trigger, ingest) succeeded both days; their crons run in
+  the workspace time zone (UTC-7), e.g. drift at 09:00 UTC.
+- Stopped rsingh-mcc-stream-bronze (run 646 killed, checkpoint kept).
+- New: config/streaming.json live_window; DAG mcc_live_stream (CDE job rsingh-mcc-live-stream)
+  runs the bronze stream and the live producer 03:30-13:30 UTC on the scheduled dates, both
+  stopping themselves; mcc_motor_claims waits for it (live_stream_idle sensor) before the
+  replay. mcc_deploy_streaming.sh start/live are bounded by stream/live_window.py (next 13:30 UTC
+  or 20:15 UTC, refused during the batch); platform_ctl start no longer starts the stream.
+- Code 2960e71 deployed to rsingh-mcc-code; both DAGs parse with no import errors; the live DAG
+  unpaused with `cde job schedule unpause` (the Airflow API answers 403). First live run
+  2026-10-19 03:30 UTC, first batch that does work 20:30 UTC.
