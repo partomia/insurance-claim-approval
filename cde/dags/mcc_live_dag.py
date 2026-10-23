@@ -26,7 +26,9 @@ from cloudera.cdp.airflow.operators.cde_operator import CDEJobRunOperator
 JOB_PREFIX = "rsingh-mcc"
 DB_PREFIX = "rsingh_mcc"
 CHECKPOINTS = "s3a://federal-buk-574bcea0/data/IB/rsingh_mcc/checkpoints"
-LIVE_DATES = ("2026-10-19", "2026-10-20", "2026-10-21")   # lakehouse.json "scheduled_dates"
+LIVE_DATES = ("2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24",
+              "2026-10-25", "2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29",
+              "2026-10-30")   # lakehouse.json "scheduled_dates"
 LIVE_START_UTC = "03:30"                                   # streaming.json live_window
 LIVE_STOP_UTC = "13:30"
 MIN_SECONDS = 300
@@ -55,9 +57,9 @@ with DAG(
     dag_id="mcc_live_stream",
     description="Live Kafka stream into bronze during the demo day, stopped before the nightly batch",
     schedule_interval=f"{int(LIVE_START_UTC[3:])} {int(LIVE_START_UTC[:2])} * * *",
-    # the first run starts on 10-19 03:30 UTC (end of the 10-18 interval), the last on 10-21
+    # the first run starts on 10-19 03:30 UTC (end of the 10-18 interval), the last on 10-30
     start_date=datetime(2026, 10, 18, 3, 30),
-    end_date=datetime(2026, 10, 20, 3, 30),
+    end_date=datetime(2026, 10, 29, 3, 30),
     catchup=False,
     is_paused_upon_creation=True,
     max_active_runs=1,

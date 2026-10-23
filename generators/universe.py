@@ -34,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CFG = json.loads((ROOT / "config" / "lakehouse.json").read_text())
 DATES = [date.fromisoformat(d) for d in
          CFG["business_dates"] + [CFG["live_date"]] + CFG.get("scheduled_dates", [])]
+FROZEN = date.fromisoformat(CFG["frozen_through"]) if CFG.get("frozen_through") else DATES[-1]
 U = CFG["universe"]
 
 FIRST = ["Aarav", "Vivaan", "Aditya", "Arjun", "Rohan", "Rahul", "Amit", "Suresh", "Vikram", "Sanjay", "Rajesh",
@@ -129,6 +130,10 @@ class Customer:
     fraud_prone: bool
     bureau_ref: str
     policies: list = field(default_factory=list)
+    later_mobiles: list = field(default_factory=list)   # (date, mobile) changes after FROZEN
+
+    def mobile_on(self, d: date) -> str:
+        return next((m for day, m in reversed(self.later_mobiles) if day <= d), self.mobile)
 
     @property
     def name(self) -> str:
@@ -359,29 +364,46 @@ class World:
                 self.claims.append(cl)
 
     def _build_telematics(self) -> None:
-        rng = R(self.seed, "telematics")
+        # dates up to FROZEN in one stream, as they were landed; each later date its own stream, with
+        # ids numbered after every frozen one, so appending dates changes nothing already loaded
         n = 0
-        for cl in self.claims:
-            if cl.crash_event:
-                n += 1
-                t = cl.incident + timedelta(seconds=rng.randint(-600, 600))
-                self.crash_events.append({
-                    "event_id": f"TM-{n:08d}", "vin": cl.policy.vin, "event_ts": ts(t),
-                    "g_force": round(rng.uniform(2.5, 9.0), 2), "speed_kmph": round(rng.uniform(15, 95), 1),
-                    "lat": round(rng.uniform(8.0, 30.0), 5), "lon": round(rng.uniform(70.0, 88.0), 5),
-                    "device_id": f"DEV-{cl.policy.policy_number[-4:]}"})
-        devices = [p for p in self._policy_list if p.has_telematics]
-        start = datetime.combine(self.anchor, datetime.min.time()) - timedelta(days=60)
-        for day in range((DATES[-1] - start.date()).days + 1):
+
+        def crash(rng, cl):
+            nonlocal n
+            n += 1
+            t = cl.incident + timedelta(seconds=rng.randint(-600, 600))
+            self.crash_events.append({
+                "event_id": f"TM-{n:08d}", "vin": cl.policy.vin, "event_ts": ts(t),
+                "g_force": round(rng.uniform(2.5, 9.0), 2), "speed_kmph": round(rng.uniform(15, 95), 1),
+                "lat": round(rng.uniform(8.0, 30.0), 5), "lon": round(rng.uniform(70.0, 88.0), 5),
+                "device_id": f"DEV-{cl.policy.policy_number[-4:]}"})
+
+        def noise(rng, day_start):
+            nonlocal n
             for _ in range(U["noise_crash_events_per_day"]):
                 p = rng.choice(devices)
                 n += 1
-                t = start + timedelta(days=day, seconds=rng.randint(0, 86399))
+                t = day_start + timedelta(seconds=rng.randint(0, 86399))
                 self.crash_events.append({
                     "event_id": f"TM-{n:08d}", "vin": p.vin, "event_ts": ts(t),
                     "g_force": round(rng.uniform(1.2, 3.0), 2), "speed_kmph": round(rng.uniform(5, 60), 1),
                     "lat": round(rng.uniform(8.0, 30.0), 5), "lon": round(rng.uniform(70.0, 88.0), 5),
                     "device_id": f"DEV-{p.policy_number[-4:]}"})
+
+        rng = R(self.seed, "telematics")
+        for cl in self.claims:
+            if cl.crash_event and cl.fnol.date() <= FROZEN:
+                crash(rng, cl)
+        devices = [p for p in self._policy_list if p.has_telematics]
+        start = datetime.combine(self.anchor, datetime.min.time()) - timedelta(days=60)
+        for day in range((min(DATES[-1], FROZEN) - start.date()).days + 1):
+            noise(rng, start + timedelta(days=day))
+        for d in (d for d in DATES if d > FROZEN):
+            rng_d = R(self.seed, f"telematics:{d}")
+            for cl in self.claims:
+                if cl.crash_event and cl.fnol.date() == d:
+                    crash(rng_d, cl)
+            noise(rng_d, datetime.combine(d, datetime.min.time()))
         self.crash_events.sort(key=lambda e: e["event_ts"])
 
     def _build_cdc(self) -> None:
@@ -400,7 +422,11 @@ class World:
                 elif kind == "lapse":
                     p.status = "LAPSED"
                 elif kind == "mobile":
-                    p.customer.mobile = rng.choice("6789") + f"{rng.randint(0, 999_999_999):09d}"
+                    m = rng.choice("6789") + f"{rng.randint(0, 999_999_999):09d}"
+                    if d <= FROZEN:
+                        p.customer.mobile = m
+                    else:   # dated, so the records of earlier dates keep the mobile they were landed with
+                        p.customer.later_mobiles.append((d, m))
                 else:
                     p.ncb_pct = 0
                 self.cdc[d].append({"op": "u", "ts_ms": epoch_ms(t), "policy_number": p.policy_number,
@@ -411,7 +437,7 @@ class World:
     def policy_row(self, p: Policy, updated: datetime) -> dict:
         c = p.customer
         return {"policy_number": p.policy_number, "customer_ref": p.customer_ref, "holder_name": p.holder_name,
-                "holder_dob": c.dob.strftime("%d/%m/%Y"), "holder_mobile": c.mobile, "holder_email": c.email,
+                "holder_dob": c.dob.strftime("%d/%m/%Y"), "holder_mobile": c.mobile_on(updated.date()), "holder_email": c.email,
                 "address_city": c.city, "customer_since": c.customer_since.isoformat(), "provider_name": p.provider,
                 "policy_type": "Motor", "premium_amount": f"{p.premium:.2f}", "status": p.status,
                 "coverage_limit": f"{p.idv:.2f}", "deductible": f"{p.deductible:.2f}", "co_pay_pct": f"{p.co_pay_pct}",
@@ -432,7 +458,7 @@ class World:
         if rng.random() < 0.12:
             name = f"{c.first[0]}. {c.last}".upper() if rng.random() < 0.5 else typo(rng, c.first).upper() + " " + c.last.upper()
         return {"bureau_ref": c.bureau_ref, "full_name": name, "dob": c.dob.strftime("%d/%m/%Y"),
-                "mobile": "" if rng.random() < 0.05 else fmt_mobile(rng, c.mobile),
+                "mobile": "" if rng.random() < 0.05 else fmt_mobile(rng, c.mobile_on(as_of)),
                 "credit_score": str(credit), "loan_defaults_12m": str(defaults),
                 "active_vehicle_loan": "Y" if rng.random() < 0.45 else "N", "driver_age": str(age),
                 "years_licensed": str(max(0, min(age - 18, int(rng.gauss(c.care * 18, 4))))),
@@ -450,7 +476,7 @@ class World:
         c = cl.policy.customer
         name = c.name if rng.random() < 0.8 else typo(rng, c.first) + " " + c.last
         return {"claim_id": cl.claim_id, "policy_number": cl.policy.policy_number, "claimant_name": name,
-                "claimant_mobile": fmt_mobile(rng, c.mobile), "claim_type": cl.claim_type,
+                "claimant_mobile": fmt_mobile(rng, c.mobile_on(as_of.date())), "claim_type": cl.claim_type,
                 "incident_ts": ts(cl.incident), "fnol_ts": ts(cl.fnol), "incident_city": cl.city,
                 "amount_requested": round(cl.amount, 2), "vehicle_vin": cl.stated_vin, "garage_id": cl.garage_id,
                 "police_report": "Y" if cl.police_report else "N", "third_party_involved": "Y" if cl.third_party else "N",

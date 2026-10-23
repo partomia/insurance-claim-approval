@@ -16,7 +16,7 @@ The semantic layer runs on CDW Impala after the batch:
   python scripts/run_semantic.py --engine impala --dates <date>
 
 Scheduled nightly at 02:00 IST (20:30 UTC) for the business dates in lakehouse.json
-"scheduled_dates" (2026-10-19 .. 2026-10-21): each run closes the UTC day its data interval ends
+"scheduled_dates" (2026-10-19 .. 2026-10-30): each run closes the UTC day its data interval ends
 on and replays that day's stream first (producer backfill, then the bronze stream with an
 available-now trigger). The live stream of the day is the DAG mcc_live_stream (cde/dags/
 mcc_live_dag.py, 03:30-13:30 UTC); live_stream_idle waits until no run of it is active, so the
@@ -56,7 +56,9 @@ SCHEDULED = "dag_run.run_type == 'scheduled'"
 BUSINESS_DATE = ("{{ data_interval_end.strftime('%Y-%m-%d') if " + SCHEDULED +
                  " else params.business_date }}")
 CAI_DEADLINE_MIN = 60
-SCHEDULED_DATES = ("2026-10-19", "2026-10-20", "2026-10-21")   # lakehouse.json "scheduled_dates"
+SCHEDULED_DATES = ("2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24",
+                   "2026-10-25", "2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29",
+                   "2026-10-30")   # lakehouse.json "scheduled_dates"
 LIVE_DAG_ID = "mcc_live_stream"
 
 
@@ -116,7 +118,7 @@ with DAG(
     schedule_interval="30 20 * * *",
     # scheduled business dates 10-16 .. 10-18 are skipped by in_window; the last starts on end_date
     start_date=datetime(2026, 10, 16),
-    end_date=datetime(2026, 10, 20, 20, 30),
+    end_date=datetime(2026, 10, 29, 20, 30),
     catchup=False,
     is_paused_upon_creation=True,
     max_active_runs=1,

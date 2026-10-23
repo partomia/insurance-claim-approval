@@ -56,7 +56,7 @@ mismatched; 142 claims scored.
 Known and deferred: the loss ratio is about 576% (the synthetic book is claim-dense); the
 nightly drift check reports ALERT until its reference is regenerated at about 6 claims a day.
 
-Daily cycle on the scheduled dates (2026-10-19 .. 10-21): live stream and producer 03:30-13:30
+Daily cycle on the scheduled dates (2026-10-19 .. 10-30; ran clean 10-19 to 10-21, 10-22 caught up by hand): live stream and producer 03:30-13:30
 UTC, nightly batch at 20:30 UTC, CAI nightly jobs after it. Nothing streams in between, so the
 batch's replay never overlaps a live run and the cluster is idle overnight.
 
