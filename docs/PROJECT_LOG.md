@@ -235,3 +235,27 @@ Earlier history of this repo (go01 env 1, AWC env 2) is in `MEMORY_DUMP.md`.
 - Code 2960e71 deployed to rsingh-mcc-code; both DAGs parse with no import errors; the live DAG
   unpaused with `cde job schedule unpause` (the Airflow API answers 403). First live run
   2026-10-19 03:30 UTC, first batch that does work 20:30 UTC.
+
+## 2026-10-23 13:45–14:30 - Pipeline extended to 10-30
+
+- Status: every layer up (app, model mcc-approval, CAI schedules, CDE, CDW, Kafka). 10-19..10-21
+  ran clean: three live windows (03:30-13:30 UTC) and three nightly batches; recon 23 MATCHED +
+  3 EXPLAINED each day; scores 150 / 147 / 151. Nothing ran after 10-21: both DAGs had reached
+  end_date.
+- Found while extending: adding dates changed the generated records of already-loaded dates
+  (claims of new dates shifted the telematics random stream, so noise crash events moved and new
+  claim crash ids collided with loaded ones; future CDC mobile changes leaked into earlier rows).
+  Fix: lakehouse.json frozen_through 2026-10-21; later dates get their own telematics stream
+  (ids after TM-00003666) and dated mobile changes (Customer.mobile_on). Verified against the
+  previous commit: every entity of every date 10-12..10-21, the 3,666 crash events, CDC and
+  claims hash identical.
+- scheduled_dates 10-22..10-30; both DAGs' end_date moved (9e49f3b deployed). Updating the
+  unpaused DAG made Airflow run the latest missed interval at once: the scheduled 10-22 batch
+  ran 13:55-14:15 UTC, all tasks success, recon 23 MATCHED + 3 EXPLAINED, 155 scores. The live
+  DAG ran its missed 10-23 run and skipped it (window over), as designed.
+- My manual catch-up for 10-22, started at the same time, overlapped it: my stream-bronze run 707
+  failed on the shared checkpoint and my DAG run 708 was killed, but my extra producer backfill
+  (704) also landed, so bronze.stream_telematics / stream_claim_event hold each 10-22 event twice
+  (producer runs backfill-c3e26089 and backfill-be63573e). Silver keeps one row per event_id,
+  so silver, gold, KPIs and scores are unaffected; bronze is left as received.
+- Next: batch tonight 20:30 UTC (10-23), live window from 10-24 03:30 UTC, last run 10-30.

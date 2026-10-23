@@ -9,6 +9,9 @@
 #   cde job schedule unpause --name rsingh-mcc-orchestration
 #   cde job schedule unpause --name rsingh-mcc-live-stream
 #   manual batch run: Airflow UI -> mcc_motor_claims -> Trigger DAG w/ config {"business_date": "2026-10-17"}
+#
+# Extending end_date of an unpaused DAG makes Airflow run the latest missed interval at once
+# (catchup=False still runs the most recent one): do not start a manual catch-up for that date too.
 
 set -euo pipefail
 
